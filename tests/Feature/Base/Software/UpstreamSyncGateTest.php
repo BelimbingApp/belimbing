@@ -139,8 +139,8 @@ test('a closed gate is an explanation on the page, and read-only visibility is u
 
     Livewire::test(Index::class)
         ->call('loadLatestStatus')
-        // #344/#374 visibility renders regardless of the gate.
-        ->assertSee('Current with the framework')
+        // Lane visibility (#482, was #344/#374) renders regardless of the gate.
+        ->assertSee('Fork stable')
         // The gate's state is stated, not hidden.
         ->assertSee('unavailable when APP_ENV is production');
 });

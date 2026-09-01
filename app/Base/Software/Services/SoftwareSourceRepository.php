@@ -57,7 +57,7 @@ class SoftwareSourceRepository
     }
 
     /**
-     * @return list<array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, update_state: 'up_to_date'|'ahead'|'behind'|null, error: string|null, error_detail: string|null, upstream: array{remote: string, repo: string|null, branch: string|null, head: array<string, mixed>|null, mirror: array{state: 'missing'|'current'|'behind'|'diverged'|'unknown', sha: string|null, ahead: int|null, behind: int|null, reason: string|null}, stable: array{state: 'contained'|'behind'|'unknown', missing: int|null, fork_own: int|null, reason: string|null}, error: string|null, error_detail: string|null}|null}>
+     * @return list<array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, update_state: 'up_to_date'|'ahead'|'behind'|null, error: string|null, error_detail: string|null, upstream: array{remote: string, repo: string|null, branch: string|null, head: array<string, mixed>|null, checkout: array{state: 'in_sync'|'behind'|'ahead'|'diverged'|'unknown', ahead: int|null, behind: int|null, reason: string|null}, stable: array{state: 'contained'|'behind'|'unknown', missing: int|null, fork_own: int|null, reason: string|null}, error: string|null, error_detail: string|null}|null}>
      */
     public function status(bool $useRemoteCache = true, bool $includeRemote = true): array
     {
@@ -126,18 +126,20 @@ class SoftwareSourceRepository
     }
 
     /**
-     * Read-only visibility of the release flow's two transitions (#374, was #344):
+     * Read-only visibility of the fork lanes (#482, was #374/#344):
      *
-     *   upstream/<branch>  ->  origin/<branch> mirror  ->  origin/master stable
+     *   HEAD            <->  origin/master   (checkout lane)
+     *   origin/master   <->  upstream/main   (fork stable lane)
      *
      * Remote branch heads are the source of truth for BOTH halves of the
      * requirement: the head values come from live ls-remote (never the
      * installed checkout's HEAD), and the branch identities are fixed — the
-     * mirror is origin/<upstream branch>, the stable is origin/master
+     * stable is origin/master
      * (UpstreamSyncService::STABLE_BRANCH) regardless of which branch the
      * local checkout happens to have checked out (sol's P1 on #395: reading
      * the branch name from localSnapshot() satisfied the HEAD half while
-     * silently substituting the local checkout's branch identity).
+     * silently substituting the local checkout's branch identity). The mirror
+     * transition is gone entirely — #455 made it optional and #482 removed it.
      *
      * Ancestry and counts come from the local object database and degrade to
      * a stated unknown when objects were never fetched. No upstream remote is
@@ -162,74 +164,77 @@ class SoftwareSourceRepository
         [$branch, $head, $error, $detail] = $this->upstreamHead($path, $identity, $useRemoteCache);
 
         // Lookups against origin authenticate with origin's own token — a
-        // private deployment fork must not read as Unknown just because the
-        // mirror probe went out anonymously (sol's P1 on #395). The upstream
-        // probe keeps the upstream owner's token, resolved in upstreamHead().
+        // private deployment fork must not read as Unknown just because a
+        // probe went out anonymously (sol's P1 on #395). The upstream probe
+        // keeps the upstream owner's token, resolved in upstreamHead().
         $originToken = ($entries['platform']['owner'] ?? null) !== null
             ? $this->tokenFor((string) $entries['platform']['owner'])
             : null;
 
-        // With no configured branch and an unreachable upstream, the mirror
-        // branch's NAME is unknowable — a distinct condition from a failed
-        // existence lookup, and the reason must say which one happened.
-        $mirror = $branch !== null
-            ? $this->originBranchHead($path, $branch, $originToken, $useRemoteCache)
-            : ['no-branch', null, null];
         $stable = $this->originBranchHead($path, UpstreamSyncService::STABLE_BRANCH, $originToken, $useRemoteCache);
 
+        // Each lane fails alone (#482): the stable read needs origin AND the
+        // upstream head; the checkout read needs origin and the local HEAD;
+        // neither consults the other, so an expired origin token greys both
+        // origin lanes while the upstream head stays displayed, and an
+        // unreachable upstream leaves the checkout lane fully readable.
         $repo = new GitRepository($path);
         $upstream = [
             'remote' => $identity['remote'],
             'repo' => $identity['repo'],
             'branch' => $branch,
             'head' => $head,
-            'mirror' => $this->mirrorRelationship($repo, $identity['remote'], $head['sha'] ?? null, $mirror),
+            'checkout' => $this->checkoutRelationship($repo, $stable, $entries['platform']['current']['sha'] ?? null),
             'stable' => $this->stableRelationship($repo, $stable, $head['sha'] ?? null),
             'error' => $error,
-            'error_detail' => $detail ?? ($mirror[0] === 'error' ? $mirror[2] : null),
+            'error_detail' => $detail,
         ];
 
         $entries['platform']['upstream'] = $upstream;
     }
 
     /**
-     * Relationship 1: the origin mirror branch vs the upstream head — missing /
-     * current / behind (fast-forwardable, count) / diverged (both counts) /
-     * unknown with a reason.
+     * Checkout lane (#482): the installed checkout's HEAD vs the stable
+     * branch head on origin — "do I need to pull, or push, before anything
+     * else?". `behind` counts commits only origin has (a pull brings them);
+     * `ahead` counts local commits origin lacks (unpushed — Update stays
+     * blocked while any exist). Both live heads come from ls-remote and the
+     * local HEAD from the snapshot; counts degrade to a stated unknown when
+     * the objects were never fetched, exactly like the stable lane.
      *
-     * @param  array{0: 'present'|'absent'|'error', 1: string|null, 2: string|null}  $mirror
-     * @return array{state: string, sha: string|null, ahead: int|null, behind: int|null, reason: string|null}
+     * @param  array{0: 'present'|'absent'|'error', 1: string|null, 2: string|null}  $stable
+     * @return array{state: 'in_sync'|'behind'|'ahead'|'diverged'|'unknown', ahead: int|null, behind: int|null, reason: string|null}
      */
-    private function mirrorRelationship(GitRepository $repo, string $remote, ?string $upstreamSha, array $mirror): array
+    private function checkoutRelationship(GitRepository $repo, array $stable, ?string $headSha): array
     {
-        $out = ['state' => 'unknown', 'sha' => $mirror[1], 'ahead' => null, 'behind' => null, 'reason' => null];
+        $out = ['state' => 'unknown', 'ahead' => null, 'behind' => null, 'reason' => null];
 
-        if ($mirror[0] === 'no-branch') {
-            $out['reason'] = (string) __('The upstream head could not be read, so the mirror branch is not known.');
-        } elseif ($mirror[0] === 'error') {
-            $out['reason'] = (string) __('Could not determine whether the mirror branch exists on origin.');
-        } elseif ($mirror[0] === 'absent') {
-            // Explicitly a state, not an error: the mirror has simply never
-            // been created (#374 acceptance).
-            $out['state'] = 'missing';
-        } elseif ($upstreamSha === null) {
-            $out['reason'] = (string) __('The upstream head could not be read, so the mirror cannot be compared.');
-        } elseif ($mirror[1] === $upstreamSha) {
-            $out['state'] = 'current';
+        if ($headSha === null) {
+            $out['reason'] = (string) __('The local checkout HEAD could not be read.');
+        } elseif ($stable[0] === 'absent') {
+            $out['reason'] = (string) __('origin has no :branch branch to compare the checkout against.', ['branch' => UpstreamSyncService::STABLE_BRANCH]);
+        } elseif ($stable[1] === null) {
+            $out['reason'] = (string) __('The stable head could not be read from origin, so the checkout cannot be compared.');
+        } elseif ($stable[1] === $headSha) {
+            $out['state'] = 'in_sync';
             $out['ahead'] = 0;
             $out['behind'] = 0;
         } else {
-            // base = upstream head, tip = mirror: `behind` counts commits only
-            // upstream has (what a fast-forward would bring), `ahead` commits
-            // only the mirror has (a broken mirror — someone committed to it).
-            $counts = $repo->aheadBehindBetween($upstreamSha, (string) $mirror[1]);
+            // base = origin stable head, tip = local HEAD: `behind` counts
+            // commits only origin has, `ahead` commits only this checkout has.
+            $counts = $repo->aheadBehindBetween((string) $stable[1], $headSha);
 
             if ($counts === null) {
-                $out['reason'] = (string) __('Commits are not in this checkout yet — fetch :remote to compare histories.', ['remote' => $remote]);
+                $out['reason'] = (string) __('Commits are not in this checkout yet — fetch origin to compare histories.');
             } else {
                 $out['ahead'] = $counts['ahead'];
                 $out['behind'] = $counts['behind'];
-                $out['state'] = $counts['ahead'] === 0 ? 'behind' : 'diverged';
+                $out['state'] = match (true) {
+                    $counts['ahead'] === 0 && $counts['behind'] === 0 => 'in_sync',
+                    $counts['ahead'] === 0 => 'behind',
+                    $counts['behind'] === 0 => 'ahead',
+                    default => 'diverged',
+                };
             }
         }
 
