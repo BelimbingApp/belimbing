@@ -53,7 +53,8 @@ class OrientStewardMechanismTest(unittest.TestCase):
                 set -euo pipefail
                 case "$1 $2" in
                   "repo view")
-                    printf 'example/canonical\\n'
+                    if [[ "$*" == *defaultBranchRef* ]]; then printf 'main\\n'
+                    else printf 'example/canonical\\n'; fi
                     ;;
                   "issue list")
                     if [[ "$*" == *"--label ops:halt"* ]]; then
@@ -81,10 +82,11 @@ class OrientStewardMechanismTest(unittest.TestCase):
         env = os.environ.copy()
         env.update(
             ORIENT_TEST_STEWARDS=stewards,
+            AI_TEAM_TEST_ORIGIN_REPO="example/canonical",
             PATH=f"{self.bin}{os.pathsep}{env.get('PATH', '')}",
         )
         return run_with_bash_path(
-            ["bash", str(self.scripts / "orient.sh")],
+            ["bash", bash_path(self.scripts / "orient.sh")],
             stub_directory=self.bin,
             cwd=self.base,
             env=env,
@@ -111,6 +113,14 @@ class OrientStewardMechanismTest(unittest.TestCase):
             "380\tagent:opus-5\t1\tappointment",
             "#380 [agent:opus-5] appointment",
             "active steward must carry exactly one",
+        )
+
+    def test_exactly_one_steward_prints_appointment_identity_note(self):
+        # #51: orient must remind substitutes that the appointment label is not
+        # their **From:** identity.
+        self.assert_orientation(
+            "468\tagent:fable\t1\tsteward appointment",
+            "NOTE: agent:fable on #468 is the APPOINTMENT, not your **From:** identity.",
         )
 
     def test_multiple_active_stewards_are_reported(self):

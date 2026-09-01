@@ -9,7 +9,7 @@ import textwrap
 import unittest
 from pathlib import Path
 
-from _test_support import _bash_executable, _git_tool_executable, run_with_bash_path
+from _test_support import bash_path, _bash_executable, _git_tool_executable, run_with_bash_path
 
 
 SCRIPT = Path(__file__).with_name("board.sh")
@@ -60,11 +60,11 @@ def gh_capture_stub(directory: Path, comments_json: str = "[]") -> Path:
 class BoardMechanismTest(unittest.TestCase):
     def run_board(self, args, directory: Path, env_extra=None, stdin: str = ""):
         env = os.environ.copy()
-        env["BOARD_TEST_CAPTURE"] = str(directory / "captured-body")
-        env["BOARD_TEST_FIXTURE"] = str(directory / "fixture.json")
+        env["BOARD_TEST_CAPTURE"] = bash_path(directory / "captured-body")
+        env["BOARD_TEST_FIXTURE"] = bash_path(directory / "fixture.json")
         env.update(env_extra or {})
         return run_with_bash_path(
-            ["bash", str(SCRIPT), *args],
+            ["bash", bash_path(SCRIPT), *args],
             stub_directory=directory,
             env=env,
             text=True,
@@ -136,16 +136,120 @@ class BoardMechanismTest(unittest.TestCase):
             env.pop("CLAIM_AGENT", None)
             env.pop("BOARD_AGENT", None)
             result = run_with_bash_path(
-                ["bash", str(SCRIPT), "post", "42", "--type", "status", "hello"],
+                ["bash", bash_path(SCRIPT), "post", "42", "--type", "status", "hello"],
                 stub_directory=directory,
-                env={**env, "BOARD_TEST_CAPTURE": str(directory / "captured-body"),
-                     "BOARD_TEST_FIXTURE": str(directory / "fixture.json")},
+                env={**env, "BOARD_TEST_CAPTURE": bash_path(directory / "captured-body"),
+                     "BOARD_TEST_FIXTURE": bash_path(directory / "fixture.json")},
                 text=True,
                 capture_output=True,
                 check=False,
             )
             self.assertEqual(result.returncode, 2)
             self.assertIn("agent id required", result.stderr)
+
+    def test_post_refuses_impersonating_steward_appointee(self):
+        # #51: ops:steward appointment names an owner; a substitute must not
+        # stamp **From:** as the appointee when CLAIM_AGENT is someone else.
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            gh_capture_stub(directory)
+            result = self.run_board(
+                ["post", "42", "--agent", "fable", "--type", "status", "queue drained"],
+                directory,
+                env_extra={
+                    "CLAIM_AGENT": "composer-2.5",
+                    "BOARD_TEST_STEWARD_APPOINTEE": "fable",
+                    "BOARD_TEST_STEWARD_ISSUE": "468",
+                },
+            )
+            self.assertEqual(result.returncode, 3, result.stderr)
+            self.assertIn("refusing", result.stderr)
+            self.assertIn("steward-backstop", result.stderr)
+            self.assertFalse((directory / "captured-body").exists())
+
+    def test_post_steward_backstop_stamps_steward_for_header(self):
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            gh_capture_stub(directory)
+            result = self.run_board(
+                [
+                    "post", "42",
+                    "--agent", "composer-2.5",
+                    "--steward-for", "fable",
+                    "--type", "steward-backstop",
+                    "drained #457 on fable's appointment",
+                ],
+                directory,
+                env_extra={
+                    "CLAIM_AGENT": "composer-2.5",
+                    "BOARD_TEST_STEWARD_APPOINTEE": "fable",
+                    "BOARD_TEST_STEWARD_ISSUE": "468",
+                },
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            body = (directory / "captured-body").read_text(encoding="utf-8")
+            match = GATE_FROM_REGEX.match(body.splitlines()[0])
+            self.assertIsNotNone(match)
+            self.assertEqual(match.group("agent"), "composer-2.5")
+            self.assertIn("**Steward-for:** fable (#468)", body)
+            self.assertIn("**Type:** steward-backstop", body)
+            self.assertIn("drained #457 on fable's appointment", body)
+
+    def test_post_steward_backstop_requires_steward_for_flag(self):
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            gh_capture_stub(directory)
+            result = self.run_board(
+                [
+                    "post", "42",
+                    "--agent", "composer-2.5",
+                    "--type", "steward-backstop",
+                    "missing --steward-for",
+                ],
+                directory,
+                env_extra={"CLAIM_AGENT": "composer-2.5"},
+            )
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertIn("requires --steward-for", result.stderr)
+
+    def test_post_allows_appointee_when_acting_as_self(self):
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            gh_capture_stub(directory)
+            result = self.run_board(
+                ["post", "42", "--agent", "fable", "--type", "status", "heartbeat ok"],
+                directory,
+                env_extra={
+                    "CLAIM_AGENT": "fable",
+                    "BOARD_TEST_STEWARD_APPOINTEE": "fable",
+                    "BOARD_TEST_STEWARD_ISSUE": "468",
+                },
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            body = (directory / "captured-body").read_text(encoding="utf-8")
+            self.assertRegex(body.splitlines()[0], r"^\*\*From:\*\* fable")
+
+    def test_post_refuses_steward_for_mismatch(self):
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            gh_capture_stub(directory)
+            result = self.run_board(
+                [
+                    "post", "42",
+                    "--agent", "composer-2.5",
+                    "--steward-for", "sol",
+                    "--type", "steward-backstop",
+                    "wrong appointee",
+                ],
+                directory,
+                env_extra={
+                    "CLAIM_AGENT": "composer-2.5",
+                    "BOARD_TEST_STEWARD_APPOINTEE": "fable",
+                    "BOARD_TEST_STEWARD_ISSUE": "468",
+                },
+            )
+            self.assertEqual(result.returncode, 3, result.stderr)
+            self.assertIn("does not match active appointee fable", result.stderr)
 
     # ---- digest ----
 
@@ -281,7 +385,7 @@ class BoardMechanismTest(unittest.TestCase):
             (directory / "reviews.json").write_text(reviews, encoding="utf-8")
             result = self.run_board(
                 ["digest", "42"], directory,
-                env_extra={"BOARD_TEST_REVIEWS": str(directory / "reviews.json")},
+                env_extra={"BOARD_TEST_REVIEWS": bash_path(directory / "reviews.json")},
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("[review COMMENTED @489f958]", result.stdout)
@@ -353,17 +457,17 @@ class BoardMechanismTest(unittest.TestCase):
                 if os.name != "nt":
                     destination.chmod(destination.stat().st_mode | stat.S_IXUSR)
             env = os.environ.copy()
-            env["BOARD_TEST_CAPTURE"] = str(directory / "captured-body")
-            env["BOARD_TEST_FIXTURE"] = str(directory / "fixture.json")
+            env["BOARD_TEST_CAPTURE"] = bash_path(directory / "captured-body")
+            env["BOARD_TEST_FIXTURE"] = bash_path(directory / "fixture.json")
             env["BOARD_POST_BUDGET"] = "201"
             # PATH is deliberately reduced to the fixture's tools, so neither gh
             # nor git is reachable to name the repository. board.sh no longer
             # assumes one (#445), so state it explicitly — this test is about
             # the iconv fallback, not about repository resolution.
             env["BOARD_REPO"] = "example/canonical"
-            env["PATH"] = str(directory)
+            env["PATH"] = bash_path(directory)
             result = subprocess.run(
-                [bash, str(SCRIPT), "post", "42",
+                [bash, bash_path(SCRIPT), "post", "42",
                  "--agent", "fable", "--type", "finding"],
                 input="\u00e9" * 300,
                 env=env,

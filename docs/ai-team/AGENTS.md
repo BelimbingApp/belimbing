@@ -14,3 +14,8 @@ Two things are specific to this repository:
 - **Paths differ from where the package runs.** Here the scripts are at
   `scripts/`; in an adopting repository they are at `docs/ai-team/scripts/`.
   Comments and documentation that name a path should say which one they mean.
+- **Appointment is not identity (#51).** The `agent:<id>` on an open
+  `ops:steward` issue names who the owner appointed; it is not the acting
+  agent's `**From:**` unless that agent is actually running the session. Set
+  `CLAIM_AGENT` to your stable id; use `board.sh post --steward-for` for
+  substitute backstop.
