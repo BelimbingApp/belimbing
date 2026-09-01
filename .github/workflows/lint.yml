@@ -38,6 +38,10 @@ jobs:
         if: github.event_name == 'pull_request'
         run: php scripts/check-changed-tests.php --base="${{ github.event.pull_request.base.sha }}" --head="${{ github.event.pull_request.head.sha }}"
 
+      - name: Refuse direct edits to the docs/ai-team mount
+        if: github.event_name == 'pull_request'
+        run: scripts/ci/mount-guard.sh "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}"
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2 # NOSONAR — well-known community Bun action; tag pinning is acceptable for internal projects
         with:
