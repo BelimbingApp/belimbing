@@ -599,6 +599,7 @@
                 >
                     <div class="p-4">
                         <p>{{ __('A software source is the repository that delivers the platform, a Domain, a module slot, or an Extension. Domains and Extensions remain the operator-facing lifecycle units; source details explain where updates come from.') }}</p>
+                        <p class="mt-2">{{ __('A platform fork shows three lanes — Checkout, Fork stable, and Deploy — each answering one question with one action. Behind (amber) is the only direction that demands work; ahead (blue) is informational. See docs/guides/adopter-fork.md for the fork workflows.') }}</p>
                     </div>
                 </div>
             </div>
@@ -640,6 +641,14 @@
                                         <x-ui.badge variant="success">{{ __('reachable') }}</x-ui.badge>
                                     @endif
                                 </div>
+                                {{-- The sync gate's state, stated plainly (#345): a closed gate is
+                                     an explanation on the page, never a hidden concept or a 500 at
+                                     the point of use. Visibility never depends on this gate. --}}
+                                @if ($upstreamSyncState['available'])
+                                    <div class="mt-1 text-xs text-muted">{{ __('Upstream synchronization is available because APP_ENV is :environment and your account has permission.', ['environment' => $upstreamSyncState['environment']]) }}</div>
+                                @else
+                                    <div class="mt-1 text-xs text-muted">{{ $upstreamSyncState['reason'] }}</div>
+                                @endif
                                 @if ($s['upstream']['error'])
                                     <div class="mt-1 text-xs text-muted">{{ $s['upstream']['error'] }}</div>
                                     @if ($s['upstream']['error_detail'])

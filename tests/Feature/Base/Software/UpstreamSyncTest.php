@@ -107,50 +107,6 @@ function fakeSyncGit(
     });
 }
 
-test('an absent mirror is created from the upstream head', function (): void {
-    $ran = [];
-    fakeSyncGit($ran, mirrorSha: null);
-
-    $result = app(UpstreamSyncService::class)->refreshMirror(createAdminUser());
-
-    expect($result['ok'])->toBeTrue()
-        ->and($result['message'])->toContain('Mirror created')
-        ->and($ran)->toHaveKey('push origin '.SYNC_UPSTREAM_SHA.':refs/heads/main');
-});
-
-test('a fast-forwardable mirror is refreshed', function (): void {
-    $ran = [];
-    fakeSyncGit($ran, mirrorSha: SYNC_OLD_MIRROR_SHA);
-
-    $result = app(UpstreamSyncService::class)->refreshMirror(createAdminUser());
-
-    expect($result['ok'])->toBeTrue()
-        ->and($result['message'])->toContain('fast-forwarded')
-        ->and($ran)->toHaveKey('push origin '.SYNC_UPSTREAM_SHA.':refs/heads/main');
-});
-
-test('an already-current mirror is reported without a push', function (): void {
-    $ran = [];
-    fakeSyncGit($ran, mirrorSha: SYNC_UPSTREAM_SHA);
-
-    $result = app(UpstreamSyncService::class)->refreshMirror(createAdminUser());
-
-    expect($result['ok'])->toBeTrue()
-        ->and($result['message'])->toContain('already current')
-        ->and(array_filter($ran, fn ($v, $k) => str_starts_with($k, 'push'), ARRAY_FILTER_USE_BOTH))->toBe([]);
-});
-
-test('a diverged mirror is refused with the condition named, and nothing is pushed', function (): void {
-    $ran = [];
-    fakeSyncGit($ran, mirrorSha: SYNC_OLD_MIRROR_SHA, mirrorDiverged: true);
-
-    $result = app(UpstreamSyncService::class)->refreshMirror(createAdminUser());
-
-    expect($result['ok'])->toBeFalse()
-        ->and($result['message'])->toContain('committed to the mirror directly')
-        ->and(array_filter($ran, fn ($v, $k) => str_starts_with($k, 'push'), ARRAY_FILTER_USE_BOTH))->toBe([]);
-});
-
 test('a clean integration prepares the proposal in the object database and pushes it', function (): void {
     $ran = [];
     fakeSyncGit($ran);
@@ -237,17 +193,6 @@ test('a failed proposal-branch lookup refuses preparation instead of reading fai
         ->and(array_filter($ran, fn ($v, $k) => str_starts_with($k, 'push'), ARRAY_FILTER_USE_BOTH))->toBe([]);
 });
 
-test('a failed mirror lookup refuses the refresh instead of creating over the unknown', function (): void {
-    $ran = [];
-    fakeSyncGit($ran, mirrorLookupFails: true);
-
-    $result = app(UpstreamSyncService::class)->refreshMirror(createAdminUser());
-
-    expect($result['ok'])->toBeFalse()
-        ->and($result['message'])->toContain('Could not determine')
-        ->and(array_filter($ran, fn ($v, $k) => str_starts_with($k, 'push'), ARRAY_FILTER_USE_BOTH))->toBe([]);
-});
-
 test('askpass is disabled at both the config and environment level, ambient credentials or not', function (): void {
     $ambient = new GitRepository(base_path(), ambientCredentials: true);
     $default = new GitRepository(base_path());
@@ -262,29 +207,28 @@ test('askpass is disabled at both the config and environment level, ambient cred
         ->and($default->environment()['GIT_ASKPASS'])->toBe('');
 });
 
-test('a checkout with no upstream remote states that, for both actions', function (): void {
+test('a checkout with no upstream remote states that', function (): void {
     $ran = [];
     fakeSyncGit($ran, hasUpstreamRemote: false);
 
     $service = app(UpstreamSyncService::class);
     $user = createAdminUser();
 
-    expect($service->refreshMirror($user)['message'])->toContain('no upstream remote')
-        ->and($service->prepareIntegration($user)['message'])->toContain('no upstream remote')
+    expect($service->prepareIntegration($user)['message'])->toContain('no upstream remote')
         ->and($ran)->toBe([]);
 });
 
 test('a rejected push is a reported failure with the remote detail', function (): void {
     $ran = [];
-    fakeSyncGit($ran, mirrorSha: SYNC_OLD_MIRROR_SHA, pushRejected: true);
+    fakeSyncGit($ran, pushRejected: true);
 
-    $result = app(UpstreamSyncService::class)->refreshMirror(createAdminUser());
+    $result = app(UpstreamSyncService::class)->prepareIntegration(createAdminUser());
 
     expect($result['ok'])->toBeFalse()
         ->and($result['detail'])->toContain('permission denied');
 });
 
-test('the gate stops both actions in production and without the capability, before any git runs', function (): void {
+test('the gate stops the action in production and without the capability, before any git runs', function (): void {
     $ran = [];
     fakeSyncGit($ran);
 
@@ -293,11 +237,9 @@ test('the gate stops both actions in production and without the capability, befo
     $incapable = syncIncapableUser();
 
     app()->instance('env', 'production');
-    expect(fn () => $service->refreshMirror($admin))->toThrow(AuthorizationException::class);
     expect(fn () => $service->prepareIntegration($admin))->toThrow(AuthorizationException::class);
 
     app()->instance('env', 'local');
-    expect(fn () => $service->refreshMirror($incapable))->toThrow(AuthorizationException::class);
     expect(fn () => $service->prepareIntegration($incapable))->toThrow(AuthorizationException::class);
 
     expect($ran)->toBe([]);
@@ -315,7 +257,7 @@ test('a gate that closes between render and click stops the Livewire action at t
     // The page rendered with the gate open; it closes before the click lands.
     app()->instance('env', 'production');
 
-    $component->call('refreshMirror');
+    $component->call('prepareIntegration');
 
     expect($ran)->toBe([]);
 });
@@ -327,11 +269,12 @@ test('the sync actions run end to end through the page when the gate is open', f
     $user = createAdminUser();
     $this->actingAs($user);
 
+    // Button visibility is lane-state-dependent and covered by the status
+    // page tests; this test proves the ACTION path end to end.
     Livewire::test(Index::class)
         ->call('loadLatestStatus')
-        ->assertSee('Refresh mirror')
-        ->assertSee('Create integration proposal')
-        ->call('refreshMirror');
+        ->assertDontSee('Refresh mirror')
+        ->call('prepareIntegration');
 
-    expect($ran)->toHaveKey('push origin '.SYNC_UPSTREAM_SHA.':refs/heads/main');
+    expect(implode(' ', array_keys($ran)))->toContain('push origin');
 });
