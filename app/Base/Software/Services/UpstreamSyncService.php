@@ -40,6 +40,10 @@ use Illuminate\Contracts\Auth\Authenticatable;
  */
 final class UpstreamSyncService
 {
+    private const EXIT_CODE_ARG = '--exit-code';
+
+    private const REF_HEADS_PREFIX = 'refs/heads/';
+
     public const STABLE_BRANCH = 'master';
 
     private const INTEGRATION_BRANCH_PREFIX = 'upstream-sync-';
@@ -87,7 +91,7 @@ final class UpstreamSyncService
         // (128, auth/network). A failure is not a fact about the repository
         // (sol's P1 on #356): refusing here stops an unreachable origin from
         // being read as "mirror absent" and answered with a creation push.
-        $mirror = $repo->run(['ls-remote', '--exit-code', 'origin', 'refs/heads/'.$branch]);
+        $mirror = $repo->run(['ls-remote', self::EXIT_CODE_ARG, 'origin', self::REF_HEADS_PREFIX.$branch]);
 
         if (! $mirror->ok && $mirror->exitCode !== 2) {
             return $this->failure((string) __('Could not determine whether origin/:branch exists.', ['branch' => $branch]), $mirror->message());
@@ -110,7 +114,7 @@ final class UpstreamSyncService
 
         // Plain push — never --force. Git itself refuses a non-fast-forward, so
         // even a mirror moved between our check and the push stays protected.
-        $pushed = $repo->run(['push', 'origin', $upstreamSha.':refs/heads/'.$branch], timeout: 300);
+        $pushed = $repo->run(['push', 'origin', $upstreamSha.':'.self::REF_HEADS_PREFIX.$branch], timeout: 300);
 
         if (! $pushed->ok) {
             return $this->failure((string) __('Could not push the mirror to origin/:branch.', ['branch' => $branch]), $pushed->message());
@@ -160,7 +164,7 @@ final class UpstreamSyncService
         // state named rather than force or reuse — and a failed lookup (exit
         // 128) is not "absent" (exit 2): preparing while GitHub is unreachable
         // must refuse, not proceed (sol's P1 on #356).
-        $existing = $repo->run(['ls-remote', '--exit-code', 'origin', 'refs/heads/'.$proposalBranch]);
+        $existing = $repo->run(['ls-remote', self::EXIT_CODE_ARG, 'origin', self::REF_HEADS_PREFIX.$proposalBranch]);
 
         if ($existing->ok) {
             return $this->failure((string) __('Refused: origin/:branch already exists — this upstream commit already has a proposal. Open its pull request, or delete the branch to prepare a fresh one.', ['branch' => $proposalBranch]));
@@ -251,7 +255,7 @@ final class UpstreamSyncService
         // branch appeared since — including a descendant, which a plain push
         // would fast-forward, letting two concurrent preparations both report
         // success (sol's P1 on #356).
-        $pushed = $repo->run(['push', 'origin', $commit->output.':refs/heads/'.$proposalBranch, '--force-with-lease=refs/heads/'.$proposalBranch.':'], timeout: 300);
+        $pushed = $repo->run(['push', 'origin', $commit->output.':'.self::REF_HEADS_PREFIX.$proposalBranch, '--force-with-lease='.self::REF_HEADS_PREFIX.$proposalBranch.':'], timeout: 300);
 
         if (! $pushed->ok && str_contains($pushed->message(), 'stale info')) {
             return $this->failure((string) __('Refused: origin/:branch appeared while this proposal was being prepared. Check whether another operator just prepared one for the same upstream commit.', ['branch' => $proposalBranch]), $pushed->message());
@@ -285,7 +289,7 @@ final class UpstreamSyncService
     private function resolveUpstreamHead(GitRepository $repo, array $identity): array|string|null
     {
         if ($identity['branch'] !== null) {
-            $result = $repo->run(['ls-remote', '--exit-code', $identity['remote'], 'refs/heads/'.$identity['branch']]);
+            $result = $repo->run(['ls-remote', self::EXIT_CODE_ARG, $identity['remote'], self::REF_HEADS_PREFIX.$identity['branch']]);
 
             if (! $result->ok) {
                 return $result->message();

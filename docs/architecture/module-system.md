@@ -3,8 +3,8 @@
 **Document Type:** Architecture Specification
 **Scope:** Application-code ownership, Domain and Module boundaries, lifecycle, discovery, variation, and delivery provenance
 **Based On:** `docs/architecture/decisions/0001-four-root-application-topology.md`, `docs/brief.md`, and Ousterhout's *A Philosophy of Software Design*
-**Last Updated:** 2026-08-05
-**Related:** `docs/architecture/database.md`, `docs/architecture/settings.md`, `docs/modules/`, `docs/guides/extensions/private-extension-repositories.md`, `docs/guides/extensions/database-migrations.md`
+**Last Updated:** 2026-08-31
+**Related:** `docs/architecture/database.md`, `docs/architecture/people-connector.md`, `docs/architecture/settings.md`, `docs/modules/`, `docs/guides/extensions/private-extension-repositories.md`, `docs/guides/extensions/database-migrations.md`
 
 ## Overview
 
@@ -73,6 +73,8 @@ app/Domains/People/
 
 The Domain is the lifecycle unit. Its Modules are the ownership boundaries. Installing or disabling `People` affects the whole Domain; it does not imply that each contained Module has an independent toggle.
 
+Provider integration does not make two ownership boundaries one Domain. `PeopleConnector` is a separate optional Domain mounted at `app/Domains/PeopleConnector/`, with its own install, enable, update, disable, and uninstall lifecycle. It composes a selected HR provider through an anti-corruption boundary and owns supplemental Skill and Training capabilities; it is not a Module inside `People` and is not a deployment-specific Extension. See `docs/architecture/people-connector.md` for the provider, transport, and data-ownership contract.
+
 ### Extension shape
 
 Extensions are a deliberate escape hatch for deployment-owned composition:
@@ -95,7 +97,7 @@ Application ownership segments use PascalCase:
 
 - Base components: `Foundation`, `Database`, `Menu`
 - Core Modules: `Company`, `Employee`, `Geonames`
-- Domains: `People`, `Commerce`, `Operation`
+- Domains: `People`, `PeopleConnector`, `Commerce`, `Operation`
 - Extension roots: `Ham`, `Kiat`, `SbGroup`
 - Modules: `Payroll`, `AutoParts`, `Qac`
 - Module-internal directories: `Config`, `Database`, `Models`, `Services`, `Views`
@@ -112,6 +114,7 @@ Persisted and external identities are stable, lowercase, kebab-case, and indepen
 |---|---|
 | `app/Core/Company` | `core/company` |
 | `app/Domains/People/Payroll` | `people/payroll` |
+| `app/Domains/PeopleConnector/Connector` | `people-connector/connector` |
 | `app/Extensions/SbGroup/Qac` | `sb-group/qac` |
 
 Do not derive durable identity by lowercasing an absolute path or serializing a checkout location. A physical move or namespace migration must not silently create a different Module.

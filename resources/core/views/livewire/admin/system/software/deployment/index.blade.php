@@ -140,7 +140,18 @@
                     if (accepted && ['success', 'warning', 'error'].includes(run.status)) {
                         this._pollTimer = null;
 
-                        return; {{-- the recorded-run marker takes over from here --}}
+                        {{-- Finish the run here rather than leaving it to the marker
+                             this poll just rendered. Every guard in this flow belongs
+                             either to the poller, which has stopped on the line above,
+                             or to scheduleStatusRefresh, which finishRun is what
+                             starts — so if the marker is not observed, no timer is
+                             left alive to notice, and the page sits silently on a
+                             stale render with neither a reload nor the stall notice.
+                             Idempotent per run: detectRecordedRun bails while
+                             running is false, and again on completedRunId. --}}
+                        this.finishRun({ status: run.status, runId: run.run_id, refresh: true });
+
+                        return;
                     }
                 } catch (error) {
                     {{-- Transient failures are by design: the final phase reloads
