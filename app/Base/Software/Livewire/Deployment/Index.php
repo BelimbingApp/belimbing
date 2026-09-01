@@ -91,11 +91,6 @@ class Index extends Component
         $this->runDetachedUpdate($history, $launcher, []);
     }
 
-    public function refreshMirror(UpstreamSyncService $sync): void
-    {
-        $this->runUpstreamSyncAction(fn (): array => $sync->refreshMirror(Auth::user()));
-    }
-
     public function prepareIntegration(UpstreamSyncService $sync): void
     {
         $this->runUpstreamSyncAction(fn (): array => $sync->prepareIntegration(Auth::user()));

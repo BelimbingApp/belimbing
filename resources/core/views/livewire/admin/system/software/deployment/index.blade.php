@@ -631,72 +631,23 @@
                                 </div>
                             @endif
                             @if ($s['upstream'] ?? null)
+                                {{-- Identity only: the lanes below carry the state (#482). --}}
                                 <div class="mt-1.5 text-xs text-muted">
                                     <span class="font-medium">{{ __('Upstream') }}</span>
                                     <span class="font-mono">{{ ($s['upstream']['repo'] ?? $s['upstream']['remote']).'@'.($s['upstream']['branch'] ?? '—') }}</span>
                                     @if ($s['upstream']['head'])
                                         <span class="font-mono">{{ $s['upstream']['head']['short'] }}</span>
+                                        <x-ui.badge variant="success">{{ __('reachable') }}</x-ui.badge>
                                     @endif
                                 </div>
-                                {{-- The mirror is now optional, informational compatibility state
-                                     (#455): stable is compared directly against the live upstream
-                                     head when no mirror branch exists, so this line never gates
-                                     anything below it. --}}
-                                <div class="mt-1 flex flex-wrap items-center gap-1.5">
-                                    <span class="text-xs text-muted">{{ __('Mirror') }}</span>
-                                    @if ($s['upstream']['mirror']['state'] === 'current')
-                                        <x-ui.badge variant="success" :title="__('origin\'s mirror branch matches the framework head exactly.')">{{ __('Current with the framework') }}</x-ui.badge>
-                                    @elseif ($s['upstream']['mirror']['state'] === 'missing')
-                                        <x-ui.badge variant="info" :title="__('The mirror branch has never been created on origin. It is optional — stable is compared directly against the framework upstream below.')">{{ __('Not created (optional)') }}</x-ui.badge>
-                                    @elseif ($s['upstream']['mirror']['state'] === 'behind')
-                                        <x-ui.badge variant="warning" :title="__('The framework has new commits the mirror does not; a mirror refresh fast-forwards cleanly.')">{{ trans_choice('{1} :count framework commit behind — refresh fast-forwards|[2,*] :count framework commits behind — refresh fast-forwards', (int) $s['upstream']['mirror']['behind'], ['count' => $s['upstream']['mirror']['behind']]) }}</x-ui.badge>
-                                    @elseif ($s['upstream']['mirror']['state'] === 'diverged')
-                                        <x-ui.badge variant="danger" :title="__('The mirror holds commits the framework does not — someone committed to it directly. A person must reconcile it; a refresh will refuse.')">{{ __('Diverged — mirror +:ahead / framework +:behind', ['ahead' => $s['upstream']['mirror']['ahead'], 'behind' => $s['upstream']['mirror']['behind']]) }}</x-ui.badge>
-                                    @else
-                                        <span class="text-xs text-muted">{{ $s['upstream']['mirror']['reason'] ?? $s['upstream']['error'] ?? __('Status unavailable.') }}</span>
+                                @if ($s['upstream']['error'])
+                                    <div class="mt-1 text-xs text-muted">{{ $s['upstream']['error'] }}</div>
+                                    @if ($s['upstream']['error_detail'])
+                                        <details class="mt-1">
+                                            <summary class="cursor-pointer text-xs text-muted underline">{{ __('Git response') }}</summary>
+                                            <pre class="mt-1 max-w-xs overflow-x-auto whitespace-pre-wrap break-words font-mono text-[11px] text-muted">{{ $s['upstream']['error_detail'] }}</pre>
+                                        </details>
                                     @endif
-                                </div>
-                                <div class="mt-1 flex flex-wrap items-center gap-1.5">
-                                    <span class="text-xs text-muted">{{ __('Stable') }}</span>
-                                    @if ($s['upstream']['stable']['state'] === 'contained')
-                                        <x-ui.badge variant="success" :title="__('Every vetted upstream commit is already in the stable branch; no integration proposal is needed.')">{{ __('Has every upstream update') }}</x-ui.badge>
-                                    @elseif ($s['upstream']['stable']['state'] === 'behind')
-                                        <x-ui.badge variant="warning" :title="__('Upstream has updates the stable branch has not integrated; preparing an integration proposal starts that integration.')">{{ trans_choice('{1} :count update available — prepare an integration proposal|[2,*] :count updates available — prepare an integration proposal', (int) $s['upstream']['stable']['missing'], ['count' => $s['upstream']['stable']['missing']]) }}</x-ui.badge>
-                                        @if (($s['upstream']['stable']['fork_own'] ?? 0) > 0)
-                                            <span class="text-xs text-muted">{{ trans_choice('{1} (:count commit of this deployment\'s own)|[2,*] (:count commits of this deployment\'s own)', (int) $s['upstream']['stable']['fork_own'], ['count' => $s['upstream']['stable']['fork_own']]) }}</span>
-                                        @endif
-                                    @else
-                                        <span class="text-xs text-muted">{{ $s['upstream']['stable']['reason'] ?? __('Status unavailable.') }}</span>
-                                    @endif
-                                </div>
-                                @if ($s['upstream']['error'] && $s['upstream']['error_detail'])
-                                    <details class="mt-1">
-                                        <summary class="cursor-pointer text-xs text-muted underline">{{ __('Git response') }}</summary>
-                                        <pre class="mt-1 max-w-xs overflow-x-auto whitespace-pre-wrap break-words font-mono text-[11px] text-muted">{{ $s['upstream']['error_detail'] }}</pre>
-                                    </details>
-                                @endif
-                                {{-- The sync gate's state, stated plainly (#345): a closed gate is an
-                                     explanation on the page, never a hidden concept or a 500 at the
-                                     point of use. Visibility above never depends on this gate. --}}
-                                @if ($upstreamSyncState['available'])
-                                    <div class="mt-1 text-xs text-muted">{{ __('Upstream synchronization is available because APP_ENV is :environment and your account has permission.', ['environment' => $upstreamSyncState['environment']]) }}</div>
-                                    {{-- Buttons are convenience; the boundary is UpstreamSyncGate::authorize()
-                                         inside each action (#339). Stops at the proposal push: the PR is a
-                                         human click in GitHub. Refresh mirror stays available as an optional
-                                         compatibility action (#455) — it is no longer required before
-                                         preparing an integration proposal. --}}
-                                    <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
-                                        <x-ui.button type="button" size="sm" variant="secondary" wire:click="refreshMirror" wire:loading.attr="disabled" wire:target="refreshMirror" :title="__('Fast-forward origin\'s optional mirror branch from the framework upstream; refused if the mirror has diverged.')">
-                                            <span wire:loading.remove wire:target="refreshMirror">{{ __('Refresh mirror') }}</span>
-                                            <span wire:loading wire:target="refreshMirror">{{ __('Refreshing…') }}</span>
-                                        </x-ui.button>
-                                        <x-ui.button type="button" size="sm" variant="secondary" wire:click="prepareIntegration" wire:loading.attr="disabled" wire:target="prepareIntegration" :title="__('Create upstream-sync-<sha> = master + the pinned upstream commit in the object database (the checkout is never touched) and push it; the pull request is then opened by a person in GitHub.')">
-                                            <span wire:loading.remove wire:target="prepareIntegration">{{ __('Create integration proposal') }}</span>
-                                            <span wire:loading wire:target="prepareIntegration">{{ __('Preparing…') }}</span>
-                                        </x-ui.button>
-                                    </div>
-                                @else
-                                    <div class="mt-1 text-xs text-muted">{{ $upstreamSyncState['reason'] }}</div>
                                 @endif
                             @endif
                         </td>
@@ -743,15 +694,12 @@
                                 <x-ui.badge variant="info">{{ __('Checking') }}</x-ui.badge>
                             @elseif ($s['error'] === null && ! $latestStatusLoaded && ($maintenanceActive || $updateInProgress))
                                 <span class="text-xs text-muted">—</span>
-                            @elseif ($s['update_state'] === 'up_to_date' && (($s['upstream'] ?? null) === null || $s['upstream']['stable']['state'] === 'contained'))
-                                <x-ui.badge variant="success">{{ __('Up to date') }}</x-ui.badge>
+                            @elseif (($s['upstream'] ?? null) !== null)
+                                {{-- The lane rows below carry this source's state and actions
+                                     (#482); a second summary here would just disagree with them. --}}
+                                <span class="text-xs text-muted">{{ __('See lanes') }}</span>
                             @elseif ($s['update_state'] === 'up_to_date')
-                                {{-- Matching origin alone must not read as plainly current when the
-                                     stable branch has not integrated every vetted upstream commit:
-                                     plain "Up to date" requires stable contained (#344/#374/#455).
-                                     The mirror line is informational only since #455 — it no longer
-                                     gates this badge. --}}
-                                <x-ui.badge variant="warning" :title="__('The deployment matches its own remote, but the stable branch has not integrated every upstream commit yet — see the Stable line.')">{{ __('Fork up to date') }}</x-ui.badge>
+                                <x-ui.badge variant="success">{{ __('Up to date') }}</x-ui.badge>
                             @elseif ($s['update_state'] === 'ahead')
                                 <x-ui.badge variant="info" :title="__('Local HEAD already contains the remote branch head.')">{{ __('Ahead of remote') }}</x-ui.badge>
                             @elseif ($s['update_state'] === 'behind' && $s['working_tree']['ahead'] > 0)
@@ -766,6 +714,119 @@
                             @endif
                         </td>
                     </tr>
+                    @if (($u = $s['upstream'] ?? null) !== null)
+                        @php $stableBranch = \App\Base\Software\Services\UpstreamSyncService::STABLE_BRANCH; @endphp
+                        {{-- One lane row = one operator question = one action (#482). --}}
+                        <tr wire:key="lane-checkout-{{ $s['key'] }}">
+                            <td class="px-table-cell-x py-table-cell-y pl-10 align-top">
+                                <div class="text-sm font-medium text-ink">{{ __('Checkout') }}</div>
+                                <div class="text-xs text-muted">{{ __('Is this working copy current?') }}</div>
+                            </td>
+                            <td class="px-table-cell-x py-table-cell-y align-top font-mono text-xs text-muted">{{ $s['branch'] }} &harr; origin/{{ $stableBranch }}</td>
+                            <td class="px-table-cell-x py-table-cell-y align-top" colspan="2">
+                                @if ($u['checkout']['state'] === 'unknown')
+                                    <x-ui.badge variant="warning">{{ __('origin unreadable') }}</x-ui.badge>
+                                    <div class="mt-0.5 text-xs text-muted">{{ $u['checkout']['reason'] }}</div>
+                                @else
+                                    <x-ui.ahead-behind
+                                        :ahead="$u['checkout']['ahead']"
+                                        :behind="$u['checkout']['behind']"
+                                        :behind-label="trans_choice('{1} :count to pull|[2,*] :count to pull', (int) $u['checkout']['behind'], ['count' => $u['checkout']['behind']])"
+                                        :ahead-label="trans_choice('{1} :count unpushed|[2,*] :count unpushed', (int) $u['checkout']['ahead'], ['count' => $u['checkout']['ahead']])"
+                                    />
+                                    @if ($u['checkout']['behind'] > 0 || $u['checkout']['ahead'] > 0)
+                                        <div class="mt-0.5 text-xs text-muted">
+                                            @if ($u['checkout']['behind'] > 0){{ trans_choice('{1} :count to pull|[2,*] :count to pull', (int) $u['checkout']['behind'], ['count' => $u['checkout']['behind']]) }}@endif
+                                            @if ($u['checkout']['behind'] > 0 && $u['checkout']['ahead'] > 0) · @endif
+                                            @if ($u['checkout']['ahead'] > 0){{ trans_choice('{1} :count unpushed|[2,*] :count unpushed', (int) $u['checkout']['ahead'], ['count' => $u['checkout']['ahead']]) }}@endif
+                                        </div>
+                                    @endif
+                                @endif
+                            </td>
+                            <td class="px-table-cell-x py-table-cell-y align-top text-right">
+                                @if ($u['checkout']['state'] === 'ahead' || $u['checkout']['state'] === 'diverged')
+                                    <x-ui.badge variant="danger" :title="__('Push or reconcile this checkout\'s local commits; Update stays blocked while any exist.')">{{ __('Push or reconcile first') }}</x-ui.badge>
+                                @elseif ($u['checkout']['state'] === 'behind')
+                                    <x-ui.badge variant="warning" :title="__('Update pulls origin/:branch into this checkout as part of its run.', ['branch' => $stableBranch])">{{ __('Pull needed — Update handles it') }}</x-ui.badge>
+                                @elseif ($u['checkout']['state'] === 'in_sync')
+                                    <x-ui.badge variant="success">{{ __('In sync') }}</x-ui.badge>
+                                @else
+                                    <span class="text-xs text-muted">&mdash;</span>
+                                @endif
+                            </td>
+                        </tr>
+                        <tr wire:key="lane-stable-{{ $s['key'] }}">
+                            <td class="px-table-cell-x py-table-cell-y pl-10 align-top">
+                                <div class="text-sm font-medium text-ink">{{ __('Fork stable') }}</div>
+                                <div class="text-xs text-muted">{{ __('Has stable integrated upstream?') }}</div>
+                            </td>
+                            <td class="px-table-cell-x py-table-cell-y align-top font-mono text-xs text-muted">origin/{{ $stableBranch }} &harr; {{ ($u['repo'] !== null ? 'upstream' : $u['remote']) }}/{{ $u['branch'] ?? '—' }}</td>
+                            <td class="px-table-cell-x py-table-cell-y align-top" colspan="2">
+                                @if ($u['stable']['state'] === 'unknown')
+                                    <x-ui.badge variant="warning">{{ $u['head'] !== null ? __('needs origin') : __('needs upstream') }}</x-ui.badge>
+                                    <div class="mt-0.5 text-xs text-muted">{{ $u['stable']['reason'] }}@if ($u['head'] !== null) {{ __('The upstream head is known; the comparison waits on the other side.') }}@endif</div>
+                                @else
+                                    <x-ui.ahead-behind
+                                        :ahead="$u['stable']['fork_own']"
+                                        :behind="$u['stable']['missing']"
+                                        :behind-label="trans_choice('{1} :count upstream update to integrate|[2,*] :count upstream updates to integrate', (int) $u['stable']['missing'], ['count' => $u['stable']['missing']])"
+                                        :ahead-label="trans_choice('{1} :count fork-own commit (expected)|[2,*] :count fork-own commits (expected)', (int) $u['stable']['fork_own'], ['count' => $u['stable']['fork_own']])"
+                                    />
+                                    @if (($u['stable']['missing'] ?? 0) > 0 || ($u['stable']['fork_own'] ?? 0) > 0)
+                                        <div class="mt-0.5 text-xs text-muted">
+                                            @if (($u['stable']['missing'] ?? 0) > 0){{ trans_choice('{1} :count upstream update to integrate|[2,*] :count upstream updates to integrate', (int) $u['stable']['missing'], ['count' => $u['stable']['missing']]) }}@endif
+                                            @if (($u['stable']['missing'] ?? 0) > 0 && ($u['stable']['fork_own'] ?? 0) > 0) · @endif
+                                            @if (($u['stable']['fork_own'] ?? 0) > 0){{ trans_choice('{1} :count fork-own commit (expected)|[2,*] :count fork-own commits (expected)', (int) $u['stable']['fork_own'], ['count' => $u['stable']['fork_own']]) }}@endif
+                                        </div>
+                                    @endif
+                                @endif
+                            </td>
+                            <td class="px-table-cell-x py-table-cell-y align-top text-right">
+                                @if ($u['stable']['state'] === 'behind' && $upstreamSyncState['available'])
+                                    <x-ui.button type="button" size="sm" variant="secondary" wire:click="prepareIntegration" wire:loading.attr="disabled" wire:target="prepareIntegration" :title="__('Create upstream-sync-<sha> = :branch + the pinned upstream commit in the object database (the checkout is never touched) and push it; the pull request is then opened by a person in GitHub.', ['branch' => $stableBranch])">
+                                        <span wire:loading.remove wire:target="prepareIntegration">{{ __('Create integration proposal') }}</span>
+                                        <span wire:loading wire:target="prepareIntegration">{{ __('Preparing…') }}</span>
+                                    </x-ui.button>
+                                @elseif ($u['stable']['state'] === 'behind')
+                                    <x-ui.badge variant="warning" :title="$upstreamSyncState['reason']">{{ __('Integration needed') }}</x-ui.badge>
+                                @elseif ($u['stable']['state'] === 'contained')
+                                    <x-ui.badge variant="success" :title="__('Every vetted upstream commit is already in the stable branch; no integration proposal is needed.')">{{ __('Has every upstream update') }}</x-ui.badge>
+                                @else
+                                    <span class="text-xs text-muted">&mdash;</span>
+                                @endif
+                            </td>
+                        </tr>
+                        <tr wire:key="lane-deploy-{{ $s['key'] }}">
+                            <td class="px-table-cell-x py-table-cell-y pl-10 align-top">
+                                <div class="text-sm font-medium text-ink">{{ __('Deploy') }}</div>
+                                <div class="text-xs text-muted">{{ __('Is the runtime current?') }}</div>
+                            </td>
+                            <td class="px-table-cell-x py-table-cell-y align-top font-mono text-xs text-muted">{{ __('runtime') }} &larr; origin/{{ $stableBranch }}</td>
+                            <td class="px-table-cell-x py-table-cell-y align-top" colspan="2">
+                                @if ($s['update_state'] === 'behind')
+                                    <x-ui.badge variant="warning">{{ __('Sources changed since last run') }}</x-ui.badge>
+                                @elseif ($s['update_state'] === 'up_to_date' || $s['update_state'] === 'ahead')
+                                    <x-ui.badge variant="success">{{ __('Current') }}</x-ui.badge>
+                                @else
+                                    <span class="text-xs text-muted">{{ $s['error'] ?? __('Status could not be determined.') }}</span>
+                                @endif
+                            </td>
+                            <td class="px-table-cell-x py-table-cell-y align-top text-right">
+                                @if ($s['update_state'] === 'behind' && ($u['checkout']['ahead'] ?? 0) > 0)
+                                    <x-ui.badge variant="danger" :title="__('Push or reconcile this source\'s local commits before updating.')">{{ __('Update blocked') }}</x-ui.badge>
+                                @elseif ($s['update_state'] === 'behind')
+                                    <x-ui.button type="button" size="sm" variant="primary" wire:click="updateRepo('{{ $s['key'] }}')" x-on:click="openRunLog()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateInProgress || maintenanceActive" wire:target="updateRepo('{{ $s['key'] }}')">
+                                        <span wire:loading.remove wire:target="updateRepo('{{ $s['key'] }}')">{{ __('Update') }}</span>
+                                        <span wire:loading wire:target="updateRepo('{{ $s['key'] }}')">{{ __('Updating…') }}</span>
+                                    </x-ui.button>
+                                @elseif ($s['update_state'] === 'up_to_date' || $s['update_state'] === 'ahead')
+                                    <x-ui.badge variant="success">{{ __('Up to date') }}</x-ui.badge>
+                                @else
+                                    <span class="text-xs text-muted">&mdash;</span>
+                                @endif
+                            </td>
+                        </tr>
+                    @endif
                 @endforeach
             </x-ui.table>
         </x-ui.card>
