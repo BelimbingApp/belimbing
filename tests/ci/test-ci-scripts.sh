@@ -76,6 +76,22 @@ trap 'rm -rf "$mount_guard_fixture"' EXIT
         echo 'mount-guard.sh accepted a merge that smuggled a mount edit' >&2; exit 1
     fi
 
+    # A diff that ERRORS (missing parent objects, e.g. a shallow or corrupt
+    # checkout) must abort the guard with exit >1, never read as "no change"
+    # (Copilot's fail-closed finding on #479).
+    shallow_clone=$(mktemp -d)
+    git clone -q --depth 1 "file://$PWD" "$shallow_clone" 2>/dev/null
+    (
+        cd "$shallow_clone"
+        guard_status=0
+        bash "$root/scripts/ci/mount-guard.sh" "$base" "$refreshed_head" >/dev/null 2>&1 || guard_status=$?
+        if [ "$guard_status" -le 1 ]; then
+            echo "mount-guard.sh judged a range with missing objects (exit $guard_status); it must fail closed" >&2
+            exit 1
+        fi
+    )
+    rm -rf "$shallow_clone"
+
     git checkout -q -b unrelated-branch "$base"
     echo 'app change' > app.php
     git add -A

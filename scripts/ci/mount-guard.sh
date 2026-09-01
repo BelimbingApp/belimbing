@@ -30,6 +30,22 @@ is_pull_merge_commit() {
     is_squash_commit "$second_parent"
 }
 
+# Fail-closed diff (Copilot's finding on #479): `git diff --quiet` exits 0 for
+# no difference, 1 for a difference, and >1 on error — a missing parent object
+# in a shallow or corrupt checkout must abort the guard loudly, never read as
+# "no mount change". lint.yml checks out with fetch-depth: 0, so an error here
+# is a broken environment, not a normal shape.
+mount_diff() {
+    local status
+    git diff --quiet "$1" "$2" -- 'docs/ai-team/' 2>/dev/null
+    status=$?
+    if [[ "$status" -gt 1 ]]; then
+        echo "mount-guard: git diff $1..$2 failed (missing objects or corrupt checkout); refusing to judge the range" >&2
+        exit 2
+    fi
+    return "$status"
+}
+
 # A merge commit only *introduces* a mount change when the mount differs from
 # EVERY parent. A branch-refresh merge ("Merge branch 'main' into <topic>")
 # shows main's legitimate pulls in its first-parent diff but matches its main
@@ -38,22 +54,40 @@ is_pull_merge_commit() {
 merge_introduces_mount_change() {
     local commit="$1" parent
     for parent in $(git log -1 --format=%P "$commit"); do
-        git diff --name-only "$parent" "$commit" -- 'docs/ai-team/' 2>/dev/null | grep -q . || return 1
+        # Exit 0 from mount_diff means the mount matches this parent — the
+        # merge introduced nothing.
+        if mount_diff "$parent" "$commit"; then
+            return 1
+        fi
     done
     return 0
+}
+
+# The range enumeration itself must fail closed: in a shallow or partial
+# checkout `git rev-list` errors on unknown endpoints, and an empty loop would
+# read as "nothing to judge" (the same finding, one level up).
+for endpoint in "$base" "$head"; do
+    if ! git cat-file -e "$endpoint^{commit}" 2>/dev/null; then
+        echo "mount-guard: endpoint $endpoint is not present in this checkout; refusing to judge the range" >&2
+        exit 2
+    fi
+done
+range_commits=$(git rev-list "$base..$head") || {
+    echo "mount-guard: git rev-list $base..$head failed; refusing to judge the range" >&2
+    exit 2
 }
 
 offenders=()
 while IFS= read -r commit; do
     [[ -n "$commit" ]] || continue
-    git diff --name-only "$commit^" "$commit" -- 'docs/ai-team/' 2>/dev/null | grep -q . || continue
+    mount_diff "$commit^" "$commit" && continue
     is_squash_commit "$commit" && continue
     is_pull_merge_commit "$commit" && continue
     if [[ "$(git log -1 --format=%P "$commit" | wc -w)" -ge 2 ]] && ! merge_introduces_mount_change "$commit"; then
         continue
     fi
     offenders+=("$commit $(git log -1 --format=%s "$commit")")
-done < <(git rev-list "$base..$head")
+done <<< "$range_commits"
 
 if [[ "${#offenders[@]}" -gt 0 ]]; then
     echo "refusing: docs/ai-team/ was edited directly instead of through the subtree pull (ai-team#26)." >&2
