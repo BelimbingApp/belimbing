@@ -2,10 +2,25 @@
 
 use App\Base\Database\Services\SchemaDrift\DeclaredIndexType;
 use App\Base\Database\Services\SchemaDrift\MigrationSourceParser;
+use App\Base\Database\Services\SchemaDrift\ParsedMigration;
 use App\Base\Database\Services\SchemaDrift\TableOperationKind;
 use Tests\TestCase;
 
 uses(TestCase::class);
+
+/**
+ * Parse a migration whose up() body is the given statements.
+ *
+ * The scaffold around a one-statement migration is ten identical lines. Written
+ * out per case it is most of the case, which is both harder to read and enough
+ * repetition to fail the duplication gate on new code.
+ */
+function parseMigrationUp(string $body): ParsedMigration
+{
+    return app(MigrationSourceParser::class)->parseContents(
+        "<?php\nreturn new class {\n    public function up(): void\n    {\n".$body."\n    }\n};\n"
+    );
+}
 
 it('replays migration operations in source order and matches Laravel fluent index priority', function (): void {
     $migration = <<<'PHP'
@@ -202,4 +217,80 @@ it('ignores raw checks and triggers that are outside the compared schema scope',
 
     expect($parsed->unreadable)->toBe([])
         ->and($parsed->operations)->toBe([]);
+});
+
+it('ignores the plpgsql function a trigger is built from, not only the trigger', function (): void {
+    // The exemption listed CREATE TRIGGER but not the function it calls, so a
+    // portable guard was readable on SQLite and unreadable on PostgreSQL --
+    // reporting the whole migration INCOMPLETE on the one driver where the
+    // trigger does any work. A function is no more comparable than a trigger.
+    // Both statements sit inside driver conditionals on purpose. The exemption
+    // is consulted from two places, and this is the one that produced #498:
+    // MutationDetector decides whether an enclosing if() counts as a schema
+    // mutation. A bare statement exercises only the reporting path and would
+    // leave the property this test exists for unasserted.
+    $parsed = parseMigrationUp(
+        "        if (DB::connection()->getDriverName() === 'pgsql') {\n"
+        .'            DB::unprepared("CREATE OR REPLACE FUNCTION widgets_guard() RETURNS trigger AS $$ BEGIN RETURN NEW; END; $$ LANGUAGE plpgsql; CREATE TRIGGER widgets_guard_trigger BEFORE UPDATE ON widgets FOR EACH ROW EXECUTE FUNCTION widgets_guard();");'."\n"
+        ."        }\n"
+        ."\n"
+        ."        if (DB::connection()->getDriverName() === 'sqlite') {\n"
+        .'            DB::statement("CREATE TRIGGER widgets_guard_trigger BEFORE UPDATE ON widgets BEGIN SELECT RAISE(ABORT, \'immutable\'); END");'."\n"
+        .'        }'
+    );
+
+    expect($parsed->unreadable)->toBe([])
+        ->and($parsed->operations)->toBe([]);
+});
+
+it('exempts the drop forms too, so replacing a trigger does not depend on statement order', function (): void {
+    // Revising a trigger is ordinarily DROP then CREATE. Only the first
+    // statement of a string is inspected, so leaving DROP out would have made
+    // statement order decide whether migrate came back clean.
+    // Inside a driver conditional for the same reason as the plpgsql case: the
+    // drop arm has to be exempt on the MutationDetector path too, or replacing
+    // a trigger inside an if() still condemns the whole conditional.
+    $parsed = parseMigrationUp(
+        "        if (DB::connection()->getDriverName() === 'pgsql') {\n"
+        ."            DB::unprepared('DROP TRIGGER IF EXISTS g ON widgets; CREATE TRIGGER g BEFORE UPDATE ON widgets FOR EACH ROW EXECUTE FUNCTION widgets_guard();');\n"
+        ."            DB::statement('DROP FUNCTION IF EXISTS widgets_guard()');\n"
+        ."            DB::statement('CREATE OR REPLACE TRIGGER g BEFORE UPDATE ON widgets FOR EACH ROW EXECUTE FUNCTION widgets_guard()');\n"
+        .'        }'
+    );
+
+    expect($parsed->unreadable)->toBe([])
+        ->and($parsed->operations)->toBe([]);
+});
+
+it('matches every exemption arm case-insensitively', function (): void {
+    // Pins the /i on both arms. Without it a lower-cased migration -- which
+    // Laravel's own generated SQL is full of -- goes unreadable.
+    expect(parseMigrationUp(
+        "        DB::statement('create or replace trigger g before update on widgets execute function f()');"
+    )->unreadable)->toBe([]);
+
+    expect(parseMigrationUp(
+        "        DB::statement('drop function if exists widgets_guard()');"
+    )->unreadable)->toBe([]);
+});
+
+it('matches the exemption on whole words, so an identifier that merely starts with the keyword is not one', function (): void {
+    // Pins the \b on both arms. These strings are not valid SQL, and that is
+    // the point: the guard must not depend on the input being well formed to
+    // avoid treating TRIGGER_LOG or FUNCTIONAL_AREA as TRIGGER or FUNCTION.
+    expect(parseMigrationUp(
+        "        DB::statement('CREATE TRIGGER_LOG widgets (id integer)');"
+    )->unreadable)->not->toBe([]);
+
+    expect(parseMigrationUp(
+        "        DB::statement('DROP FUNCTIONAL_AREA widgets');"
+    )->unreadable)->not->toBe([]);
+});
+
+it('still refuses a raw statement that is neither trigger, function, nor a supported index form', function (): void {
+    $parsed = parseMigrationUp(
+        "        DB::statement('CREATE MATERIALIZED VIEW widget_totals AS SELECT 1');"
+    );
+
+    expect($parsed->unreadable)->not->toBe([]);
 });
