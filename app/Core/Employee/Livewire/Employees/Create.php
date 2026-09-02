@@ -123,7 +123,7 @@ class Create extends Component
                 'integer',
                 Rule::exists(Employee::class, 'id')->where('company_id', $this->companyId),
             ],
-            'employeeNumber' => ['required', 'string', 'max:255', Rule::unique('employees')->where('company_id', $this->companyId)],
+            'employeeNumber' => ['required', 'string', 'max:255', Rule::unique('employees', 'employee_number')->where('company_id', $this->companyId)],
             'fullName' => ['required', 'string', 'max:255'],
             'shortName' => ['nullable', 'string', 'max:255'],
             'designation' => ['nullable', 'string', 'max:255'],
