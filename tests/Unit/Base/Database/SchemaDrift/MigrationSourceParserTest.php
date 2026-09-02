@@ -203,3 +203,46 @@ it('ignores raw checks and triggers that are outside the compared schema scope',
     expect($parsed->unreadable)->toBe([])
         ->and($parsed->operations)->toBe([]);
 });
+
+it('ignores the plpgsql function a trigger is built from, not only the trigger', function (): void {
+    // The exemption listed CREATE TRIGGER but not the function it calls, so a
+    // portable guard was readable on SQLite and unreadable on PostgreSQL --
+    // reporting the whole migration INCOMPLETE on the one driver where the
+    // trigger does any work. A function is no more comparable than a trigger.
+    $migration = <<<'PHP'
+        <?php
+        return new class {
+            public function up(): void
+            {
+                if (DB::connection()->getDriverName() === 'pgsql') {
+                    DB::unprepared("CREATE OR REPLACE FUNCTION widgets_guard() RETURNS trigger AS $$ BEGIN RETURN NEW; END; $$ LANGUAGE plpgsql; CREATE TRIGGER widgets_guard_trigger BEFORE UPDATE ON widgets FOR EACH ROW EXECUTE FUNCTION widgets_guard();");
+                }
+
+                if (DB::connection()->getDriverName() === 'sqlite') {
+                    DB::statement("CREATE TRIGGER widgets_guard_trigger BEFORE UPDATE ON widgets BEGIN SELECT RAISE(ABORT, 'immutable'); END");
+                }
+            }
+        };
+        PHP;
+
+    $parsed = app(MigrationSourceParser::class)->parseContents($migration);
+
+    expect($parsed->unreadable)->toBe([])
+        ->and($parsed->operations)->toBe([]);
+});
+
+it('still refuses a raw statement that is neither trigger, function, nor a supported index form', function (): void {
+    $migration = <<<'PHP'
+        <?php
+        return new class {
+            public function up(): void
+            {
+                DB::statement('CREATE MATERIALIZED VIEW widget_totals AS SELECT 1');
+            }
+        };
+        PHP;
+
+    $parsed = app(MigrationSourceParser::class)->parseContents($migration);
+
+    expect($parsed->unreadable)->not->toBe([]);
+});

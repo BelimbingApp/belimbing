@@ -156,7 +156,14 @@ final class SchemaCallProcessor
     public static function isRawSchemaOutsideComparison(string $sql): bool
     {
         return preg_match('/^\s*ALTER\s+TABLE\s+\S+\s+ADD\s+CONSTRAINT\s+\S+\s+CHECK\b/i', $sql) === 1
-            || preg_match('/^\s*CREATE\s+TRIGGER\b/i', $sql) === 1;
+            || preg_match('/^\s*CREATE\s+TRIGGER\b/i', $sql) === 1
+            // A trigger's function is no more comparable than the trigger it
+            // serves: the comparator knows tables, columns and indexes, and a
+            // plpgsql function is none of them. Exempting CREATE TRIGGER while
+            // reporting the CREATE OR REPLACE FUNCTION beside it made portable
+            // trigger DDL unreadable on PostgreSQL only, which is where the
+            // triggers actually run.
+            || preg_match('/^\s*CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\b/i', $sql) === 1;
     }
 
     /** @param  list<string>  $prefix */
