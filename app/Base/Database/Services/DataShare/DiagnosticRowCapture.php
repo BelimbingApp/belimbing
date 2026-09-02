@@ -269,12 +269,10 @@ class DiagnosticRowCapture
         $maxScalarBytes = $this->settings->integer('data_share.limits.max_scalar_bytes', 5 * 1024 * 1024, 1, 2147483647);
 
         foreach ($row as $column => $value) {
-            // PDO pgsql returns bytea as a stream resource; read it so the
-            // size and encoding rules below apply on every driver.
-            if (is_resource($value)) {
-                $value = (string) stream_get_contents($value);
-                $row[$column] = $value;
-            }
+            // Read a bytea stream so the size and encoding rules below apply
+            // on every driver.
+            $value = DataShareValueNormalizer::bytes($value);
+            $row[$column] = $value;
 
             if (! is_string($value)) {
                 continue;

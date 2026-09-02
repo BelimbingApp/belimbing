@@ -32,6 +32,9 @@ class PortableDataShareMirrorValueCodec
             return null;
         }
 
+        // Read a bytea stream before the string checks, or the binary branch
+        // never fires on PostgreSQL and a resource reaches CanonicalJson.
+        $value = DataShareValueNormalizer::bytes($value);
         $type = $this->schemas->portableType($targetType);
         if (is_string($value) && (! mb_check_encoding($value, 'UTF-8') || $type === 'binary')) {
             return ['__data_share_binary_base64' => base64_encode($value)];
@@ -59,7 +62,9 @@ class PortableDataShareMirrorValueCodec
                 throw DataShareMirrorException::safeFailure(__('The temporary staging file contains invalid binary data.'));
             }
 
-            $row[$column] = $decoded;
+            // The target is always PostgreSQL: bind as a stream or the bytes
+            // are truncated at the first NUL on insert.
+            $row[$column] = DataShareValueNormalizer::stream($decoded);
         }
 
         return $row;

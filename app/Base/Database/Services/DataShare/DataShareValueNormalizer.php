@@ -20,12 +20,9 @@ class DataShareValueNormalizer
             return null;
         }
 
-        // PDO pgsql returns bytea as a stream resource; SQLite returns a string.
-        // Read it here, once, so the binary rule below sees the same value on
-        // every driver and nothing downstream meets a resource.
-        if (is_resource($value)) {
-            $value = (string) stream_get_contents($value);
-        }
+        // Read a bytea stream before the string checks, or the binary branch
+        // never fires on PostgreSQL and a resource reaches CanonicalJson.
+        $value = self::bytes($value);
 
         if (is_string($value) && ($this->type($table, $column) === 'binary' || ! mb_check_encoding($value, 'UTF-8'))) {
             return ['__data_share_binary_base64' => base64_encode($value)];
@@ -61,12 +58,33 @@ class DataShareValueNormalizer
     public function materialize(array $row): array
     {
         foreach ($row as $column => $value) {
-            if (is_resource($value)) {
-                $row[$column] = (string) stream_get_contents($value);
-            }
+            $row[$column] = self::bytes($value);
         }
 
         return $row;
+    }
+
+    /**
+     * A fetched value as bytes: PDO pgsql hands bytea back as a stream. The
+     * one place that rule lives; every Data Share reader goes through it.
+     */
+    public static function bytes(mixed $value): mixed
+    {
+        return is_resource($value) ? (string) stream_get_contents($value) : $value;
+    }
+
+    /**
+     * Bytes as a stream for a query-builder write, so the connection binds
+     * PDO::PARAM_LOB. Bound as a plain string, PostgreSQL truncates a bytea
+     * at the first NUL and rejects other non-UTF-8 bytes.
+     */
+    public static function stream(string $bytes): mixed
+    {
+        $stream = fopen('php://memory', 'r+');
+        fwrite($stream, $bytes);
+        rewind($stream);
+
+        return $stream;
     }
 
     /**
@@ -81,11 +99,7 @@ class DataShareValueNormalizer
             return $value;
         }
 
-        $stream = fopen('php://memory', 'r+');
-        fwrite($stream, $value);
-        rewind($stream);
-
-        return $stream;
+        return self::stream($value);
     }
 
     public function type(string $table, string $column): string

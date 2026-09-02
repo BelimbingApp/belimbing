@@ -554,6 +554,32 @@ it('resolves each Base Setting only once per Data Share service instance', funct
         ->and($settings->integer('data_share.transfer_limits.max_records', 250000, 1, 10000000))->toBe(42);
 });
 
+it('matches destination rows by binary key on every driver', function (): void {
+    Schema::create('test_data_share_binary_keys', function (Blueprint $table): void {
+        $table->binary('token')->primary();
+        $table->string('name');
+    });
+
+    try {
+        DB::table('test_data_share_binary_keys')->insert([
+            'token' => genericShareBinaryStream(GENERIC_SHARE_BINARY_PAYLOAD),
+            'name' => 'keyed by bytes',
+        ]);
+        $definition = new DataShareTableDefinition('test_data_share_binary_keys', ['token'], []);
+        $record = ['primary_key' => ['token' => ['__data_share_binary_base64' => base64_encode(GENERIC_SHARE_BINARY_PAYLOAD)]]];
+
+        // A binary predicate bound as text returns no rows on PostgreSQL; bound as
+        // a stream it finds the row on every driver.
+        $existing = app(DataShareDestinationMapper::class)->findExisting($definition, $record);
+
+        expect($existing)->not->toBeNull()
+            ->and($existing['name'])->toBe('keyed by bytes')
+            ->and(genericShareBinary($existing['token']))->toBe(GENERIC_SHARE_BINARY_PAYLOAD);
+    } finally {
+        Schema::dropIfExists('test_data_share_binary_keys');
+    }
+});
+
 it('exports deterministic bounded payloads with physical identities and binary fidelity', function (): void {
     seedGenericDataShareFixture();
     becomeGenericDataShareSource();
