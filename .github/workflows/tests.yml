@@ -92,8 +92,9 @@ jobs:
 
   # Every supported database driver is a production driver; the main job's
   # driver is not a stand-in for "real". This lane exists only for tests whose
-  # mechanism needs this driver (they skip elsewhere). Do not replace the
-  # main job with it. See tests/AGENTS.md "Database Drivers".
+  # mechanism needs this driver. Such tests self-skip elsewhere AND must be
+  # registered in this job's run steps below - a self-skip alone runs nowhere.
+  # Do not replace the main job with it. See tests/AGENTS.md "Database Drivers".
   postgres-mirror:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -112,6 +113,12 @@ jobs:
       MIRROR_TEST_DB_USERNAME: postgres
       MIRROR_TEST_DB_PASSWORD: postgres
       BLB_POSTGRES_MIRROR_TESTS: 'true'
+      BLB_POSTGRES_FRESHNESS_TESTS: 'true'
+      BLB_FRESHNESS_PG_HOST: 127.0.0.1
+      BLB_FRESHNESS_PG_PORT: 5432
+      BLB_FRESHNESS_PG_DB: blb_freshness_target
+      BLB_FRESHNESS_PG_USER: postgres
+      BLB_FRESHNESS_PG_PASS: postgres
 
     services:
       postgres:
@@ -159,8 +166,10 @@ jobs:
       - name: Prove migrations on PostgreSQL
         run: php artisan migrate --force --no-interaction
 
-      - name: Create isolated mirror target
-        run: psql --host=127.0.0.1 --username=postgres --dbname=postgres --command='CREATE DATABASE blb_mirror_target'
+      - name: Create isolated mirror and freshness targets
+        run: |
+          psql --host=127.0.0.1 --username=postgres --dbname=postgres --command='CREATE DATABASE blb_mirror_target'
+          psql --host=127.0.0.1 --username=postgres --dbname=postgres --command='CREATE DATABASE blb_freshness_target'
         env:
           PGPASSWORD: postgres
 
@@ -169,5 +178,10 @@ jobs:
           ./vendor/bin/pest tests/Integration/Database/DevelopmentTableMirrorPostgresTest.php
           DB_CONNECTION=sqlite DB_DATABASE=:memory: ./vendor/bin/pest tests/Integration/Database/PortableDevelopmentTableMirrorTest.php
 
-      - name: Run schedule reservation concurrency tests
-        run: ./vendor/bin/pest tests/Integration/Schedule/ScheduleRunReservationConcurrencyTest.php
+      - name: Run schedule concurrency tests
+        run: |
+          ./vendor/bin/pest tests/Integration/Schedule/ScheduleRunReservationConcurrencyTest.php
+          ./vendor/bin/pest tests/Integration/Schedule/ScheduleConfigurationGateConcurrencyTest.php
+
+      - name: Run data-freshness trigger proof
+        run: ./vendor/bin/pest tests/Integration/Database/DataFreshnessPostgresTest.php
