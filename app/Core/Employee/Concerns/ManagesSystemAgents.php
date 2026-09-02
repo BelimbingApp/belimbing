@@ -81,9 +81,7 @@ trait ManagesSystemAgents
             'employment_start' => now()->toDateString(),
         ]));
 
-        // TEMPORARY — deliberate break for the #491 coverage proof, reverted in
-        // the next commit. Removing the sequence reset must turn postgres-mirror
-        // red while ci (SQLite) stays green.
+        static::resetSequenceAfterExplicitIdInsert();
 
         return true;
     }
