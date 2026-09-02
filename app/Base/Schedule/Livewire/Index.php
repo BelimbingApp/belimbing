@@ -29,6 +29,7 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Throwable;
@@ -359,9 +360,17 @@ class Index extends Component
         $saved = $this->withSchedulerConfigurationLock($key, function () use ($key, $task, $expression): bool {
             if (($this->cronVersion ?? '') === '') {
                 try {
-                    ScheduleOverride::query()->create(
+                    // The unique-index violation IS the staleness verdict, but
+                    // on PostgreSQL a failed statement aborts the whole
+                    // enclosing transaction (25P02) — here, the configuration
+                    // gate this closure runs inside. A nested transaction
+                    // issues a SAVEPOINT, so the refusal rolls back only the
+                    // attempted INSERT and the gate transaction stays usable.
+                    // SQLite reaches the same outcome through the same
+                    // savepoint, so both production drivers agree.
+                    DB::transaction(fn () => ScheduleOverride::query()->create(
                         ['source' => 'scheduler', 'key' => $key, 'name' => $task->name, 'expression' => $expression],
-                    );
+                    ));
                 } catch (UniqueConstraintViolationException) {
                     return false;
                 }

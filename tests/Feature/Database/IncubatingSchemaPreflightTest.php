@@ -537,14 +537,22 @@ test('preflight drops mutually-referencing tables through the foreign-key cycle 
         INCUBATING_SCHEMA_TEST_CYCLE_TABLE,
     );
 
+    // Build the cycle in the one order both production drivers accept.
+    // PostgreSQL resolves a foreign key's target table at CREATE time, so the
+    // forward reference SQLite tolerates cannot be written first: create both
+    // tables, then close the cycle with an ALTER.
     Schema::create(INCUBATING_SCHEMA_TEST_TABLE, function (Blueprint $table): void {
         $table->id();
-        $table->foreignId('cycle_id')->nullable()->constrained(INCUBATING_SCHEMA_TEST_CYCLE_TABLE);
+        $table->unsignedBigInteger('cycle_id')->nullable();
     });
 
     Schema::create(INCUBATING_SCHEMA_TEST_CYCLE_TABLE, function (Blueprint $table): void {
         $table->id();
         $table->foreignId('widget_id')->constrained(INCUBATING_SCHEMA_TEST_TABLE);
+    });
+
+    Schema::table(INCUBATING_SCHEMA_TEST_TABLE, function (Blueprint $table): void {
+        $table->foreign('cycle_id')->references('id')->on(INCUBATING_SCHEMA_TEST_CYCLE_TABLE);
     });
 
     // Rows that reference each other, so a DROP TABLE under foreign-key

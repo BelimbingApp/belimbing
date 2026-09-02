@@ -18,6 +18,17 @@ use Illuminate\Support\Str;
 
 class TaskModelRecommendationService
 {
+    /**
+     * The `ai_runs.source` discriminator for a recommendation run.
+     *
+     * `ai_runs.source` is varchar(30). SQLite ignores a declared width and
+     * PostgreSQL enforces it, so an over-long value stores fine on one
+     * production driver and raises 22001 on the other — which is what the
+     * previous 33-character value did, making this whole feature unusable on
+     * every PostgreSQL deployment. Keep any replacement within 30 characters.
+     */
+    public const RUN_SOURCE = 'task_model_recommendation';
+
     public function __construct(
         private readonly ConfigResolver $configResolver,
         private readonly AgenticRuntime $agenticRuntime,
@@ -58,7 +69,7 @@ class TaskModelRecommendationService
             'id' => $runId,
             'employee_id' => $employeeId,
             'acting_for_user_id' => auth()->id(),
-            'source' => 'core_ai_task_model_recommendation',
+            'source' => self::RUN_SOURCE,
             'execution_mode' => $policy->mode->value,
             'status' => AiRunStatus::Queued,
             'runtime_meta' => ['task_key' => $taskKey],
@@ -80,7 +91,7 @@ class TaskModelRecommendationService
             allowedToolNames: [],
             executionControlsOverride: ['limits' => ['max_output_tokens' => 120]],
             context: new RuntimeInvocationContext(
-                source: 'core_ai_task_model_recommendation',
+                source: self::RUN_SOURCE,
                 taskKey: $taskKey,
             ),
         );

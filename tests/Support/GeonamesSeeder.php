@@ -14,11 +14,11 @@ final class GeonamesSeeder
     public static function countries(int $count): void
     {
         for ($i = 0; $i < $count; $i++) {
-            $iso = sprintf('C%02d', $i);
+            $iso = self::iso($i);
 
             Country::query()->create([
                 'iso' => $iso,
-                'iso3' => $iso.'A',
+                'iso3' => 'X'.$iso,
                 'iso_numeric' => sprintf('%03d', 900 + $i),
                 'country' => "Country $i",
                 'continent' => 'EU',
@@ -32,7 +32,7 @@ final class GeonamesSeeder
     {
         for ($i = 0; $i < $count; $i++) {
             Admin1::query()->create([
-                'code' => "C$i.A$i",
+                'code' => self::iso($i).'.A'.$i,
                 'name' => "Division $i",
             ]);
         }
@@ -57,5 +57,18 @@ final class GeonamesSeeder
                 'place_name' => "Place $i",
             ]);
         }
+    }
+
+    /**
+     * A distinct two-letter code for row $i.
+     *
+     * The real column is varchar(2) and PostgreSQL enforces that, while SQLite
+     * ignores the declared length — so a wider fixture value silently passes on
+     * one production driver and fails on the other. Keep this inside the
+     * declared width so the fixture is honest on both.
+     */
+    private static function iso(int $index): string
+    {
+        return chr(ord('A') + intdiv($index, 26)).chr(ord('A') + $index % 26);
     }
 }

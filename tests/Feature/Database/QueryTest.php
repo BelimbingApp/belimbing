@@ -23,6 +23,7 @@ use App\Core\Company\Models\Company;
 use App\Core\User\Models\Query;
 use App\Core\User\Models\User;
 use App\Core\User\Models\UserPin;
+use Illuminate\Support\Facades\DB;
 use Tests\Support\PermissiveUrlSafetyGuard;
 
 const QUERY_TEST_SQL = 'SELECT 1 AS id, \'hello\' AS name';
@@ -315,6 +316,23 @@ test('executor returns structured result for valid query', function (): void {
     expect($result['total'])->toBe(1);
     expect($result['current_page'])->toBe(1);
     expect($result['last_page'])->toBe(1);
+});
+
+test('executor arms the PostgreSQL read-only transaction guard, not only the SELECT validation', function (): void {
+    // SKIP CATEGORY: test mechanism. `transaction_read_only` is a PostgreSQL
+    // setting and SQLite has no transaction-level read-only mode at all, so
+    // there is no SQLite behaviour for this assertion to read — QueryExecutor
+    // documents application-level enforcement as the whole guard on that
+    // driver, and the SELECT-only validation tests above are that guard. This
+    // is not a "fails on SQLite" skip: nothing about the code's behaviour is
+    // being hidden, only a setting that one driver does not have.
+    if (DB::connection('readonly')->getDriverName() !== 'pgsql') {
+        test()->markTestSkipped('Requires a real PostgreSQL connection (DB_CONNECTION=pgsql) — see the postgres-mirror CI job or a local pgsql .env.');
+    }
+
+    $result = app(QueryExecutor::class)->execute("SELECT current_setting('transaction_read_only') AS read_only");
+
+    expect($result['rows'][0]['read_only'])->toBe('on');
 });
 
 test('executor rejects a non-operator tenant before touching the database', function (): void {
