@@ -63,6 +63,11 @@ trait AppliesDiagnosticPackages
      */
     private function applyRow(array $entry, array $values, array $row): bool
     {
+        // Decoded binary must be bound as a stream or PostgreSQL truncates it.
+        foreach ($values as $column => $value) {
+            $values[$column] = $this->diagnosticValueNormalizer()->bindable($entry['table'], $column, $value);
+        }
+
         if ($this->rowExists($entry['table'], $entry['primary_keys'], $row)) {
             $updates = array_diff_key($values, array_fill_keys($entry['primary_keys'], true));
 

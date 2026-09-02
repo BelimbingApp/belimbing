@@ -26,6 +26,22 @@ beforeEach(function (): void {
     ]);
 });
 
+/** Bind bytes as a stream so PostgreSQL stores them intact (PDO::PARAM_LOB). */
+function diagnosticImportBlobStream(string $bytes): mixed
+{
+    $stream = fopen('php://memory', 'r+');
+    fwrite($stream, $bytes);
+    rewind($stream);
+
+    return $stream;
+}
+
+/** PDO pgsql returns bytea as a stream; SQLite as a string. */
+function diagnosticImportBlobBytes(mixed $value): ?string
+{
+    return is_resource($value) ? (string) stream_get_contents($value) : $value;
+}
+
 /** @return array{parent: string, child: string} */
 function createDiagnosticImportTables(string $suffix): array
 {
@@ -40,6 +56,7 @@ function createDiagnosticImportTables(string $suffix): array
         $table->unsignedBigInteger('id')->primary();
         $table->unsignedBigInteger('parent_id');
         $table->text('diagnostic_value');
+        $table->binary('blob')->nullable();
         $table->foreign('parent_id')->references('id')->on($parent);
     });
 
@@ -63,7 +80,10 @@ it('receives, inspects, and transactionally imports a diagnostic package parents
     $diagnosticValue = "\u{200F}شركة\u{200B} Aме\u{0301}rica";
 
     DB::table($tables['parent'])->insert(['id' => 7, 'label' => 'Parent']);
-    DB::table($tables['child'])->insert(['id' => 11, 'parent_id' => 7, 'diagnostic_value' => $diagnosticValue]);
+    // A NUL-bearing binary: bound as text it is truncated on PostgreSQL, so the
+    // capture must materialize the stream and the import must bind a stream.
+    $blob = "\x00\xFFdiag";
+    DB::table($tables['child'])->insert(['id' => 11, 'parent_id' => 7, 'diagnostic_value' => $diagnosticValue, 'blob' => diagnosticImportBlobStream($blob)]);
 
     $capture = createDiagnosticImportPackage($tables['child'], 11);
     $rawPackage = (string) Storage::disk('local')->get($capture['path']);
@@ -90,7 +110,8 @@ it('receives, inspects, and transactionally imports a diagnostic package parents
 
     expect(DB::table($tables['parent'])->where('id', 7)->value('label'))->toBe('Parent')
         ->and($restored['diagnostic_value'])->toBe($diagnosticValue)
-        ->and(bin2hex($restored['diagnostic_value']))->toBe(bin2hex($diagnosticValue));
+        ->and(bin2hex($restored['diagnostic_value']))->toBe(bin2hex($diagnosticValue))
+        ->and(bin2hex((string) diagnosticImportBlobBytes($restored['blob'])))->toBe(bin2hex($blob));
 });
 
 it('rejects Incoming bytes that no longer match the destination receipt', function (): void {

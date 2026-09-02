@@ -38,6 +38,11 @@ class DiagnosticPackageImporter
         return $this->settings;
     }
 
+    protected function diagnosticValueNormalizer(): DataShareValueNormalizer
+    {
+        return app(DataShareValueNormalizer::class);
+    }
+
     /**
      * @return array{package_id: string, package_sha256: string, size_bytes: int, tables: list<array{table: string, rows: int, inserts: int, updates: int}>, total_rows: int}
      */
