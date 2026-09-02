@@ -326,32 +326,60 @@ ensure_bunx_available() {
     return 1
 }
 
-resolve_bun_executable() {
-    if command_exists bun; then
-        command -v bun
-        return 0
-    fi
+readonly BUN_SERVICE_PATH='/usr/local/bin/bun'
 
-    if [[ -f "$HOME/.bun/bin/bun" ]]; then
-        printf '%s\n' "$HOME/.bun/bin/bun"
-        return 0
-    fi
+resolve_bun_executable() {
+    local candidate
+
+    for candidate in \
+        "$(command -v bun 2>/dev/null || true)" \
+        "$HOME/.bun/bin/bun"; do
+        [[ -n "$candidate" ]] || continue
+        [[ -x "$candidate" ]] || continue
+
+        if "$candidate" --version >/dev/null 2>&1; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
 
     return 1
 }
 
 link_bun_to_service_path() {
     local bun_path=$1
+    local service_path=$BUN_SERVICE_PATH
+
+    if [[ "$bun_path" == "$service_path" ]]; then
+        echo -e "${CYAN}ℹ${NC} Bun is already at ${CYAN}$service_path${NC}; skipping service-path link"
+        return 0
+    fi
+
+    if [[ -e "$service_path" && -e "$bun_path" ]]; then
+        local service_real bun_real
+        service_real=$(readlink -f "$service_path" 2>/dev/null || printf '%s' "$service_path")
+        bun_real=$(readlink -f "$bun_path" 2>/dev/null || printf '%s' "$bun_path")
+
+        if [[ "$service_real" == "$bun_real" ]]; then
+            echo -e "${CYAN}ℹ${NC} ${CYAN}$service_path${NC} already resolves to the pinned Bun; skipping link"
+            return 0
+        fi
+    fi
+
+    if [[ -e "$service_path" && ! -L "$service_path" ]]; then
+        echo -e "${YELLOW}⚠${NC} ${CYAN}$service_path${NC} exists and is not a symlink — leaving it untouched; BLB_BUN_EXECUTABLE covers FrankenPHP PATH"
+        return 0
+    fi
 
     if [[ -w '/usr/local/bin' ]]; then
-        ln -sf "$bun_path" /usr/local/bin/bun
-        echo -e "${GREEN}✓${NC} Linked Bun into ${CYAN}/usr/local/bin/bun${NC} for service PATH"
+        ln -sf "$bun_path" "$service_path"
+        echo -e "${GREEN}✓${NC} Linked Bun into ${CYAN}$service_path${NC} for service PATH"
         return 0
     fi
 
     if sudo -n true 2>/dev/null; then
-        sudo ln -sf "$bun_path" /usr/local/bin/bun
-        echo -e "${GREEN}✓${NC} Linked Bun into ${CYAN}/usr/local/bin/bun${NC} for service PATH"
+        sudo ln -sf "$bun_path" "$service_path"
+        echo -e "${GREEN}✓${NC} Linked Bun into ${CYAN}$service_path${NC} for service PATH"
         return 0
     fi
 
