@@ -20,12 +20,9 @@ class DataShareValueNormalizer
             return null;
         }
 
-        // PDO pgsql returns bytea as a stream resource; SQLite returns a string.
-        // Read it here, once, so the binary rule below sees the same value on
-        // every driver and nothing downstream meets a resource.
-        if (is_resource($value)) {
-            $value = (string) stream_get_contents($value);
-        }
+        // Read a bytea stream before the string checks, or the binary branch
+        // never fires on PostgreSQL and a resource reaches CanonicalJson.
+        $value = self::bytes($value);
 
         if (is_string($value) && ($this->type($table, $column) === 'binary' || ! mb_check_encoding($value, 'UTF-8'))) {
             return ['__data_share_binary_base64' => base64_encode($value)];
