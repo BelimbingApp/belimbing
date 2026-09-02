@@ -203,26 +203,30 @@ it('reports freshness as Unknown on SQLite, never Clean', function () {
     expect($tracker->driverSupportsTracking())->toBeFalse()
         ->and($tracker->state('sbg_products', null))->toBe(DataFreshnessState::Unknown)
         ->and($tracker->state('sbg_products', 5))->toBe(DataFreshnessState::Unknown);
-});
+})->skip(
+    fn (): bool => DB::connection()->getDriverName() === 'pgsql',
+    'Asserts the unsupported-driver path; PostgreSQL is the supported driver and is covered by tests/Integration/Database/DataFreshnessPostgresTest.php in the postgres-mirror lane.',
+);
 
 it('reads the generation as the latest append-only event and compacts to one per table', function () {
     // Generation = MAX(id) of a table's events; compaction keeps only the latest.
-    DB::table('base_database_data_freshness_events')->insert([
-        ['table_name' => 'sbg_widgets', 'occurred_at' => now()],
-        ['table_name' => 'sbg_widgets', 'occurred_at' => now()],
-        ['table_name' => 'sbg_orders', 'occurred_at' => now()],
-    ]);
+    // Capture the ids rather than assuming they start at 1: a PostgreSQL
+    // sequence does not roll back with the test transaction.
+    $events = DB::table('base_database_data_freshness_events');
+    $events->insertGetId(['table_name' => 'sbg_widgets', 'occurred_at' => now()]);
+    $latestWidgetEvent = $events->insertGetId(['table_name' => 'sbg_widgets', 'occurred_at' => now()]);
+    $events->insertGetId(['table_name' => 'sbg_orders', 'occurred_at' => now()]);
 
     $tracker = app(DataFreshnessTracker::class);
 
-    expect($tracker->currentGeneration('sbg_widgets'))->toBe(2)
+    expect($tracker->currentGeneration('sbg_widgets'))->toBe($latestWidgetEvent)
         ->and($tracker->currentGeneration('never_tracked'))->toBeNull();
 
     $tracker->compact();
 
     // One latest event kept per table; the generation (MAX id) is unchanged.
     expect(DB::table('base_database_data_freshness_events')->count())->toBe(2)
-        ->and($tracker->currentGeneration('sbg_widgets'))->toBe(2);
+        ->and($tracker->currentGeneration('sbg_widgets'))->toBe($latestWidgetEvent);
 });
 
 it('builds an append-only statement-level PostgreSQL trigger that covers TRUNCATE', function () {
@@ -268,7 +272,10 @@ it('installs no tracking and stays a safe no-op on an unsupported driver', funct
     $tracker->installTracking('sbg_products'); // SQLite: must not throw or install anything
 
     expect($tracker->currentGeneration('sbg_products'))->toBeNull();
-});
+})->skip(
+    fn (): bool => DB::connection()->getDriverName() === 'pgsql',
+    'Asserts the unsupported-driver path; PostgreSQL is the supported driver and is covered by tests/Integration/Database/DataFreshnessPostgresTest.php in the postgres-mirror lane.',
+);
 
 it('acknowledges a captured push generation and leaves it untouched on later non-tracking observations', function () {
     $projection = app(DataShareMirrorObservationProjection::class);
@@ -286,7 +293,10 @@ it('attaches no freshness tracking on an unsupported driver', function () {
 
     expect($result['driver_supported'])->toBeFalse()
         ->and($result['attached'])->toBe([]);
-});
+})->skip(
+    fn (): bool => DB::connection()->getDriverName() === 'pgsql',
+    'Asserts the unsupported-driver path; PostgreSQL is the supported driver and is covered by tests/Integration/Database/DataFreshnessPostgresTest.php in the postgres-mirror lane.',
+);
 
 it('keeps ledger bookkeeping out of mutation audit while emitting one semantic action', function () {
     $spy = recordingSpy();
