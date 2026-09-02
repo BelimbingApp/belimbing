@@ -421,6 +421,45 @@ Base owns the narrow `FrameworkPrimitivesProvisioner` contract. Core/Company
 implements transactional, idempotent and sequence-safe provisioning of the operator
 tenant, primary company, assignment, initial admin, and Lara.
 
+### Retiring and Erasing a Company
+
+Removing a company comes in two shapes, and they are not interchangeable.
+
+**Retiring** a company is a soft delete (`$company->delete()`). The row stays, so
+anything that asks which companies a tenant has held keeps getting the true
+answer. This is the only removal the admin UI offers, and it is the intended
+one.
+
+**Erasing** a company is a hard delete (`$company->forceDelete()`). It removes
+the row, and the row is the only record that the company ever existed. Core
+refuses an erasure that would leave the tenant looking as though it had held
+fewer companies than it has - in practice, once a tenant has held a second
+company, none of them can be erased, and `CompanyErasureException` says so.
+
+The reason is that a company's existence is not private to Core. Other
+subsystems read a tenant's company list and decide what a user may see from it;
+a rule that relaxes for a single-company tenant, for example, is correct while
+the tenant really has one company and wrong the moment an erasure makes a
+two-company tenant look like one. Core cannot enumerate those subsystems, and a
+list of subsystems allowed to object would silently permit anything missing from
+it, so the rule is stated about the fact instead: once a tenant has held more
+than one company, that number never goes down. A tenant's sole company can still
+be erased, because with no second company there is nobody left to widen access
+onto. See `BelimbingApp/belimbing#489`.
+
+There is a cost to this and it is worth knowing before you hit it. A tenant that
+creates a second company by mistake and retires it can never get back to being a
+single-company tenant, because the readers of this fact count retired companies
+too - which is exactly what makes retirement safe. Force delete used to be the
+escape hatch from that mistake and this rule closes it. Nothing is exposed by
+that, but a recoverable mistake becomes a permanent one. The real fix is the
+stored workforce-company to platform-company link tracked in
+`BelimbingApp/blb-people#21`, which removes the need to reason from a count.
+
+`CompanyBuilder` carries the same refusal onto the query path, because Eloquent's
+own `Builder::forceDelete()` would otherwise erase rows in one statement without
+loading a model.
+
 ### Foundation vs Vendor Layer
 
 The Company module is **foundation layer** - it provides essential functionality that every deployment needs. Vendors can extend it with:

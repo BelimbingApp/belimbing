@@ -4,6 +4,7 @@ use App\Base\Tenancy\Contracts\TenantContext;
 use App\Base\Tenancy\Exceptions\TenantContextMissingException;
 use App\Base\Tenancy\Models\Tenant;
 use App\Core\Address\Models\Address;
+use App\Core\Company\Exceptions\CompanyErasureException;
 use App\Core\Company\Exceptions\CompanyTenantAssignmentException;
 use App\Core\Company\Exceptions\PrimaryCompanyAssignmentException;
 use App\Core\Company\Exceptions\PrimaryCompanyDeletionException;
@@ -230,16 +231,20 @@ test('deletion updates the invoking company instance after a primary transfer', 
     expect($first->trashed())->toBeTrue();
 });
 
-test('the former primary company can be force deleted after a transfer', function (): void {
+test('transferring the primary role does not make the former primary company erasable', function (): void {
     [$tenant, $first] = createTenantWithCompany();
     $second = Company::factory()->create(['tenant_id' => $tenant->id]);
     $manager = app(PrimaryCompanyManager::class);
     $manager->assign($tenant, $first);
     $manager->transfer($tenant, $second);
 
-    $first->forceDelete();
+    // Giving up the primary role clears the only guard that used to stand in
+    // the way. The tenant has still held two companies, and erasing the row
+    // would tell everyone downstream it had only ever held one. See
+    // tests/Feature/Company/CompanyErasureTest.php.
+    expect(fn () => $first->forceDelete())->toThrow(CompanyErasureException::class);
 
-    expect(Company::withTrashed()->find($first->id))->toBeNull()
+    expect(Company::withTrashed()->find($first->id))->not->toBeNull()
         ->and($manager->requireForTenant($tenant)->is($second))->toBeTrue();
 });
 

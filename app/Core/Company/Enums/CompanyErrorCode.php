@@ -6,6 +6,7 @@ use App\Base\Foundation\Enums\BlbErrorCode;
 
 enum CompanyErrorCode: string implements BlbErrorCode
 {
+    case COMPANY_ERASURE_FORBIDDEN = 'company_erasure_forbidden';
     case COMPANY_TENANT_ASSIGNMENT_INVALID = 'company_tenant_assignment_invalid';
     case PRIMARY_COMPANY_ASSIGNMENT_INVALID = 'primary_company_assignment_invalid';
     case PRIMARY_COMPANY_DELETION_FORBIDDEN = 'primary_company_deletion_forbidden';
