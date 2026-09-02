@@ -326,11 +326,89 @@ ensure_bunx_available() {
     return 1
 }
 
+readonly BUN_SERVICE_PATH='/usr/local/bin/bun'
+
+resolve_bun_executable() {
+    local candidate
+
+    for candidate in \
+        "$(command -v bun 2>/dev/null || true)" \
+        "$HOME/.bun/bin/bun"; do
+        [[ -n "$candidate" ]] || continue
+        [[ -x "$candidate" ]] || continue
+
+        if "$candidate" --version >/dev/null 2>&1; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+link_bun_to_service_path() {
+    local bun_path=$1
+    local service_path=$BUN_SERVICE_PATH
+
+    if [[ "$bun_path" == "$service_path" ]]; then
+        echo -e "${CYAN}ℹ${NC} Bun is already at ${CYAN}$service_path${NC}; skipping service-path link"
+        return 0
+    fi
+
+    if [[ -e "$service_path" && -e "$bun_path" ]]; then
+        local service_real bun_real
+        service_real=$(readlink -f "$service_path" 2>/dev/null || printf '%s' "$service_path")
+        bun_real=$(readlink -f "$bun_path" 2>/dev/null || printf '%s' "$bun_path")
+
+        if [[ "$service_real" == "$bun_real" ]]; then
+            echo -e "${CYAN}ℹ${NC} ${CYAN}$service_path${NC} already resolves to the pinned Bun; skipping link"
+            return 0
+        fi
+    fi
+
+    if [[ -e "$service_path" && ! -L "$service_path" ]]; then
+        echo -e "${YELLOW}⚠${NC} ${CYAN}$service_path${NC} exists and is not a symlink — leaving it untouched; BLB_BUN_EXECUTABLE covers FrankenPHP PATH"
+        return 0
+    fi
+
+    if [[ -w '/usr/local/bin' ]]; then
+        ln -sf "$bun_path" "$service_path"
+        echo -e "${GREEN}✓${NC} Linked Bun into ${CYAN}$service_path${NC} for service PATH"
+        return 0
+    fi
+
+    if sudo -n true 2>/dev/null; then
+        sudo ln -sf "$bun_path" "$service_path"
+        echo -e "${GREEN}✓${NC} Linked Bun into ${CYAN}$service_path${NC} for service PATH"
+        return 0
+    fi
+
+    echo -e "${YELLOW}⚠${NC} Could not link Bun into /usr/local/bin — BLB_BUN_EXECUTABLE is pinned in .env instead"
+}
+
+pin_bun_for_long_running_services() {
+    local bun_path
+    bun_path=$(resolve_bun_executable) || {
+        echo -e "${YELLOW}⚠${NC} Bun executable not resolved; skipping BLB_BUN_EXECUTABLE pin" >&2
+        return 0
+    }
+
+    update_env_file "BLB_BUN_EXECUTABLE" "$bun_path"
+    echo -e "${GREEN}✓${NC} Pinned Bun executable in .env: ${CYAN}$bun_path${NC}"
+
+    case "$(detect_os)" in
+        linux|wsl2)
+            link_bun_to_service_path "$bun_path"
+            ;;
+    esac
+}
+
 # Handle successful Bun setup/installation
 handle_bun_success() {
     local bun_version
     bun_version=$(get_bun_version)
     ensure_bunx_available || exit 1
+    pin_bun_for_long_running_services
 
     save_to_setup_state "JS_RUNTIME" "bun"
     save_to_setup_state "BUN_VERSION" "$bun_version"

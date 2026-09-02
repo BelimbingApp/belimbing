@@ -1138,6 +1138,22 @@ test('manual frontend rebuild installs with the lockfile package manager and bui
     Process::assertRan(fn ($process): bool => $process->command === ['bun', 'run', 'build']);
 });
 
+test('frontend rebuild uses the configured bun executable when pinned', function (): void {
+    $original = config('app.bun_executable');
+
+    config(['app.bun_executable' => '/usr/local/bin/blb-bun']);
+    Process::fake();
+
+    try {
+        app(DeploymentService::class)->rebuildAssets();
+
+        Process::assertRan(fn ($process): bool => array_slice($process->command, 0, 3) === ['/usr/local/bin/blb-bun', 'install', '--frozen-lockfile']);
+        Process::assertRan(fn ($process): bool => $process->command === ['/usr/local/bin/blb-bun', 'run', 'build']);
+    } finally {
+        config(['app.bun_executable' => $original]);
+    }
+});
+
 test('maintenance actions rebuild from the component and record the run', function (): void {
     $user = createAdminUser();
     $this->actingAs($user);

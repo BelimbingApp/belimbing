@@ -79,7 +79,21 @@ class DeploymentBuildRunner
 
     public function frontendPackageManager(): string
     {
-        return $this->nodeInstallCommand()[0];
+        if (is_file(base_path('bun.lock'))) {
+            return 'bun';
+        }
+
+        foreach ([
+            'pnpm-lock.yaml' => 'pnpm',
+            'yarn.lock' => 'yarn',
+            'package-lock.json' => 'npm',
+        ] as $lockfile => $manager) {
+            if (is_file(base_path($lockfile))) {
+                return $manager;
+            }
+        }
+
+        return 'npm';
     }
 
     /**
@@ -148,7 +162,7 @@ class DeploymentBuildRunner
     private function nodeInstallCommand(): array
     {
         if (is_file(base_path('bun.lock'))) {
-            $args = ['bun', 'install', self::FROZEN_LOCKFILE];
+            $args = [$this->bunExecutable(), 'install', self::FROZEN_LOCKFILE];
 
             if (DIRECTORY_SEPARATOR === '\\') {
                 $args[] = '--backend';
@@ -177,7 +191,7 @@ class DeploymentBuildRunner
     private function nodeBuildCommand(): array
     {
         foreach ([
-            'bun.lock' => ['bun', 'run', 'build'],
+            'bun.lock' => [$this->bunExecutable(), 'run', 'build'],
             'pnpm-lock.yaml' => ['pnpm', 'run', 'build'],
             'yarn.lock' => ['yarn', 'run', 'build'],
         ] as $lockfile => $command) {
@@ -187,6 +201,21 @@ class DeploymentBuildRunner
         }
 
         return ['npm', 'run', 'build'];
+    }
+
+    private function bunExecutable(): string
+    {
+        $configured = function_exists('config') ? config('app.bun_executable') : null;
+
+        if (is_string($configured) && $configured !== '') {
+            return $configured;
+        }
+
+        $environmentExecutable = getenv('BLB_BUN_EXECUTABLE');
+
+        return is_string($environmentExecutable) && $environmentExecutable !== ''
+            ? $environmentExecutable
+            : 'bun';
     }
 
     private function processError(ProcessResult $result): string
