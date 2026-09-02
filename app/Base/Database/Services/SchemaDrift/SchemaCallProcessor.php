@@ -281,10 +281,17 @@ final class SchemaCallProcessor
     private static function copyQuoted(string $sql, int $i, int $length, string &$current): int
     {
         $quote = $sql[$i];
+        $backslashEscapes = $quote === "'" && self::isPostgresEscapeString($sql, $i);
         $current .= $quote;
         $i++;
         while ($i < $length) {
             $current .= $sql[$i];
+            if ($backslashEscapes && $sql[$i] === '\\' && $i + 1 < $length) {
+                $current .= $sql[$i + 1];
+                $i += 2;
+
+                continue;
+            }
             if ($sql[$i] === $quote) {
                 // A doubled quote is an escaped quote, not the terminator.
                 if ($i + 1 < $length && $sql[$i + 1] === $quote) {
@@ -300,6 +307,16 @@ final class SchemaCallProcessor
         }
 
         return $i;
+    }
+
+    /** PostgreSQL E'…' strings use backslash escapes; ordinary strings do not. */
+    private static function isPostgresEscapeString(string $sql, int $quoteOffset): bool
+    {
+        if ($quoteOffset === 0 || ! in_array($sql[$quoteOffset - 1], ['E', 'e'], true)) {
+            return false;
+        }
+
+        return $quoteOffset === 1 || ! self::isDollarTagByte($sql[$quoteOffset - 2]);
     }
 
     /**

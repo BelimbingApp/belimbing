@@ -351,6 +351,12 @@ it('keeps a semicolon inside a string literal from splitting its statement', fun
         ->and($parsed->operations)->toBe([]);
 });
 
+it('reports a schema statement following a PostgreSQL escape string', function (): void {
+    // The quote after the backslash belongs to the E-string; the second quote
+    // closes it and the CREATE TABLE is a separate statement that must not hide.
+    expect(parseUnprepared("SELECT E'foo\\''; CREATE TABLE secret (id integer);")->unreadable)->not->toBe([]);
+});
+
 it('flags a mutation hidden behind a comment inside a runtime-dependent loop', function (): void {
     // The loop body is not replayed, so only the mutation detector can see this
     // one; a comment-prefixed head used to read as "no mutation".
