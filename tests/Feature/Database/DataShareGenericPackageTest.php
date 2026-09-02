@@ -106,6 +106,55 @@ afterEach(function (): void {
     Schema::dropIfExists(GENERIC_SHARE_PARENT);
 });
 
+/** Bind binary as a stream (PDO::PARAM_LOB): a plain string is truncated at NUL by PostgreSQL. */
+function genericShareBinaryStream(string $bytes): mixed
+{
+    $stream = fopen('php://memory', 'r+');
+    fwrite($stream, $bytes);
+    rewind($stream);
+
+    return $stream;
+}
+
+/** PDO pgsql returns bytea as a stream; SQLite as a string. Compare bytes, not handles. */
+function genericShareBinary(mixed $value): ?string
+{
+    return is_resource($value) ? (string) stream_get_contents($value) : $value;
+}
+
+/**
+ * Two tables that reference each other. Both must exist before either foreign
+ * key is declared: PostgreSQL rejects a forward reference even with constraint
+ * checking deferred, and the failure would poison the test transaction.
+ */
+function genericShareCreateCycle(string $first, string $second): void
+{
+    Schema::create($first, function (Blueprint $table): void {
+        $table->integer('id')->primary();
+        $table->integer('second_id');
+    });
+    Schema::create($second, function (Blueprint $table): void {
+        $table->integer('id')->primary();
+        $table->integer('first_id');
+    });
+    Schema::table($first, fn (Blueprint $table) => $table->foreign('second_id')->references('id')->on($second));
+    Schema::table($second, fn (Blueprint $table) => $table->foreign('first_id')->references('id')->on($first));
+}
+
+/** Drop a referencing pair: PostgreSQL needs CASCADE for a table another one still references. */
+function genericShareDropCycle(string $first, string $second): void
+{
+    if (DB::connection()->getDriverName() === 'pgsql') {
+        DB::statement("DROP TABLE IF EXISTS \"{$second}\" CASCADE");
+        DB::statement("DROP TABLE IF EXISTS \"{$first}\" CASCADE");
+
+        return;
+    }
+
+    Schema::dropIfExists($second);
+    Schema::dropIfExists($first);
+}
+
 function seedGenericDataShareFixture(): void
 {
     DB::table(GENERIC_SHARE_PARENT)->insert([
@@ -117,7 +166,7 @@ function seedGenericDataShareFixture(): void
             'metadata' => json_encode(['nested' => ['ready' => true]], JSON_THROW_ON_ERROR),
             'effective_on' => '2026-07-10',
             'amount' => '12.3400',
-            'payload' => GENERIC_SHARE_BINARY_PAYLOAD,
+            'payload' => genericShareBinaryStream(GENERIC_SHARE_BINARY_PAYLOAD),
         ],
         [
             'id' => 10,
@@ -226,8 +275,7 @@ it('rejects a selected foreign-key cycle that has no generic insert order', func
     Schema::disableForeignKeyConstraints();
 
     try {
-        DB::statement("CREATE TABLE {$first} (id INTEGER PRIMARY KEY, second_id INTEGER NOT NULL, FOREIGN KEY(second_id) REFERENCES {$second}(id))");
-        DB::statement("CREATE TABLE {$second} (id INTEGER PRIMARY KEY, first_id INTEGER NOT NULL, FOREIGN KEY(first_id) REFERENCES {$first}(id))");
+        genericShareCreateCycle($first, $second);
         TableRegistry::register($first, 'Data Share Cycle Fixture', $scope, 'test');
         TableRegistry::register($second, 'Data Share Cycle Fixture', $scope, 'test');
 
@@ -236,8 +284,7 @@ it('rejects a selected foreign-key cycle that has no generic insert order', func
     } finally {
         TableRegistry::unregister($second);
         TableRegistry::unregister($first);
-        Schema::dropIfExists($second);
-        Schema::dropIfExists($first);
+        genericShareDropCycle($first, $second);
         Schema::enableForeignKeyConstraints();
     }
 });
@@ -249,8 +296,7 @@ it('keeps the Data Share page available when one registered scope has a foreign-
     Schema::disableForeignKeyConstraints();
 
     try {
-        DB::statement("CREATE TABLE {$first} (id INTEGER PRIMARY KEY, second_id INTEGER NOT NULL, FOREIGN KEY(second_id) REFERENCES {$second}(id))");
-        DB::statement("CREATE TABLE {$second} (id INTEGER PRIMARY KEY, first_id INTEGER NOT NULL, FOREIGN KEY(first_id) REFERENCES {$first}(id))");
+        genericShareCreateCycle($first, $second);
         TableRegistry::register($first, 'Data Share Page Cycle Fixture', $scope, 'test');
         TableRegistry::register($second, 'Data Share Page Cycle Fixture', $scope, 'test');
         $this->actingAs(createAdminUser());
@@ -270,8 +316,7 @@ it('keeps the Data Share page available when one registered scope has a foreign-
     } finally {
         TableRegistry::unregister($second);
         TableRegistry::unregister($first);
-        Schema::dropIfExists($second);
-        Schema::dropIfExists($first);
+        genericShareDropCycle($first, $second);
         Schema::enableForeignKeyConstraints();
     }
 });
@@ -570,7 +615,7 @@ it('plans and applies inserts, preserves relationships, rejects replay, and repl
     app(DataSharePackageApplier::class)->apply($plan, $receipt->package_sha256, $plan->plan_hash, confirmed: true);
 
     expect((int) DB::table(GENERIC_SHARE_CHILD)->value('parent_id'))->toBe(10)
-        ->and(DB::table(GENERIC_SHARE_PARENT)->where('id', 2)->value('payload'))->toBe(GENERIC_SHARE_BINARY_PAYLOAD)
+        ->and(genericShareBinary(DB::table(GENERIC_SHARE_PARENT)->where('id', 2)->value('payload')))->toBe(GENERIC_SHARE_BINARY_PAYLOAD)
         ->and(DataShareEvent::query()->pluck('action')->all())->toContain('offer_published', 'received', 'planned', 'applied');
 
     expect(fn () => app(DataSharePackageApplier::class)->apply(

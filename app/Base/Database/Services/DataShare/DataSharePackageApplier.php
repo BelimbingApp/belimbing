@@ -185,7 +185,7 @@ class DataSharePackageApplier
         }
 
         $desired = $this->destination->desiredValues($table, $record);
-        DB::table($table->table)->insert($desired);
+        DB::table($table->table)->insert($this->destination->bindableValues($table, $desired));
 
         $stored = $this->destination->findExisting($table, $record);
 

@@ -12,8 +12,9 @@ uses(TestCase::class, LazilyRefreshDatabase::class);
 
 const RIS_EMPLOYEE_ID = 1;
 const RIS_SESSION_ID = 'sess_test_001';
-const RIS_RUN_ID = 'run_test_001';
-const RIS_RUN_ID_2 = 'run_test_002';
+// ai_runs.id is a ULID char(26): PostgreSQL pads shorter ids on read.
+const RIS_RUN_ID = '01jtstrn000000000000000001';
+const RIS_RUN_ID_2 = '01jtstrn000000000000000002';
 const RIS_DISPATCH_ID = 'op_test_001';
 const RIS_PROVIDER = 'anthropic';
 const RIS_MODEL = 'claude-opus-4';
@@ -159,4 +160,12 @@ describe('inspectDispatchRun', function () {
             ->and($result[0]->runId)->toBe(RIS_RUN_ID)
             ->and($result[1]->runId)->toBe(RIS_RUN_ID_2);
     });
+});
+
+it('uses real ULID-shaped fixture ids for ai_runs.id', function (): void {
+    // char(26) pads shorter ids on PostgreSQL (#507); lowercase Crockford,
+    // excluding i, l, o and u, is what DataShareTransferOfferBundle::isUlid() accepts.
+    foreach ([RIS_RUN_ID, RIS_RUN_ID_2] as $fixtureId) {
+        expect($fixtureId)->toMatch('/^[0-9a-hjkmnp-tv-z]{26}$/');
+    }
 });

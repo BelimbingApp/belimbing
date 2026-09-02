@@ -80,7 +80,7 @@ class DataShareDestinationMapper
 
         $row = $query->first();
 
-        return $row === null ? null : (array) $row;
+        return $row === null ? null : $this->values->materialize((array) $row);
     }
 
     /** @param array<string, mixed> $record */
@@ -90,6 +90,19 @@ class DataShareDestinationMapper
 
         foreach ($record['values'] as $column => $value) {
             $desired[$column] = $this->values->decode($table->table, $column, $value);
+        }
+
+        return $desired;
+    }
+
+    /**
+     * @param  array<string, mixed>  $desired
+     * @return array<string, mixed>
+     */
+    public function bindableValues(DataShareTableDefinition $table, array $desired): array
+    {
+        foreach ($desired as $column => $value) {
+            $desired[$column] = $this->values->bindable($table->table, $column, $value);
         }
 
         return $desired;

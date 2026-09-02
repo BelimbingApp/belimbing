@@ -13,7 +13,10 @@ test('the notification bell scopes reads and mutations to the signed-in user', f
     $user->notify(new BellTestNotification('Mine too', '/mine-too'));
     $other->notify(new BellTestNotification('Not mine', '/not-mine'));
 
-    $mine = $user->notifications()->where('data->title', 'Mine')->firstOrFail();
+    // notifications.data is text, not json: a JSON-path where() is a
+    // PostgreSQL error, so match on the cast array instead.
+    $mine = $user->notifications()->get()->firstWhere('data.title', 'Mine');
+    expect($mine)->not->toBeNull();
     $notMine = $other->notifications()->firstOrFail();
 
     $component = Livewire::actingAs($user)

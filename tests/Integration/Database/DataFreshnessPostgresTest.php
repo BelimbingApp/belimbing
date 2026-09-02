@@ -1,7 +1,10 @@
 <?php
 
+use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorCatalogTable;
 use App\Base\Database\Enums\DataFreshnessState;
+use App\Base\Database\Services\DataShare\Freshness\DataFreshnessAttachmentService;
 use App\Base\Database\Services\DataShare\Freshness\DataFreshnessTracker;
+use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorCatalog;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -154,4 +157,32 @@ it('reports unknown when the expected tracking trigger is disabled or missing', 
 
     $connection->statement('DROP TRIGGER blb_freshness_touch ON '.FRESHNESS_PROBE_TABLE);
     expect($tracker->state(FRESHNESS_PROBE_TABLE, $captured))->toBe(DataFreshnessState::Unknown);
+});
+
+it('reports PostgreSQL as a supported driver and attaches tracking to the catalogued tables', function (): void {
+    $connection = DB::connection();
+    $connection->statement('DROP TABLE IF EXISTS zz_freshness_probe_c CASCADE');
+    $connection->statement('CREATE TABLE zz_freshness_probe_c (id serial PRIMARY KEY, v integer)');
+
+    // The catalog is mocked: this database carries no table registry, and the
+    // contract under test is attachment on a supported driver, not discovery.
+    $catalog = Mockery::mock(DataShareMirrorCatalog::class);
+    $catalog->shouldReceive('localCatalog')->once()->andReturn([
+        new DataShareMirrorCatalogTable('zz_freshness_probe_c', null, null, null, true, false, 'table', null, true),
+        new DataShareMirrorCatalogTable('zz_freshness_missing', null, null, null, false, false, null, null, true),
+    ]);
+    app()->instance(DataShareMirrorCatalog::class, $catalog);
+
+    $tracker = app(DataFreshnessTracker::class);
+    $result = app(DataFreshnessAttachmentService::class)->attachEligible();
+
+    try {
+        // The unsupported-driver half of this contract lives in
+        // tests/Feature/Database/DataOperationLedgerTest.php and self-skips here.
+        expect($tracker->driverSupportsTracking())->toBeTrue()
+            ->and($result)->toBe(['driver_supported' => true, 'attached' => ['zz_freshness_probe_c']])
+            ->and($tracker->isTrackingInstalled('zz_freshness_probe_c'))->toBeTrue();
+    } finally {
+        $connection->statement('DROP TABLE IF EXISTS zz_freshness_probe_c CASCADE');
+    }
 });

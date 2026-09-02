@@ -10,7 +10,8 @@ use App\Core\Employee\Models\Employee;
 use Illuminate\Support\Facades\File;
 use Livewire\Livewire;
 
-const CONTROL_PLANE_OVERSIZED_RUN_ID = 'run_control_plane_oversized';
+// ai_runs.id is char(26): this identifier must not exceed it.
+const CONTROL_PLANE_OVERSIZED_RUN_ID = 'run_control_plane_oversize';
 const CONTROL_PLANE_WINDOWED_RUN_ID = 'run_control_plane_windowed';
 const CONTROL_PLANE_TIMELINE_RUN_ID = 'run_control_plane_timeline';
 const CONTROL_PLANE_OPERATOR_NAME = 'Test Platform Operator';
