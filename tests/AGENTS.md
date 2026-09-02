@@ -37,6 +37,13 @@ Assert the real contract, not a proxy:
 - **Avoid ambient `assertSee()`** that only checks headings, generic status words, and one record string. Use distinctive fixtures with explicit included/excluded assertions.
 - **Reflection-based tests:** when reaching a private helper by reflection, also include a small public-contract assertion when practical.
 
+## Database Drivers
+
+- Every supported driver is a production driver. A failure on one driver is a bug, never a reason to skip or to change CI's driver.
+- Write driver-agnostic code and tests (e.g. `whereDate`/bound date objects, not string comparison on date columns).
+- Skip a test only when its **mechanism** requires a driver (real locking, triggers, cross-database work), never because the **behaviour** differs. Such tests self-skip elsewhere and run in the driver lane (`postgres-mirror` in `tests.yml`).
+- Before proposing any CI/driver change: list the existing workflows and driver branches, and cite what production runs.
+
 ## Common Pitfalls
 
 - **Form-component reset behavior:** shared form components may reset dependent fields when a parent selector changes. Follow the real interaction order before claiming a persistence bug.

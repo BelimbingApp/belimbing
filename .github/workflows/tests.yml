@@ -90,6 +90,10 @@ jobs:
       - name: Run Tests
         run: ./vendor/bin/pest
 
+  # Every supported database driver is a production driver; the main job's
+  # driver is not a stand-in for "real". This lane exists only for tests whose
+  # mechanism needs this driver (they skip elsewhere). Do not replace the
+  # main job with it. See tests/AGENTS.md "Database Drivers".
   postgres-mirror:
     runs-on: ubuntu-latest
     timeout-minutes: 20

@@ -8,6 +8,11 @@ name: domain-ci
 # dependencies, then runs Pint, Pest (with coverage), and a scoped SonarCloud
 # scan. Existing callers remain supported while descriptor-based callers are
 # rolled out on immutable workflow refs.
+#
+# The test database driver here is a production driver, not a CI shortcut;
+# do not swap it for another. Tests whose mechanism needs a specific driver
+# belong in a driver lane (see the postgres-mirror job in tests.yml and
+# tests/AGENTS.md "Database Drivers"), never in place of this one.
 
 on:
   workflow_call:
