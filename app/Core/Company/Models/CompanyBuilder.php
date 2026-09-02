@@ -27,13 +27,17 @@ class CompanyBuilder extends Builder
      * Soft-deleted companies are included, which is what the method being
      * replaced did: it read the underlying query, where no scope applies.
      *
+     * Walked with `lazyById()` rather than `get()` so a broad or accidental
+     * scope cannot pull an unbounded number of rows into memory. Paging by
+     * ascending id never revisits a page, so erasing as we go is safe.
+     *
      * @return int the number of companies erased
      */
     public function forceDelete(): int
     {
         $erased = 0;
 
-        foreach ($this->withoutGlobalScope(SoftDeletingScope::class)->get() as $company) {
+        foreach ($this->withoutGlobalScope(SoftDeletingScope::class)->lazyById() as $company) {
             $erased += $company->forceDelete() === true ? 1 : 0;
         }
 

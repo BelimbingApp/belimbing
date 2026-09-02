@@ -142,6 +142,28 @@ test('a company its tenant has never held a second of can still be erased', func
         ->and(Company::withTrashed()->where('tenant_id', $tenant->id)->count())->toBe(0);
 });
 
+test('erasing an already retired company really removes the row', function (): void {
+    [$tenant, $only] = createTenantWithCompany(['name' => 'Retired Then Erasable Tenant']);
+
+    $only->delete();
+
+    // The erase must reach a row that is already soft-deleted. A guard that
+    // quietly matched nothing would leave the row behind while the model
+    // claimed it was gone.
+    expect($only->forceDelete())->toBeTrue()
+        ->and($only->exists)->toBeFalse()
+        ->and(Company::withTrashed()->where('tenant_id', $tenant->id)->count())->toBe(0);
+});
+
+test('the query builder erases an already retired company too', function (): void {
+    [$tenant, $only] = createTenantWithCompany(['name' => 'Builder Retired Erasable Tenant']);
+
+    $only->delete();
+
+    expect(Company::query()->whereKey($only->id)->forceDelete())->toBe(1)
+        ->and(Company::withTrashed()->where('tenant_id', $tenant->id)->count())->toBe(0);
+});
+
 test('the erasure refusal names the tenant and the company it protected', function (): void {
     [$tenant, , $beta] = tenantHoldingTwoCompanies('Erasure Context Tenant');
 

@@ -181,6 +181,11 @@ class Company extends Model
      * builder, and `CompanyBuilder` overrides that method to send bulk erasures
      * back through this model - so leaving it inherited would have the model
      * call the builder call the model, forever.
+     *
+     * The erase still reaches a soft-deleted row. `newModelQuery()` registers
+     * no global scopes, so there is no `deleted_at is null` here, and Eloquent's
+     * own `Builder::forceDelete()` reads the same underlying query - this runs
+     * the identical statement by a shorter route.
      */
     protected function performDeleteOnModel(): mixed
     {
@@ -255,6 +260,13 @@ class Company extends Model
      * Deliberately not "would the count fall to one": that number belongs to
      * one particular reader's rule, and writing it here would move that reader's
      * logic into Core. Any decrease is refused.
+     *
+     * The count is read under the tenant-row lock the caller already holds, so
+     * two erasures in one tenant cannot both see a safe number. Company
+     * creation does not take that lock, so a creation committing between this
+     * count and the erase is not serialized against it - see
+     * BelimbingApp/belimbing#489 for why that residual window is left open here
+     * rather than closed by putting a tenant lock on every company insert.
      */
     private static function assertTenantCompanyHistorySurvives(int $tenantId, int $companyId): void
     {
