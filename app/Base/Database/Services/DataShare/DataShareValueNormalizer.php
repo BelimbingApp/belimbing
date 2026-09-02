@@ -20,6 +20,13 @@ class DataShareValueNormalizer
             return null;
         }
 
+        // PDO pgsql returns bytea as a stream resource; SQLite returns a string.
+        // Read it here, once, so the binary rule below sees the same value on
+        // every driver and nothing downstream meets a resource.
+        if (is_resource($value)) {
+            $value = (string) stream_get_contents($value);
+        }
+
         if (is_string($value) && ($this->type($table, $column) === 'binary' || ! mb_check_encoding($value, 'UTF-8'))) {
             return ['__data_share_binary_base64' => base64_encode($value)];
         }
@@ -40,6 +47,45 @@ class DataShareValueNormalizer
         }
 
         return $this->normalize($table, $column, $value);
+    }
+
+    /**
+     * Read a fetched row's stream values into strings immediately. PDO pgsql
+     * returns bytea as a stream tied to the statement: once the cursor moves
+     * on, the handle is closed and the bytes are gone, and a closed resource
+     * is not even is_resource() any more. Call this at the fetch boundary.
+     *
+     * @param  array<string, mixed>  $row
+     * @return array<string, mixed>
+     */
+    public function materialize(array $row): array
+    {
+        foreach ($row as $column => $value) {
+            if (is_resource($value)) {
+                $row[$column] = (string) stream_get_contents($value);
+            }
+        }
+
+        return $row;
+    }
+
+    /**
+     * Prepare a decoded value for a query-builder write. Binary values become
+     * a stream so the connection binds them as PDO::PARAM_LOB: bound as a
+     * plain string, PostgreSQL silently truncates a bytea at the first NUL
+     * byte and rejects other non-UTF-8 bytes outright.
+     */
+    public function bindable(string $table, string $column, mixed $value): mixed
+    {
+        if (! is_string($value) || $this->type($table, $column) !== 'binary') {
+            return $value;
+        }
+
+        $stream = fopen('php://memory', 'r+');
+        fwrite($stream, $value);
+        rewind($stream);
+
+        return $stream;
     }
 
     public function type(string $table, string $column): string

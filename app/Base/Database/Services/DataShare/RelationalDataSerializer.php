@@ -80,7 +80,7 @@ class RelationalDataSerializer
             $maximumRecords = $this->settings->integer('data_share.transfer_limits.max_records', 250000, 1, 10000000);
 
             foreach ($query->cursor() as $databaseRow) {
-                $row = (array) $databaseRow;
+                $row = $this->values->materialize((array) $databaseRow);
                 $encoded = [];
 
                 foreach ($row as $column => $value) {
