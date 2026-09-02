@@ -12,8 +12,9 @@ uses(TestCase::class, LazilyRefreshDatabase::class);
 
 const RIS_EMPLOYEE_ID = 1;
 const RIS_SESSION_ID = 'sess_test_001';
-const RIS_RUN_ID = 'run_test_001';
-const RIS_RUN_ID_2 = 'run_test_002';
+// ai_runs.id is a ULID char(26): PostgreSQL pads shorter ids on read.
+const RIS_RUN_ID = '01JTESTRUN0000000000000001';
+const RIS_RUN_ID_2 = '01JTESTRUN0000000000000002';
 const RIS_DISPATCH_ID = 'op_test_001';
 const RIS_PROVIDER = 'anthropic';
 const RIS_MODEL = 'claude-opus-4';
