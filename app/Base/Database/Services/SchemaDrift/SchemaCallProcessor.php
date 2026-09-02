@@ -213,91 +213,26 @@ final class SchemaCallProcessor
             }
 
             if ($char === '-' && $next === '-') {
-                // Line comment: a semicolon on this line is comment text, not a
-                // separator. Consume through the comment; the newline is then
-                // handled by the ordinary loop.
-                $current .= '--';
-                $i += 2;
-                while ($i < $length && $sql[$i] !== "\n") {
-                    $current .= $sql[$i];
-                    $i++;
-                }
+                $i = self::copyLineComment($sql, $i, $length, $current);
 
                 continue;
             }
 
             if ($char === '/' && $next === '*') {
-                // Block comment: a semicolon inside it is not a separator.
-                $current .= '/*';
-                $i += 2;
-                while ($i < $length) {
-                    $current .= $sql[$i];
-                    if ($i + 1 < $length && $sql[$i] === '*' && $sql[$i + 1] === '/') {
-                        $current .= '/';
-                        $i += 2;
-                        break;
-                    }
-                    $i++;
-                }
+                $i = self::copyBlockComment($sql, $i, $length, $current);
 
                 continue;
             }
 
             if ($char === "'" || $char === '"') {
-                // Quoted literal or identifier: semicolons inside it are data.
-                $quote = $char;
-                $current .= $char;
-                $i++;
-                while ($i < $length) {
-                    $current .= $sql[$i];
-                    if ($sql[$i] === $quote) {
-                        // A doubled quote is an escaped quote, not the terminator.
-                        if ($i + 1 < $length && $sql[$i + 1] === $quote) {
-                            $current .= $quote;
-                            $i += 2;
-
-                            continue;
-                        }
-                        $i++;
-
-                        break;
-                    }
-                    $i++;
-                }
+                $i = self::copyQuoted($sql, $i, $length, $current);
 
                 continue;
             }
 
-            if ($char === '$') {
-                // Dollar-quoted body: $$ ... $$ or $tag$ ... $tag$. The body
-                // frequently contains semicolons (a plpgsql function), which
-                // must not split the statement.
-                $tagEnd = $i + 1;
-                while ($tagEnd < $length && self::isDollarTagByte($sql[$tagEnd])) {
-                    $tagEnd++;
-                }
-                if ($tagEnd < $length && $sql[$tagEnd] === '$') {
-                    $tag = substr($sql, $i, $tagEnd - $i + 1);
-                    $current .= $tag;
-                    $i = $tagEnd + 1;
-                    while ($i < $length) {
-                        if (substr($sql, $i, strlen($tag)) === $tag) {
-                            $current .= $tag;
-                            $i += strlen($tag);
-
-                            break;
-                        }
-                        $current .= $sql[$i];
-                        $i++;
-                    }
-
-                    continue;
-                }
-
-                // Not a dollar quote: '$' is literal (e.g. a positional
-                // parameter like $1).
-                $current .= $char;
-                $i++;
+            $dollarEnd = $char === '$' ? self::copyDollarQuoted($sql, $i, $length, $current) : null;
+            if ($dollarEnd !== null) {
+                $i = $dollarEnd;
 
                 continue;
             }
@@ -308,6 +243,102 @@ final class SchemaCallProcessor
 
         $statements[] = $current;
 
+        return self::significantStatements($statements);
+    }
+
+    /** Line comment: a semicolon on this line is comment text, not a separator. */
+    private static function copyLineComment(string $sql, int $i, int $length, string &$current): int
+    {
+        $current .= '--';
+        $i += 2;
+        while ($i < $length && $sql[$i] !== "\n") {
+            $current .= $sql[$i];
+            $i++;
+        }
+
+        return $i;
+    }
+
+    /** Block comment: a semicolon inside it is not a separator. */
+    private static function copyBlockComment(string $sql, int $i, int $length, string &$current): int
+    {
+        $current .= '/*';
+        $i += 2;
+        while ($i < $length) {
+            $current .= $sql[$i];
+            if ($i + 1 < $length && $sql[$i] === '*' && $sql[$i + 1] === '/') {
+                $current .= '/';
+
+                return $i + 2;
+            }
+            $i++;
+        }
+
+        return $i;
+    }
+
+    /** Quoted literal or identifier: semicolons inside it are data. */
+    private static function copyQuoted(string $sql, int $i, int $length, string &$current): int
+    {
+        $quote = $sql[$i];
+        $current .= $quote;
+        $i++;
+        while ($i < $length) {
+            $current .= $sql[$i];
+            if ($sql[$i] === $quote) {
+                // A doubled quote is an escaped quote, not the terminator.
+                if ($i + 1 < $length && $sql[$i + 1] === $quote) {
+                    $current .= $quote;
+                    $i += 2;
+
+                    continue;
+                }
+
+                return $i + 1;
+            }
+            $i++;
+        }
+
+        return $i;
+    }
+
+    /**
+     * Dollar-quoted body: $$ ... $$ or $tag$ ... $tag$. The body frequently
+     * contains semicolons (a plpgsql function), which must not split the
+     * statement. Null when '$' is literal (e.g. a positional parameter).
+     */
+    private static function copyDollarQuoted(string $sql, int $i, int $length, string &$current): ?int
+    {
+        $tagEnd = $i + 1;
+        while ($tagEnd < $length && self::isDollarTagByte($sql[$tagEnd])) {
+            $tagEnd++;
+        }
+        if ($tagEnd >= $length || $sql[$tagEnd] !== '$') {
+            return null;
+        }
+
+        $tag = substr($sql, $i, $tagEnd - $i + 1);
+        $current .= $tag;
+        $i = $tagEnd + 1;
+        while ($i < $length) {
+            if (substr($sql, $i, strlen($tag)) === $tag) {
+                $current .= $tag;
+
+                return $i + strlen($tag);
+            }
+            $current .= $sql[$i];
+            $i++;
+        }
+
+        return $i;
+    }
+
+    /**
+     * @param  list<string>  $statements
+     * @return list<string>
+     */
+    private static function significantStatements(array $statements): array
+    {
         $significant = [];
         foreach ($statements as $statement) {
             $statement = self::stripLeadingTrivia($statement);
