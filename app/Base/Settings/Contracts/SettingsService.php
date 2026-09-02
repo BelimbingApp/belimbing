@@ -38,6 +38,16 @@ interface SettingsService
     public function forget(string $key, ?Scope $scope = null): void;
 
     /**
+     * Invalidate any cache for a (key, scope) pair without touching the
+     * database row.
+     *
+     * Settings-rename migrations rewrite the row directly and call this so a
+     * read later in the same process does not return a stale value that was
+     * cached or memoized before the rename.
+     */
+    public function forgetCached(string $key, ?Scope $scope = null): void;
+
+    /**
      * Check whether a key has an explicit value at the given scope (DB only, no cascade).
      */
     public function has(string $key, ?Scope $scope = null): bool;

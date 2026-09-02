@@ -127,8 +127,22 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
         @chmod($path, 0600);
         $state = $this->newSnapshotState($tables, $sourceLabel, $progress);
 
+        // PostgreSQL's SET TRANSACTION configures the current transaction and
+        // must be its first statement, so it has to run immediately inside the
+        // callback after BEGIN. It can only be applied when this is the
+        // outermost transaction: under an outer transaction (a test rollback
+        // wrapper) the callback runs as a savepoint and PostgreSQL rejects the
+        // statement with SQLSTATE 25001, so it is skipped there.
+        $outermost = $source->transactionLevel() === 0;
+
         try {
-            $source->transaction(fn () => $this->snapshotTables($source, $target, $tables, $handle, $state), 1);
+            $source->transaction(function () use ($source, $target, $tables, $handle, $state, $outermost): void {
+                if ($outermost && $source->getDriverName() === 'pgsql') {
+                    $source->statement('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
+                }
+
+                $this->snapshotTables($source, $target, $tables, $handle, $state);
+            }, 1);
         } finally {
             fclose($handle);
         }
@@ -152,10 +166,6 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
     /** @param list<string> $tables @param resource $handle */
     private function snapshotTables(Connection $source, Connection $target, array $tables, $handle, PortableDataShareMirrorSnapshotState $state): void
     {
-        if ($source->getDriverName() === 'pgsql') {
-            $source->statement('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
-        }
-
         foreach ($tables as $index => $table) {
             $this->snapshotTable($source, $target, $table, $handle, $state);
             $state->progress?->report((string) __('Staged table :current of :total from :source: :table (:rows rows).', [

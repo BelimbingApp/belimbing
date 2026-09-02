@@ -253,6 +253,11 @@ class DatabaseSettingsService implements SettingsService
         $this->bustCache($key, $scope);
     }
 
+    public function forgetCached(string $key, ?Scope $scope = null): void
+    {
+        $this->bustCache($key, $scope);
+    }
+
     /**
      * Check whether a key has an explicit value at the given scope (DB only, no cascade).
      */

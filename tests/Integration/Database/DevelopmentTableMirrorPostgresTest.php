@@ -846,6 +846,11 @@ final class DevelopmentTableMirrorIntegrationSettings implements SettingsService
         unset($this->values[$key]);
     }
 
+    public function forgetCached(string $key, ?Scope $scope = null): void
+    {
+        // No cache layer in this in-memory stub.
+    }
+
     public function has(string $key, ?Scope $scope = null): bool
     {
         return array_key_exists($key, $this->values);
