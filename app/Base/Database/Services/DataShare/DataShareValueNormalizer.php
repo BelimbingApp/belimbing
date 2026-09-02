@@ -61,12 +61,33 @@ class DataShareValueNormalizer
     public function materialize(array $row): array
     {
         foreach ($row as $column => $value) {
-            if (is_resource($value)) {
-                $row[$column] = (string) stream_get_contents($value);
-            }
+            $row[$column] = self::bytes($value);
         }
 
         return $row;
+    }
+
+    /**
+     * A fetched value as bytes: PDO pgsql hands bytea back as a stream. The
+     * one place that rule lives; every Data Share reader goes through it.
+     */
+    public static function bytes(mixed $value): mixed
+    {
+        return is_resource($value) ? (string) stream_get_contents($value) : $value;
+    }
+
+    /**
+     * Bytes as a stream for a query-builder write, so the connection binds
+     * PDO::PARAM_LOB. Bound as a plain string, PostgreSQL truncates a bytea
+     * at the first NUL and rejects other non-UTF-8 bytes.
+     */
+    public static function stream(string $bytes): mixed
+    {
+        $stream = fopen('php://memory', 'r+');
+        fwrite($stream, $bytes);
+        rewind($stream);
+
+        return $stream;
     }
 
     /**
@@ -81,11 +102,7 @@ class DataShareValueNormalizer
             return $value;
         }
 
-        $stream = fopen('php://memory', 'r+');
-        fwrite($stream, $value);
-        rewind($stream);
-
-        return $stream;
+        return self::stream($value);
     }
 
     public function type(string $table, string $column): string
