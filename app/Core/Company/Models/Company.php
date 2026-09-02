@@ -8,6 +8,7 @@ use App\Base\Tenancy\Models\Tenant;
 use App\Core\Address\Models\Address;
 use App\Core\Address\Models\Addressable;
 use App\Core\Company\Database\Factories\CompanyFactory;
+use App\Core\Company\Exceptions\CompanyErasureException;
 use App\Core\Company\Exceptions\CompanyTenantAssignmentException;
 use App\Core\Company\Exceptions\PrimaryCompanyDeletionException;
 use App\Core\Company\Services\PrimaryCompanyManager;
@@ -84,6 +85,16 @@ class Company extends Model
     }
 
     /**
+     * Query companies through the builder that keeps the erasure guards on.
+     *
+     * @param  \Illuminate\Database\Query\Builder  $query
+     */
+    public function newEloquentBuilder($query): CompanyBuilder
+    {
+        return new CompanyBuilder($query);
+    }
+
+    /**
      * Resolve web route bindings inside the current tenant boundary.
      *
      * Cross-tenant company IDs intentionally resolve as not found so route
@@ -150,9 +161,36 @@ class Company extends Model
         return $this->deleteWithPrimaryCompanyGuard(false);
     }
 
+    /**
+     * Erase this company for good.
+     *
+     * Refused once the tenant has held more than one company. See
+     * `assertTenantCompanyHistorySurvives()` for why; use `delete()` to retire
+     * a company instead.
+     */
     public function forceDelete(): ?bool
     {
         return $this->deleteWithPrimaryCompanyGuard(true);
+    }
+
+    /**
+     * Erase or retire the row once the guards above have passed.
+     *
+     * Copied from `SoftDeletes` with one change: the erase runs on the plain
+     * query builder. The inherited version calls `forceDelete()` on an Eloquent
+     * builder, and `CompanyBuilder` overrides that method to send bulk erasures
+     * back through this model - so leaving it inherited would have the model
+     * call the builder call the model, forever.
+     */
+    protected function performDeleteOnModel(): mixed
+    {
+        if (! $this->forceDeleting) {
+            return $this->runSoftDelete();
+        }
+
+        return tap($this->setKeysForSaveQuery($this->newModelQuery())->getQuery()->delete(), function (): void {
+            $this->exists = false;
+        });
     }
 
     private function deleteWithPrimaryCompanyGuard(bool $force): ?bool
@@ -180,10 +218,51 @@ class Company extends Model
                 throw new PrimaryCompanyDeletionException($tenantId, $companyId);
             }
 
+            if ($force) {
+                static::assertTenantCompanyHistorySurvives($tenantId, $companyId);
+            }
+
             return $force
                 ? $this->forceDeleteWithoutPrimaryCompanyGuard()
                 : parent::delete();
         });
+    }
+
+    /**
+     * Refuse an erasure that would shrink the tenant's company history.
+     *
+     * Deleting a company comes in two shapes and they are not interchangeable.
+     * A soft delete retires the company: the row stays, so anything that asks
+     * how many companies this tenant has held keeps getting the true answer. A
+     * hard delete removes the row, and the row is the only record that the
+     * company ever existed.
+     *
+     * That matters because a company's existence is not private to Core. Other
+     * subsystems read the tenant's company list and decide what a user may see
+     * from it - most sharply, rules that relax when a tenant has only one
+     * company, because a single-company tenant has no internal boundary to
+     * cross. Erase the second company and such a rule silently reopens, handing
+     * the survivor everything the erased company's data was standing next to.
+     * That is BelimbingApp/belimbing#489.
+     *
+     * Core has no way to enumerate those subsystems, and it should not try: a
+     * list of things allowed to object is only as good as its last entry, and a
+     * subsystem missing from it is silently permitted. So the rule is stated
+     * about the fact itself rather than about who reads it - the number of
+     * companies a tenant has held never goes down. Retiring a company is always
+     * available and changes nothing downstream.
+     *
+     * Deliberately not "would the count fall to one": that number belongs to
+     * one particular reader's rule, and writing it here would move that reader's
+     * logic into Core. Any decrease is refused.
+     */
+    private static function assertTenantCompanyHistorySurvives(int $tenantId, int $companyId): void
+    {
+        $companiesHeldByTenant = static::withTrashed()->where('tenant_id', $tenantId)->count();
+
+        if ($companiesHeldByTenant > 1) {
+            throw new CompanyErasureException($tenantId, $companyId, $companiesHeldByTenant);
+        }
     }
 
     private static function assertParentBelongsToTenant(mixed $parentId, int $tenantId): void

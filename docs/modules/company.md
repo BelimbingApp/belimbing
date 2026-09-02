@@ -192,7 +192,7 @@ erDiagram
   explicit safe transfer.
 - **Table names:** Follow Core convention `{module}_{entity}` (e.g. `company_relationship_types`, `company_external_accesses`).
 - **Company registration:** Implemented as normalized columns (`legal_name`, `registration_number`, `tax_id`, `legal_entity_type`, `jurisdiction`) plus contact (`email`, `website`) and JSON (`scope_activities`, `metadata`).
-- **Soft deletes:** Used on `companies`, `company_relationships`, and `company_external_accesses`.
+- **Soft deletes:** Used on `companies`, `company_relationships`, and `company_external_accesses`. Soft-deleting a company retires it and keeps the row; hard deletion is refused once the tenant has held more than one company, because the row is the only record that the tenant ever held it.
 - **Relationship types:** Seeded from Company module config `company.relationship_types`; model table is `company_relationship_types`.
 - **User link:** Users have `company_id` (User module migration); Company module does not own the `users` table.
 
