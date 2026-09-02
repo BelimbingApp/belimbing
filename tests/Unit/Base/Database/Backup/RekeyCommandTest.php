@@ -2,11 +2,15 @@
 
 use App\Base\Database\Services\Backup\Encryption\AppKeyEncryption;
 use App\Base\Settings\Contracts\SettingsService;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
-uses(TestCase::class);
+// The migrated schema, not a hand-rolled base_settings: these tests only need
+// SettingsService to persist two backup settings, and replacing a real table
+// with SQLite-only DDL on the default connection destroyed it for every later
+// test in the process on PostgreSQL (#496).
+uses(TestCase::class, LazilyRefreshDatabase::class);
 
 /**
  * Helpers shared by rekey tests.
@@ -58,19 +62,7 @@ function rkEncryptDek(string $appKey): array
     ];
 }
 
-function rkCreateSettingsTable(): void
-{
-    DB::statement('DROP TABLE IF EXISTS base_settings');
-    DB::statement(
-        'CREATE TABLE base_settings (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT NOT NULL, value TEXT, is_encrypted INTEGER NOT NULL DEFAULT 0, scope_type TEXT, scope_id INTEGER, created_at TEXT, updated_at TEXT)'
-    );
-    DB::statement(
-        'CREATE UNIQUE INDEX base_settings_scope_unique ON base_settings (key, scope_type, scope_id)'
-    );
-}
-
 beforeEach(function (): void {
-    rkCreateSettingsTable();
     Storage::fake('local');
     app(SettingsService::class)->set('backup.disk', 'local');
     app(SettingsService::class)->set('backup.path_prefix', 'backups');
