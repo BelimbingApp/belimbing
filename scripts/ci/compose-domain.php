@@ -103,9 +103,32 @@ function requiredModuleIds(string $domainPath): array
     return array_values(array_unique($ids));
 }
 
+/**
+ * Collect the module ids the domain under test itself provides. A module
+ * requiring a sibling module in the same repository needs no clone and no
+ * registry entry - the code is already sitting next to it.
+ *
+ * @return list<string>
+ */
+function providedModuleIds(string $domainPath): array
+{
+    $ids = [];
+
+    foreach ((array) glob($domainPath.'/*/composer.json') as $composerPath) {
+        $data = json_decode((string) @file_get_contents($composerPath), true);
+        $module = is_array($data) ? ($data['extra']['blb']['module'] ?? null) : null;
+        if (is_string($module) && $module !== '') {
+            $ids[] = $module;
+        }
+    }
+
+    return array_values(array_unique($ids));
+}
+
 $options = parseArguments($argv);
 $registry = loadRegistry($options['registry']);
-$requiredIds = requiredModuleIds($options['domain-path']);
+$providedIds = providedModuleIds($options['domain-path']);
+$requiredIds = array_values(array_diff(requiredModuleIds($options['domain-path']), $providedIds));
 
 $toClone = [];
 $missing = [];
