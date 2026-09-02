@@ -221,10 +221,14 @@ it('resolves global declared parameters in one database query', function (): voi
 });
 
 it('memoizes repeated reads within one request or job scope', function (): void {
+    // Warm the request-scoped memo (and force any lazy migration) first, so the
+    // count below measures only the memoized read and is not sensitive to test
+    // order or whether the database was already migrated.
+    $first = $this->settings->get(AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY);
+
     DB::flushQueryLog();
     DB::enableQueryLog();
 
-    $first = $this->settings->get(AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY);
     $second = $this->settings->get(AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY);
     $settingQueries = collect(DB::getQueryLog())
         ->filter(fn (array $query): bool => str_contains($query['query'], 'base_settings'))
@@ -234,7 +238,7 @@ it('memoizes repeated reads within one request or job scope', function (): void 
 
     expect($first)->toBe(100)
         ->and($second)->toBe(100)
-        ->and($settingQueries)->toBe(1);
+        ->and($settingQueries)->toBe(0);
 });
 
 it('preserves JSON values and invalidates cached overrides', function (mixed $value): void {
