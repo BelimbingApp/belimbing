@@ -13,7 +13,8 @@ name: domain-ci
 # the domain suite on SQLite; the `postgres-mirror` job runs the same suite on
 # PostgreSQL in parallel (see the job of the same name in tests.yml and
 # tests/AGENTS.md "Database Drivers"). Neither lane replaces the other. The two
-# jobs share their setup steps verbatim; change them together.
+# jobs deliberately duplicate their checkout, compose, and toolchain setup
+# steps (GitHub Actions has no way to share them); change both together.
 
 on:
   workflow_call:
@@ -203,6 +204,7 @@ jobs:
     timeout-minutes: 20
     environment: Testing
     env:
+      APP_ENV: testing
       DOMAIN_ID: ${{ inputs.domain-id }}
       LEGACY_DOMAIN_PATH: ${{ inputs.domain-path }}
       DB_CONNECTION: pgsql
