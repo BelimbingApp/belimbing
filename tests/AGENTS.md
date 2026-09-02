@@ -41,7 +41,7 @@ Assert the real contract, not a proxy:
 
 - Every supported driver is a production driver. A failure on one driver is a bug, never a reason to skip or to change CI's driver.
 - Write driver-agnostic code and tests (e.g. `whereDate`/bound date objects, not string comparison on date columns).
-- Skip a test only when its **mechanism** requires a driver (real locking, triggers, cross-database work), never because the **behaviour** differs. Such tests self-skip elsewhere and run in the driver lane (`postgres-mirror` in `tests.yml`).
+- Skip a test only when its **mechanism** requires a driver (real locking, triggers, cross-database work), never because the **behavior** differs. Such tests self-skip elsewhere and run in the driver lane (`postgres-mirror` in `tests.yml`).
 - Before proposing any CI/driver change: list the existing workflows and driver branches, and cite what production runs.
 
 ## Common Pitfalls
