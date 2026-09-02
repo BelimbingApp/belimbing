@@ -442,8 +442,19 @@ a rule that relaxes for a single-company tenant, for example, is correct while
 the tenant really has one company and wrong the moment an erasure makes a
 two-company tenant look like one. Core cannot enumerate those subsystems, and a
 list of subsystems allowed to object would silently permit anything missing from
-it, so the rule is stated about the fact instead: the number of companies a
-tenant has held never goes down. See `BelimbingApp/belimbing#489`.
+it, so the rule is stated about the fact instead: once a tenant has held more
+than one company, that number never goes down. A tenant's sole company can still
+be erased, because with no second company there is nobody left to widen access
+onto. See `BelimbingApp/belimbing#489`.
+
+There is a cost to this and it is worth knowing before you hit it. A tenant that
+creates a second company by mistake and retires it can never get back to being a
+single-company tenant, because the readers of this fact count retired companies
+too - which is exactly what makes retirement safe. Force delete used to be the
+escape hatch from that mistake and this rule closes it. Nothing is exposed by
+that, but a recoverable mistake becomes a permanent one. The real fix is the
+stored workforce-company to platform-company link tracked in
+`BelimbingApp/blb-people#21`, which removes the need to reason from a count.
 
 `CompanyBuilder` carries the same refusal onto the query path, because Eloquent's
 own `Builder::forceDelete()` would otherwise erase rows in one statement without

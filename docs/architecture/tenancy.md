@@ -31,7 +31,7 @@ This doc describes implemented behavior. The owning module is `app/Base/Tenancy`
 
 Missing primary assignment means not yet provisioned. Once assigned, a missing, cross-tenant, or soft-deleted referenced company is corruption and raises an invariant violation. Primary-company deletion is blocked until an explicit safe transfer assigns another live company.
 
-A tenant's company history only ever grows. Soft-deleting a company retires it and leaves the row, so anything reading how many companies a tenant has held still gets the true answer; hard deletion removes that record, so Core refuses it whenever the tenant has held more than one company. Subsystems outside Core read the company list to decide what a user may see, and an erasure would change their answers without telling them.
+Once a tenant has held more than one company, that number never goes down. Soft-deleting a company retires it and leaves the row, so anything reading how many companies a tenant has held still gets the true answer; hard deletion removes that record, so Core refuses it whenever the tenant has held more than one company. A tenant's sole company can still be erased, because with no second company there is nobody left to widen access onto. Subsystems outside Core read the company list to decide what a user may see, and an erasure would change their answers without telling them.
 
 ### Provisioning and migration compatibility
 

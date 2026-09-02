@@ -253,13 +253,27 @@ class Company extends Model
      * Core has no way to enumerate those subsystems, and it should not try: a
      * list of things allowed to object is only as good as its last entry, and a
      * subsystem missing from it is silently permitted. So the rule is stated
-     * about the fact itself rather than about who reads it - the number of
-     * companies a tenant has held never goes down. Retiring a company is always
-     * available and changes nothing downstream.
+     * about the fact itself rather than about who reads it: once a tenant has
+     * held more than one company, that number never goes down. Retiring a
+     * company is always available and changes nothing downstream.
+     *
+     * A tenant's sole company can still be erased, which is why the rule says
+     * "more than one" and not "never goes down" - with no second company there
+     * is nobody left to widen access onto, so 1 to 0 is refusing nothing.
      *
      * Deliberately not "would the count fall to one": that number belongs to
      * one particular reader's rule, and writing it here would move that reader's
-     * logic into Core. Any decrease is refused.
+     * logic into Core. Any decrease below a count of more than one is refused.
+     *
+     * Known operational cost, and it is a real one. A tenant that creates a
+     * second company by mistake and retires it can never get back to being a
+     * single-company tenant, because the readers of this fact count retired
+     * companies too - that is what makes retirement safe. Force delete used to
+     * be the escape hatch from that mistake and this guard closes it. The
+     * failure is closed rather than open, so nothing is exposed, but a
+     * recoverable mistake becomes a permanent one. The real fix is the stored
+     * workforce-company to platform-company link in BelimbingApp/blb-people#21,
+     * which removes the need for anyone to reason from a count at all.
      *
      * The count is read under the tenant-row lock the caller already holds, so
      * two erasures in one tenant cannot both see a safe number. Company

@@ -31,6 +31,13 @@ class CompanyBuilder extends Builder
      * scope cannot pull an unbounded number of rows into memory. Paging by
      * ascending id never revisits a page, so erasing as we go is safe.
      *
+     * This is not atomic. The statement it replaces erased every matched row at
+     * once; this erases each company in its own transaction, so a refusal
+     * partway through leaves the earlier ones erased. That is the safer of the
+     * two - the single statement was atomic precisely because it checked
+     * nothing - but a caller erasing many companies should not read a failure
+     * as "nothing happened".
+     *
      * @return int the number of companies erased
      */
     public function forceDelete(): int
