@@ -160,7 +160,7 @@ final class SchemaCallProcessor
             // schema in exactly the same way: the comparator knows tables,
             // columns and indexes, and neither of these is one of them.
             //
-            // All four forms are listed together deliberately. Exempting
+            // Create and drop are covered together deliberately. Exempting
             // CREATE TRIGGER alone meant portable guard code was readable on
             // SQLite and unreadable on PostgreSQL, which is where the trigger
             // does the work. Leaving the DROP forms out would have reproduced
@@ -168,8 +168,12 @@ final class SchemaCallProcessor
             // ordinarily written DROP TRIGGER then CREATE TRIGGER, and only
             // the first statement of a string is inspected, so statement order
             // would have decided whether migrate came back clean.
-            || preg_match('/^\s*CREATE\s+(?:OR\s+REPLACE\s+)?TRIGGER\b/i', $sql) === 1
-            || preg_match('/^\s*CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\b/i', $sql) === 1
+            //
+            // TRIGGER and FUNCTION share one alternation rather than sitting
+            // on separate lines so that each flag is pinned by a test on every
+            // form it governs. Split across two arms, a test could pin /i on
+            // one and \b on the other and leave the remaining pair free.
+            || preg_match('/^\s*CREATE\s+(?:OR\s+REPLACE\s+)?(?:TRIGGER|FUNCTION)\b/i', $sql) === 1
             || preg_match('/^\s*DROP\s+(?:TRIGGER|FUNCTION)\b/i', $sql) === 1;
     }
 
