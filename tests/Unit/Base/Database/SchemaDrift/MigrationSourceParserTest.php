@@ -22,6 +22,25 @@ function parseMigrationUp(string $body): ParsedMigration
     );
 }
 
+function parseUnprepared(string $sql): ParsedMigration
+{
+    return parseMigrationUp('        DB::unprepared('.var_export($sql, true).');');
+}
+
+function parseStatement(string $sql): ParsedMigration
+{
+    return parseMigrationUp('        DB::statement('.var_export($sql, true).');');
+}
+
+function parseUnpreparedInRuntimeLoop(string $sql): ParsedMigration
+{
+    return parseMigrationUp(
+        "        foreach (config('widgets') as \$widget) {\n"
+        .'            DB::unprepared('.var_export($sql, true).");\n"
+        .'        }'
+    );
+}
+
 it('replays migration operations in source order and matches Laravel fluent index priority', function (): void {
     $migration = <<<'PHP'
         <?php
@@ -293,4 +312,53 @@ it('still refuses a raw statement that is neither trigger, function, nor a suppo
     );
 
     expect($parsed->unreadable)->not->toBe([]);
+});
+
+it('reports a schema statement hidden behind an exempt function opener', function (): void {
+    // Only the first statement used to be inspected, so the CREATE TABLE rode
+    // through on the CREATE FUNCTION exemption and the whole string was silent.
+    expect(parseUnprepared(
+        'CREATE OR REPLACE FUNCTION widgets_guard() RETURNS trigger AS $$ BEGIN RETURN NEW; END; $$ LANGUAGE plpgsql; CREATE TABLE secret (id integer);'
+    )->unreadable)->not->toBe([]);
+});
+
+it('reports a schema statement hidden behind a leading line comment', function (): void {
+    // A leading comment used to make the string start with `--` rather than a
+    // DDL keyword, so the CREATE TABLE was silently skipped.
+    expect(parseUnprepared("-- housekeeping\nCREATE TABLE secret (id integer)")->unreadable)->not->toBe([]);
+});
+
+it('reports a schema statement hidden behind a leading block comment', function (): void {
+    expect(parseUnprepared('/* housekeeping */ CREATE TABLE secret (id integer)')->unreadable)->not->toBe([]);
+});
+
+it('does not split a dollar-quoted body that contains a schema-looking statement', function (): void {
+    // The CREATE TABLE inside $$ ... $$ is function body text, not a statement.
+    // A naive semicolon splitter would report it and turn a clean migration
+    // unreadable.
+    $parsed = parseUnprepared(
+        'CREATE OR REPLACE FUNCTION widgets_guard() RETURNS trigger AS $$ BEGIN CREATE TABLE secret (id integer); END; $$ LANGUAGE plpgsql;'
+    );
+
+    expect($parsed->unreadable)->toBe([])
+        ->and($parsed->operations)->toBe([]);
+});
+
+it('keeps a semicolon inside a string literal from splitting its statement', function (): void {
+    $parsed = parseStatement("INSERT INTO widgets (name) VALUES ('a;b;c')");
+
+    expect($parsed->unreadable)->toBe([])
+        ->and($parsed->operations)->toBe([]);
+});
+
+it('reports a schema statement following a PostgreSQL escape string', function (): void {
+    // The quote after the backslash belongs to the E-string; the second quote
+    // closes it and the CREATE TABLE is a separate statement that must not hide.
+    expect(parseUnprepared("SELECT E'foo\\''; CREATE TABLE secret (id integer);")->unreadable)->not->toBe([]);
+});
+
+it('flags a mutation hidden behind a comment inside a runtime-dependent loop', function (): void {
+    // The loop body is not replayed, so only the mutation detector can see this
+    // one; a comment-prefixed head used to read as "no mutation".
+    expect(parseUnpreparedInRuntimeLoop("-- housekeeping\nCREATE TABLE secret (id integer)")->unreadable)->not->toBe([]);
 });

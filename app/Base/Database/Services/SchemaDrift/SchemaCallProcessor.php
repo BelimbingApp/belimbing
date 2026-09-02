@@ -122,8 +122,12 @@ final class SchemaCallProcessor
             return;
         }
 
-        $normalized = trim(preg_replace('/\s+/', ' ', $sql) ?? $sql);
-        $this->processNormalizedStatement($call, $normalized);
+        // A single DB::statement()/DB::unprepared() can carry several
+        // statements. Classify each one, not only the first, so a non-exempt
+        // statement cannot hide behind an exempt opener or a leading comment.
+        foreach (self::splitStatements($sql) as $statement) {
+            $this->processNormalizedStatement($call, $statement);
+        }
     }
 
     private function processNormalizedStatement(Node\Expr\StaticCall $call, string $normalized): void
@@ -175,6 +179,223 @@ final class SchemaCallProcessor
             // one and \b on the other and leave the remaining pair free.
             || preg_match('/^\s*CREATE\s+(?:OR\s+REPLACE\s+)?(?:TRIGGER|FUNCTION)\b/i', $sql) === 1
             || preg_match('/^\s*DROP\s+(?:TRIGGER|FUNCTION)\b/i', $sql) === 1;
+    }
+
+    /**
+     * Split a raw SQL string into its significant statements.
+     *
+     * Statements are separated by semicolons that sit outside a single-quoted
+     * literal, a double-quoted identifier, a dollar-quoted body, or a comment.
+     * Leading whitespace and comments are stripped from each statement and the
+     * remaining whitespace is collapsed so the classification regexes see a
+     * single, head-anchored statement rather than the whole string. Empty and
+     * comment-only statements are dropped.
+     *
+     * @return list<string>
+     */
+    public static function splitStatements(string $sql): array
+    {
+        $statements = [];
+        $current = '';
+        $length = strlen($sql);
+        $i = 0;
+
+        while ($i < $length) {
+            $char = $sql[$i];
+            $next = $i + 1 < $length ? $sql[$i + 1] : '';
+
+            if ($char === ';') {
+                $statements[] = $current;
+                $current = '';
+                $i++;
+
+                continue;
+            }
+
+            if ($char === '-' && $next === '-') {
+                $i = self::copyLineComment($sql, $i, $length, $current);
+
+                continue;
+            }
+
+            if ($char === '/' && $next === '*') {
+                $i = self::copyBlockComment($sql, $i, $length, $current);
+
+                continue;
+            }
+
+            if ($char === "'" || $char === '"') {
+                $i = self::copyQuoted($sql, $i, $length, $current);
+
+                continue;
+            }
+
+            $dollarEnd = $char === '$' ? self::copyDollarQuoted($sql, $i, $length, $current) : null;
+            if ($dollarEnd !== null) {
+                $i = $dollarEnd;
+
+                continue;
+            }
+
+            $current .= $char;
+            $i++;
+        }
+
+        $statements[] = $current;
+
+        return self::significantStatements($statements);
+    }
+
+    /** Line comment: a semicolon on this line is comment text, not a separator. */
+    private static function copyLineComment(string $sql, int $i, int $length, string &$current): int
+    {
+        $current .= '--';
+        $i += 2;
+        while ($i < $length && $sql[$i] !== "\n") {
+            $current .= $sql[$i];
+            $i++;
+        }
+
+        return $i;
+    }
+
+    /** Block comment: a semicolon inside it is not a separator. */
+    private static function copyBlockComment(string $sql, int $i, int $length, string &$current): int
+    {
+        $current .= '/*';
+        $i += 2;
+        while ($i < $length) {
+            $current .= $sql[$i];
+            if ($i + 1 < $length && $sql[$i] === '*' && $sql[$i + 1] === '/') {
+                $current .= '/';
+
+                return $i + 2;
+            }
+            $i++;
+        }
+
+        return $i;
+    }
+
+    /** Quoted literal or identifier: semicolons inside it are data. */
+    private static function copyQuoted(string $sql, int $i, int $length, string &$current): int
+    {
+        $quote = $sql[$i];
+        $backslashEscapes = $quote === "'" && self::isPostgresEscapeString($sql, $i);
+        $current .= $quote;
+        $i++;
+        while ($i < $length) {
+            $current .= $sql[$i];
+            if ($backslashEscapes && $sql[$i] === '\\' && $i + 1 < $length) {
+                $current .= $sql[$i + 1];
+                $i += 2;
+
+                continue;
+            }
+            if ($sql[$i] === $quote) {
+                // A doubled quote is an escaped quote, not the terminator.
+                if ($i + 1 < $length && $sql[$i + 1] === $quote) {
+                    $current .= $quote;
+                    $i += 2;
+
+                    continue;
+                }
+
+                return $i + 1;
+            }
+            $i++;
+        }
+
+        return $i;
+    }
+
+    /** PostgreSQL E'…' strings use backslash escapes; ordinary strings do not. */
+    private static function isPostgresEscapeString(string $sql, int $quoteOffset): bool
+    {
+        if ($quoteOffset === 0 || ! in_array($sql[$quoteOffset - 1], ['E', 'e'], true)) {
+            return false;
+        }
+
+        return $quoteOffset === 1 || ! self::isDollarTagByte($sql[$quoteOffset - 2]);
+    }
+
+    /**
+     * Dollar-quoted body: $$ ... $$ or $tag$ ... $tag$. The body frequently
+     * contains semicolons (a plpgsql function), which must not split the
+     * statement. Null when '$' is literal (e.g. a positional parameter).
+     */
+    private static function copyDollarQuoted(string $sql, int $i, int $length, string &$current): ?int
+    {
+        $tagEnd = $i + 1;
+        while ($tagEnd < $length && self::isDollarTagByte($sql[$tagEnd])) {
+            $tagEnd++;
+        }
+        if ($tagEnd >= $length || $sql[$tagEnd] !== '$') {
+            return null;
+        }
+
+        $tag = substr($sql, $i, $tagEnd - $i + 1);
+        $current .= $tag;
+        $i = $tagEnd + 1;
+        while ($i < $length) {
+            if (substr($sql, $i, strlen($tag)) === $tag) {
+                $current .= $tag;
+
+                return $i + strlen($tag);
+            }
+            $current .= $sql[$i];
+            $i++;
+        }
+
+        return $i;
+    }
+
+    /**
+     * @param  list<string>  $statements
+     * @return list<string>
+     */
+    private static function significantStatements(array $statements): array
+    {
+        $significant = [];
+        foreach ($statements as $statement) {
+            $statement = self::stripLeadingTrivia($statement);
+            if ($statement === '') {
+                continue;
+            }
+            $significant[] = trim(preg_replace('/\s+/', ' ', $statement) ?? $statement);
+        }
+
+        return $significant;
+    }
+
+    private static function isDollarTagByte(string $char): bool
+    {
+        return ($char >= 'a' && $char <= 'z')
+            || ($char >= 'A' && $char <= 'Z')
+            || ($char >= '0' && $char <= '9')
+            || $char === '_';
+    }
+
+    /**
+     * Strip leading whitespace and comments so a statement that opens with a
+     * comment still classifies by the keyword that follows it.
+     */
+    private static function stripLeadingTrivia(string $statement): string
+    {
+        $statement = ltrim($statement);
+        while ($statement !== '') {
+            if (str_starts_with($statement, '--')) {
+                $newline = strpos($statement, "\n");
+                $statement = $newline === false ? '' : ltrim(substr($statement, $newline + 1));
+            } elseif (str_starts_with($statement, '/*')) {
+                $end = strpos($statement, '*/');
+                $statement = $end === false ? '' : ltrim(substr($statement, $end + 2));
+            } else {
+                break;
+            }
+        }
+
+        return $statement;
     }
 
     /** @param  list<string>  $prefix */

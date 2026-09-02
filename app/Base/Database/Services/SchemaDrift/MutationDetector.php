@@ -64,14 +64,31 @@ final class MutationDetector
         }
 
         if ($class === 'db' && in_array($method, ['statement', 'unprepared'], true)) {
-            $sql = isset($call->args[0]) ? $this->context->evaluator->evaluate($call->args[0]->value, $environment) : null;
-
-            return ! is_string($sql)
-                || (preg_match('/^\s*(CREATE|ALTER|DROP)\s/i', $sql) === 1
-                    && ! SchemaCallProcessor::isRawSchemaOutsideComparison($sql));
+            return $this->rawStatementMutates($call, $environment);
         }
 
         return $this->containsSelfMethodMutation($call, $class, $method, $environment, $activeMethods);
+    }
+
+    /** @param  array<string, mixed>  $environment */
+    private function rawStatementMutates(Node\Expr\StaticCall $call, array $environment): bool
+    {
+        $sql = isset($call->args[0]) ? $this->context->evaluator->evaluate($call->args[0]->value, $environment) : null;
+
+        if (! is_string($sql)) {
+            return true;
+        }
+
+        // Classify every statement, not only the first, so a mutation
+        // cannot hide behind an exempt opener or a leading comment.
+        foreach (SchemaCallProcessor::splitStatements($sql) as $statement) {
+            if (preg_match('/^(CREATE|ALTER|DROP)\s/i', $statement) === 1
+                && ! SchemaCallProcessor::isRawSchemaOutsideComparison($statement)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** @param  list<Node\Stmt>  $statements @param  array<string, mixed>  $environment @param  array<string, true>  $activeMethods */
