@@ -224,8 +224,19 @@ it('ignores the plpgsql function a trigger is built from, not only the trigger',
     // portable guard was readable on SQLite and unreadable on PostgreSQL --
     // reporting the whole migration INCOMPLETE on the one driver where the
     // trigger does any work. A function is no more comparable than a trigger.
+    // Both statements sit inside driver conditionals on purpose. The exemption
+    // is consulted from two places, and this is the one that produced #498:
+    // MutationDetector decides whether an enclosing if() counts as a schema
+    // mutation. A bare statement exercises only the reporting path and would
+    // leave the property this test exists for unasserted.
     $parsed = parseMigrationUp(
-        '        DB::unprepared("CREATE OR REPLACE FUNCTION widgets_guard() RETURNS trigger AS $$ BEGIN RETURN NEW; END; $$ LANGUAGE plpgsql; CREATE TRIGGER widgets_guard_trigger BEFORE UPDATE ON widgets FOR EACH ROW EXECUTE FUNCTION widgets_guard();");'
+        "        if (DB::connection()->getDriverName() === 'pgsql') {\n"
+        .'            DB::unprepared("CREATE OR REPLACE FUNCTION widgets_guard() RETURNS trigger AS $$ BEGIN RETURN NEW; END; $$ LANGUAGE plpgsql; CREATE TRIGGER widgets_guard_trigger BEFORE UPDATE ON widgets FOR EACH ROW EXECUTE FUNCTION widgets_guard();");'."\n"
+        ."        }\n"
+        ."\n"
+        ."        if (DB::connection()->getDriverName() === 'sqlite') {\n"
+        .'            DB::statement("CREATE TRIGGER widgets_guard_trigger BEFORE UPDATE ON widgets BEGIN SELECT RAISE(ABORT, \'immutable\'); END");'."\n"
+        .'        }'
     );
 
     expect($parsed->unreadable)->toBe([])
@@ -236,10 +247,15 @@ it('exempts the drop forms too, so replacing a trigger does not depend on statem
     // Revising a trigger is ordinarily DROP then CREATE. Only the first
     // statement of a string is inspected, so leaving DROP out would have made
     // statement order decide whether migrate came back clean.
+    // Inside a driver conditional for the same reason as the plpgsql case: the
+    // drop arm has to be exempt on the MutationDetector path too, or replacing
+    // a trigger inside an if() still condemns the whole conditional.
     $parsed = parseMigrationUp(
-        "        DB::unprepared('DROP TRIGGER IF EXISTS g ON widgets; CREATE TRIGGER g BEFORE UPDATE ON widgets FOR EACH ROW EXECUTE FUNCTION widgets_guard();');\n"
-        ."        DB::statement('DROP FUNCTION IF EXISTS widgets_guard()');\n"
-        ."        DB::statement('CREATE OR REPLACE TRIGGER g BEFORE UPDATE ON widgets FOR EACH ROW EXECUTE FUNCTION widgets_guard()');"
+        "        if (DB::connection()->getDriverName() === 'pgsql') {\n"
+        ."            DB::unprepared('DROP TRIGGER IF EXISTS g ON widgets; CREATE TRIGGER g BEFORE UPDATE ON widgets FOR EACH ROW EXECUTE FUNCTION widgets_guard();');\n"
+        ."            DB::statement('DROP FUNCTION IF EXISTS widgets_guard()');\n"
+        ."            DB::statement('CREATE OR REPLACE TRIGGER g BEFORE UPDATE ON widgets FOR EACH ROW EXECUTE FUNCTION widgets_guard()');\n"
+        .'        }'
     );
 
     expect($parsed->unreadable)->toBe([])
