@@ -248,6 +248,7 @@ class DataShareDestinationMapper
             return;
         }
 
-        $query->where($column, $value);
+        // A binary predicate bound as text matches nothing on PostgreSQL.
+        $query->where($column, $this->values->bindable($table, $column, $value));
     }
 }

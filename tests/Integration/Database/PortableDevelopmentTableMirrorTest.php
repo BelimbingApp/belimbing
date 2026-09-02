@@ -49,8 +49,8 @@ afterEach(function (): void {
 
 it('mirrors complete selected data in both directions between SQLite and PostgreSQL without client tools', function (): void {
     DB::table(PORTABLE_MIRROR_PARENT)->insert([
-        ['id' => 1, 'name' => 'local parent', 'enabled' => true, 'payload' => json_encode(['from' => 'sqlite']), 'amount' => '10.50'],
-        ['id' => 2, 'name' => 'local second', 'enabled' => false, 'payload' => null, 'amount' => '0.25'],
+        ['id' => 1, 'name' => 'local parent', 'enabled' => true, 'payload' => json_encode(['from' => 'sqlite']), 'blob' => PORTABLE_MIRROR_BLOB, 'amount' => '10.50'],
+        ['id' => 2, 'name' => 'local second', 'enabled' => false, 'payload' => null, 'blob' => null, 'amount' => '0.25'],
     ]);
     DB::table(PORTABLE_MIRROR_CHILD)->insert([
         ['id' => 1, 'parent_id' => 1, 'label' => 'local child'],
@@ -85,6 +85,7 @@ it('mirrors complete selected data in both directions between SQLite and Postgre
     expect($remote->table(PORTABLE_MIRROR_PARENT)->orderBy('id')->pluck('name')->all())
         ->toBe(['local parent', 'local second'])
         ->and($remote->table(PORTABLE_MIRROR_CHILD)->value('label'))->toBe('local child')
+        ->and(portableBlobBytes($remote->table(PORTABLE_MIRROR_PARENT)->where('id', 1)->value('blob')))->toBe(PORTABLE_MIRROR_BLOB)
         ->and($remote->table(PORTABLE_MIRROR_CONTROL)->value('marker'))->toBe('untouched')
         ->and($pushProgress)->toContain(
             'Changes committed to Supabase.',
@@ -94,7 +95,7 @@ it('mirrors complete selected data in both directions between SQLite and Postgre
     $remote->table(PORTABLE_MIRROR_CHILD)->delete();
     $remote->table(PORTABLE_MIRROR_PARENT)->delete();
     $remote->table(PORTABLE_MIRROR_PARENT)->insert([
-        'id' => 7, 'name' => 'remote authority', 'enabled' => true, 'payload' => json_encode(['from' => 'postgres']), 'amount' => '7.75',
+        'id' => 7, 'name' => 'remote authority', 'enabled' => true, 'payload' => json_encode(['from' => 'postgres']), 'blob' => portableBlobStream(PORTABLE_MIRROR_BLOB), 'amount' => '7.75',
     ]);
     $remote->table(PORTABLE_MIRROR_CHILD)->insert([
         'id' => 8, 'parent_id' => 7, 'label' => 'remote child',
@@ -106,6 +107,7 @@ it('mirrors complete selected data in both directions between SQLite and Postgre
 
     expect(DB::table(PORTABLE_MIRROR_PARENT)->get(['id', 'name'])->map(fn (object $row): array => (array) $row)->all())
         ->toBe([['id' => 7, 'name' => 'remote authority']])
+        ->and(portableBlobBytes(DB::table(PORTABLE_MIRROR_PARENT)->where('id', 7)->value('blob')))->toBe(PORTABLE_MIRROR_BLOB)
         ->and(DB::table(PORTABLE_MIRROR_CHILD)->value('label'))->toBe('remote child');
 });
 
@@ -153,6 +155,25 @@ it('blocks portable data transfer when a selected schema is absent at one endpoi
         ->toContain('schema_missing_at_endpoint');
 });
 
+/** Bytes that expose text binding: a leading NUL and a non-UTF-8 byte. */
+const PORTABLE_MIRROR_BLOB = "\x00\xFFmirror";
+
+/** PDO pgsql returns bytea as a stream; SQLite as a string. Compare bytes, not handles. */
+function portableBlobBytes(mixed $value): ?string
+{
+    return is_resource($value) ? (string) stream_get_contents($value) : $value;
+}
+
+/** Bind bytes as a stream so PostgreSQL stores them intact (PDO::PARAM_LOB). */
+function portableBlobStream(string $bytes): mixed
+{
+    $stream = fopen('php://memory', 'r+');
+    fwrite($stream, $bytes);
+    rewind($stream);
+
+    return $stream;
+}
+
 function portableCreateFixtureSchema(): void
 {
     foreach ([null, DataShareMirrorConnectionManager::CONNECTION] as $connectionName) {
@@ -162,6 +183,7 @@ function portableCreateFixtureSchema(): void
             $table->string('name');
             $table->boolean('enabled');
             $table->json('payload')->nullable();
+            $table->binary('blob')->nullable();
             $table->decimal('amount', 12, 2);
         });
         $schema->create(PORTABLE_MIRROR_CHILD, function ($table): void {
