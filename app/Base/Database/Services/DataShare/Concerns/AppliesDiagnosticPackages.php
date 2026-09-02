@@ -65,7 +65,7 @@ trait AppliesDiagnosticPackages
     {
         // Decoded binary must be bound as a stream or PostgreSQL truncates it.
         foreach ($values as $column => $value) {
-            $values[$column] = $this->values->bindable($entry['table'], $column, $value);
+            $values[$column] = $this->diagnosticValueNormalizer()->bindable($entry['table'], $column, $value);
         }
 
         if ($this->rowExists($entry['table'], $entry['primary_keys'], $row)) {

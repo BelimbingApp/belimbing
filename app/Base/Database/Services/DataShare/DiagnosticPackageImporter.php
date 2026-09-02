@@ -26,7 +26,6 @@ class DiagnosticPackageImporter
         private readonly TableInspector $inspector,
         private readonly DevelopmentInstanceGuard $environment,
         private readonly DataShareSettings $settings,
-        private readonly DataShareValueNormalizer $values,
     ) {}
 
     protected function diagnosticTableInspector(): TableInspector
@@ -37,6 +36,11 @@ class DiagnosticPackageImporter
     protected function diagnosticSettings(): DataShareSettings
     {
         return $this->settings;
+    }
+
+    protected function diagnosticValueNormalizer(): DataShareValueNormalizer
+    {
+        return app(DataShareValueNormalizer::class);
     }
 
     /**
