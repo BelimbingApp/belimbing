@@ -294,3 +294,64 @@ it('still refuses a raw statement that is neither trigger, function, nor a suppo
 
     expect($parsed->unreadable)->not->toBe([]);
 });
+
+it('reports a schema statement hidden behind an exempt function opener', function (): void {
+    // Only the first statement used to be inspected, so the CREATE TABLE rode
+    // through on the CREATE FUNCTION exemption and the whole string was silent.
+    $parsed = parseMigrationUp(
+        '        DB::unprepared(\'CREATE OR REPLACE FUNCTION widgets_guard() RETURNS trigger AS $$ BEGIN RETURN NEW; END; $$ LANGUAGE plpgsql; CREATE TABLE secret (id integer);\');'
+    );
+
+    expect($parsed->unreadable)->not->toBe([]);
+});
+
+it('reports a schema statement hidden behind a leading line comment', function (): void {
+    // A leading comment used to make the string start with `--` rather than a
+    // DDL keyword, so the CREATE TABLE was silently skipped.
+    $parsed = parseMigrationUp(
+        '        DB::unprepared("-- housekeeping\\nCREATE TABLE secret (id integer)");'
+    );
+
+    expect($parsed->unreadable)->not->toBe([]);
+});
+
+it('reports a schema statement hidden behind a leading block comment', function (): void {
+    $parsed = parseMigrationUp(
+        '        DB::unprepared(\'/* housekeeping */ CREATE TABLE secret (id integer)\');'
+    );
+
+    expect($parsed->unreadable)->not->toBe([]);
+});
+
+it('does not split a dollar-quoted body that contains a schema-looking statement', function (): void {
+    // The CREATE TABLE inside $$ ... $$ is function body text, not a statement.
+    // A naive semicolon splitter would report it and turn a clean migration
+    // unreadable.
+    $parsed = parseMigrationUp(
+        '        DB::unprepared(\'CREATE OR REPLACE FUNCTION widgets_guard() RETURNS trigger AS $$ BEGIN CREATE TABLE secret (id integer); END; $$ LANGUAGE plpgsql;\');'
+    );
+
+    expect($parsed->unreadable)->toBe([])
+        ->and($parsed->operations)->toBe([]);
+});
+
+it('keeps a semicolon inside a string literal from splitting its statement', function (): void {
+    $parsed = parseMigrationUp(
+        "        DB::statement(\"INSERT INTO widgets (name) VALUES ('a;b;c')\");"
+    );
+
+    expect($parsed->unreadable)->toBe([])
+        ->and($parsed->operations)->toBe([]);
+});
+
+it('flags a mutation hidden behind a comment inside a runtime-dependent loop', function (): void {
+    // The loop body is not replayed, so only the mutation detector can see this
+    // one; a comment-prefixed head used to read as "no mutation".
+    $parsed = parseMigrationUp(
+        "        foreach (config('widgets') as \$widget) {\n"
+        ."            DB::unprepared(\"-- housekeeping\\nCREATE TABLE secret (id integer)\");\n"
+        .'        }'
+    );
+
+    expect($parsed->unreadable)->not->toBe([]);
+});
