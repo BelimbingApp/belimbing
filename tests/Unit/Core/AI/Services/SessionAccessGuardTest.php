@@ -267,7 +267,7 @@ it('records run metadata in ai_runs table, not session meta', function (): void 
         Employee::LARA_ID,
         $session->id,
         'First reply',
-        '01JTESTRUNONE000000000001',
+        '01JTESTRUNONE0000000000001',
     );
 
     $sessionMetaPath = $sessionManager->metaPath(Employee::LARA_ID, $session->id);
