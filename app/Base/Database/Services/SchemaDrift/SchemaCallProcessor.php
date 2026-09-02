@@ -156,14 +156,21 @@ final class SchemaCallProcessor
     public static function isRawSchemaOutsideComparison(string $sql): bool
     {
         return preg_match('/^\s*ALTER\s+TABLE\s+\S+\s+ADD\s+CONSTRAINT\s+\S+\s+CHECK\b/i', $sql) === 1
-            || preg_match('/^\s*CREATE\s+TRIGGER\b/i', $sql) === 1
-            // A trigger's function is no more comparable than the trigger it
-            // serves: the comparator knows tables, columns and indexes, and a
-            // plpgsql function is none of them. Exempting CREATE TRIGGER while
-            // reporting the CREATE OR REPLACE FUNCTION beside it made portable
-            // trigger DDL unreadable on PostgreSQL only, which is where the
-            // triggers actually run.
-            || preg_match('/^\s*CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\b/i', $sql) === 1;
+            // Triggers and the functions they call are outside the compared
+            // schema in exactly the same way: the comparator knows tables,
+            // columns and indexes, and neither of these is one of them.
+            //
+            // All four forms are listed together deliberately. Exempting
+            // CREATE TRIGGER alone meant portable guard code was readable on
+            // SQLite and unreadable on PostgreSQL, which is where the trigger
+            // does the work. Leaving the DROP forms out would have reproduced
+            // that asymmetry one revision later: replacing a trigger is
+            // ordinarily written DROP TRIGGER then CREATE TRIGGER, and only
+            // the first statement of a string is inspected, so statement order
+            // would have decided whether migrate came back clean.
+            || preg_match('/^\s*CREATE\s+(?:OR\s+REPLACE\s+)?TRIGGER\b/i', $sql) === 1
+            || preg_match('/^\s*CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\b/i', $sql) === 1
+            || preg_match('/^\s*DROP\s+(?:TRIGGER|FUNCTION)\b/i', $sql) === 1;
     }
 
     /** @param  list<string>  $prefix */

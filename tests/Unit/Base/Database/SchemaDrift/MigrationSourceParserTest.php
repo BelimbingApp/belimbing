@@ -231,6 +231,57 @@ it('ignores the plpgsql function a trigger is built from, not only the trigger',
         ->and($parsed->operations)->toBe([]);
 });
 
+it('exempts the drop forms too, so replacing a trigger does not depend on statement order', function (): void {
+    // Revising a trigger is ordinarily DROP then CREATE. Only the first
+    // statement of a string is inspected, so leaving DROP out would have made
+    // statement order decide whether migrate came back clean.
+    $migration = <<<'PHP'
+        <?php
+        return new class {
+            public function up(): void
+            {
+                DB::unprepared('DROP TRIGGER IF EXISTS widgets_guard_trigger ON widgets; CREATE TRIGGER widgets_guard_trigger BEFORE UPDATE ON widgets FOR EACH ROW EXECUTE FUNCTION widgets_guard();');
+                DB::statement('DROP FUNCTION IF EXISTS widgets_guard()');
+                DB::statement('CREATE OR REPLACE TRIGGER widgets_guard_trigger BEFORE UPDATE ON widgets FOR EACH ROW EXECUTE FUNCTION widgets_guard()');
+            }
+        };
+        PHP;
+
+    $parsed = app(MigrationSourceParser::class)->parseContents($migration);
+
+    expect($parsed->unreadable)->toBe([])
+        ->and($parsed->operations)->toBe([]);
+});
+
+it('matches the exemption case-insensitively and only on whole words', function (): void {
+    // Pins the /i and \b in the exemption patterns. Without /i a lower-case
+    // migration goes unreadable; without \b a table named `functional_areas`
+    // would be swallowed by the FUNCTION arm.
+    $migration = <<<'PHP'
+        <?php
+        return new class {
+            public function up(): void
+            {
+                DB::statement('create trigger widgets_guard_trigger before update on widgets begin select 1; end');
+            }
+        };
+        PHP;
+
+    expect(app(MigrationSourceParser::class)->parseContents($migration)->unreadable)->toBe([]);
+
+    $wordBoundary = <<<'PHP'
+        <?php
+        return new class {
+            public function up(): void
+            {
+                DB::statement('CREATE FUNCTIONAL_AREA widgets (id integer)');
+            }
+        };
+        PHP;
+
+    expect(app(MigrationSourceParser::class)->parseContents($wordBoundary)->unreadable)->not->toBe([]);
+});
+
 it('still refuses a raw statement that is neither trigger, function, nor a supported index form', function (): void {
     $migration = <<<'PHP'
         <?php
