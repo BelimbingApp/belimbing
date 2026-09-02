@@ -225,11 +225,11 @@ it('allows message append and read for Lara sessions', function (): void {
         Employee::LARA_ID,
         $session->id,
         'Hi!',
-        'run_meta_test',
+        '01JTESTRUNMETA000000000001',
     );
 
     AiRun::query()->create([
-        'id' => 'run_meta_test',
+        'id' => '01JTESTRUNMETA000000000001',
         'employee_id' => Employee::LARA_ID,
         'session_id' => $session->id,
         'source' => 'chat',
@@ -249,7 +249,7 @@ it('allows message append and read for Lara sessions', function (): void {
     expect($messages)->toHaveCount(2)
         ->and($messages[0]->role)->toBe('user')
         ->and($messages[1]->role)->toBe('assistant')
-        ->and($messages[1]->runId)->toBe('run_meta_test')
+        ->and($messages[1]->runId)->toBe('01JTESTRUNMETA000000000001')
         ->and($messages[1]->meta['provider_name'])->toBe('openai')
         ->and($messages[1]->meta['model'])->toBe('gpt-5.3')
         ->and(array_key_exists('meta', is_array($assistantLine) ? $assistantLine : []))->toBeFalse();
@@ -267,7 +267,7 @@ it('records run metadata in ai_runs table, not session meta', function (): void 
         Employee::LARA_ID,
         $session->id,
         'First reply',
-        'run_one',
+        '01JTESTRUNONE000000000001',
     );
 
     $sessionMetaPath = $sessionManager->metaPath(Employee::LARA_ID, $session->id);

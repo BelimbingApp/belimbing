@@ -15,7 +15,8 @@ use Tests\TestCase;
 uses(TestCase::class, LazilyRefreshDatabase::class);
 
 const RDLC_EMPLOYEE_ID = 1;
-const RDLC_RUN_ID = 'run_rdlc_001';
+// ai_runs.id is a ULID char(26): PostgreSQL pads shorter ids on read.
+const RDLC_RUN_ID = '01JTESTRDLC000000000000001';
 
 beforeEach(function (): void {
     config()->set('ai.workspace_path', storage_path('framework/testing/rdlc-'.Str::random(16)));
@@ -102,7 +103,7 @@ it('exposes lifecycle milestones and a meta rail in the Run Inspector view-model
 });
 
 it('returns an empty milestone list and zero rail total for a run with only delta events', function (): void {
-    $run = rdlcMakeRun('run_rdlc_empty');
+    $run = rdlcMakeRun('01JTESTRDLCEMPTY0000000001');
     rdlcAddEvent($run, RunEventType::AssistantOutputDelta, 1, '2026-05-09T10:00:00+00:00', ['delta' => 'a']);
     rdlcAddEvent($run, RunEventType::AssistantOutputDelta, 2, '2026-05-09T10:00:01+00:00', ['delta' => 'b']);
 
