@@ -225,11 +225,11 @@ it('allows message append and read for Lara sessions', function (): void {
         Employee::LARA_ID,
         $session->id,
         'Hi!',
-        '01JTESTRUNMETA000000000001',
+        '01jtstrnmeta00000000000001',
     );
 
     AiRun::query()->create([
-        'id' => '01JTESTRUNMETA000000000001',
+        'id' => '01jtstrnmeta00000000000001',
         'employee_id' => Employee::LARA_ID,
         'session_id' => $session->id,
         'source' => 'chat',
@@ -249,7 +249,7 @@ it('allows message append and read for Lara sessions', function (): void {
     expect($messages)->toHaveCount(2)
         ->and($messages[0]->role)->toBe('user')
         ->and($messages[1]->role)->toBe('assistant')
-        ->and($messages[1]->runId)->toBe('01JTESTRUNMETA000000000001')
+        ->and($messages[1]->runId)->toBe('01jtstrnmeta00000000000001')
         ->and($messages[1]->meta['provider_name'])->toBe('openai')
         ->and($messages[1]->meta['model'])->toBe('gpt-5.3')
         ->and(array_key_exists('meta', is_array($assistantLine) ? $assistantLine : []))->toBeFalse();
@@ -267,7 +267,7 @@ it('records run metadata in ai_runs table, not session meta', function (): void 
         Employee::LARA_ID,
         $session->id,
         'First reply',
-        '01JTESTRUNONE0000000000001',
+        '01jtstrnne0000000000000001',
     );
 
     $sessionMetaPath = $sessionManager->metaPath(Employee::LARA_ID, $session->id);
@@ -294,4 +294,12 @@ it('does not leak Lara sessions across users via messages', function (): void {
 
     expect($sessionManager->get(Employee::LARA_ID, $session->id))->toBeNull()
         ->and($messageManager->read(Employee::LARA_ID, $session->id))->toBeEmpty();
+});
+
+it('uses real ULID-shaped fixture ids for ai_runs.id', function (): void {
+    // char(26) pads shorter ids on PostgreSQL (#507); lowercase Crockford,
+    // excluding i, l, o and u, is what DataShareTransferOfferBundle::isUlid() accepts.
+    foreach (['01jtstrnmeta00000000000001', '01jtstrnne0000000000000001'] as $fixtureId) {
+        expect($fixtureId)->toMatch('/^[0-9a-hjkmnp-tv-z]{26}$/');
+    }
 });
