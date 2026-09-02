@@ -156,6 +156,34 @@ test('system Agent provisioning never rehomes an employee from another tenant', 
         ->not->toBe($operatorCompany->id);
 });
 
+test('system Agent provisioning leaves the auto-numbered employee sequence clear of its explicit id', function (): void {
+    // Lara is inserted at an explicit primary key. PostgreSQL does not advance
+    // a serial sequence for an explicit-ID insert, so without
+    // Employee::provisionLara()'s sequence reset the very next auto-numbered
+    // employee is handed Lara's id and the insert dies on the primary key.
+    DB::table('employees')->where('id', Employee::LARA_ID)->delete();
+
+    // Reproduce a fresh install. A PostgreSQL serial sequence starts before
+    // its first value and an explicit-ID insert leaves it there, which is the
+    // state provisionLara() has to correct; SQLite derives the next id from
+    // max(rowid) and arrives in that state by itself, so there is nothing to
+    // arrange for it. The setup differs because the drivers' id allocators
+    // differ — the assertion below is the same on both.
+    if (DB::connection()->getDriverName() === 'pgsql') {
+        DB::statement("SELECT setval(pg_get_serial_sequence('employees', 'id'), 1, false)");
+    }
+
+    expect(Employee::provisionLara())->toBeTrue();
+
+    $next = Employee::factory()->create([
+        'company_id' => platformOperatorCompany()->id,
+        'status' => 'active',
+    ]);
+
+    expect((int) $next->id)->toBeGreaterThan(Employee::LARA_ID)
+        ->and(Employee::query()->whereKey(Employee::LARA_ID)->value('employee_number'))->toBe('SYS-001');
+});
+
 test('provisioner emits platform-operator terminology', function (): void {
     makePlatformOperatorUnprovisioned();
     $messages = [];

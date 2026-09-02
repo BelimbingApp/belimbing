@@ -343,12 +343,19 @@ class DiagnosticRowCapture
     /** @return array{encoding: ?string, collation: ?string} */
     private function postgresTextMetadata(Connection $connection): array
     {
-        $encoding = (array) $connection->selectOne('show server_encoding');
-        $collation = (array) $connection->selectOne('show lc_collate');
+        // PostgreSQL 15 removed the `lc_collate` server setting, so
+        // `show lc_collate` errors on every currently supported release: the
+        // provenance block has been reporting a null collation there, and the
+        // failed statement also aborts whatever transaction the capture runs
+        // inside. Read the per-database catalog values instead, which every
+        // supported release exposes.
+        $row = (array) $connection->selectOne(
+            'select pg_encoding_to_char(encoding) as encoding, datcollate as collation from pg_database where datname = current_database()',
+        );
 
         return [
-            'encoding' => isset($encoding['server_encoding']) ? (string) $encoding['server_encoding'] : null,
-            'collation' => isset($collation['lc_collate']) ? (string) $collation['lc_collate'] : null,
+            'encoding' => isset($row['encoding']) ? (string) $row['encoding'] : null,
+            'collation' => isset($row['collation']) ? (string) $row['collation'] : null,
         ];
     }
 

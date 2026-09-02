@@ -48,12 +48,13 @@ jobs:
       - name: Copy Environment File
         run: cp .env.example .env
 
+      # phpunit.xml has declared sqlite/:memory: since 2026-08-06, so the two
+      # phpunit.xml rewrites this step used to carry matched nothing. Only the
+      # .env lines do real work, for the artisan commands below.
       - name: Configure Database for Testing
         run: |
           sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=sqlite/' .env
           sed -i 's/^DB_DATABASE=.*/DB_DATABASE=:memory:/' .env
-          sed -i 's/value="pgsql"/value="sqlite"/' phpunit.xml
-          sed -i 's/value="blb"/value=":memory:"/' phpunit.xml
 
       - name: Configure Framework Primitives for Testing
         run: |
@@ -154,6 +155,12 @@ jobs:
           pg_dump --version
           psql --version
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2 # NOSONAR — well-known community Bun action; tag pinning is acceptable for internal projects
+        with:
+          bun-version: '1.3.10'
+          no-cache: true
+
       - name: Install Dependencies
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
 
@@ -162,6 +169,15 @@ jobs:
 
       - name: Generate Application Key
         run: php artisan key:generate
+
+      # The driver-sensitive list below includes page-rendering tests, because
+      # the audit filters, the schedule board and the Geonames lists are where
+      # this driver's JSON and string grammar actually executes. Every one of
+      # them 500s on a missing Vite manifest.
+      - name: Build Assets
+        run: |
+          bun install --frozen-lockfile --ignore-scripts
+          bun run build
 
       - name: Prove migrations on PostgreSQL
         run: php artisan migrate --force --no-interaction
@@ -185,3 +201,38 @@ jobs:
 
       - name: Run data-freshness trigger proof
         run: ./vendor/bin/pest tests/Integration/Database/DataFreshnessPostgresTest.php
+
+      # Its own database, because DevelopmentTableMirrorPostgresTest drops
+      # tables from the source database it runs against (base_settings among
+      # them). Anything sharing blb_mirror_source after that step would fail for
+      # that reason rather than for a real one.
+      - name: Create isolated driver-sensitive test database
+        run: psql --host=127.0.0.1 --username=postgres --dbname=postgres --command='CREATE DATABASE blb_driver_sensitive'
+        env:
+          PGPASSWORD: postgres
+
+      - name: Migrate the driver-sensitive test database
+        env:
+          DB_DATABASE: blb_driver_sensitive
+        run: php artisan migrate --force --no-interaction
+
+      # RefreshDatabase calls migrate:fresh, whose db:wipe step BLB blocks
+      # outside an in-memory SQLite database — so these tests reuse the schema
+      # the step above created and rely on their own per-test transaction. That
+      # is why the migrate step is not optional and why this is one invocation.
+      - name: Run driver-sensitive tests on PostgreSQL
+        env:
+          DB_DATABASE: blb_driver_sensitive
+          PLATFORM_OPERATOR_COMPANY_NAME: Belimbing CI
+          PLATFORM_OPERATOR_COMPANY_CODE: belimbing_ci
+        run: |
+          ./vendor/bin/pest \
+            tests/Feature/Foundation/FrameworkPrimitivesProvisionerTest.php \
+            tests/Feature/Database/QueryTest.php \
+            tests/Feature/Database/DataShareDiagnosticCaptureTest.php \
+            tests/Feature/Database/IncubatingSchemaPreflightTest.php \
+            tests/Feature/Schedule/ScheduleCronOverrideTest.php \
+            tests/Feature/Schedule/SchedulePageTest.php \
+            tests/Feature/Audit/AuditLogUiTest.php \
+            tests/Feature/Core/Geonames \
+            tests/Unit/Core/AI/Services/TaskModelRecommendationServiceTest.php

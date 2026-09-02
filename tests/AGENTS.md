@@ -43,6 +43,9 @@ Assert the real contract, not a proxy:
 - Write driver-agnostic code and tests (e.g. `whereDate`/bound date objects, not string comparison on date columns).
 - Skip a test only when its **mechanism** requires a driver (real locking, triggers, cross-database work), never because the **behavior** differs. Such tests self-skip elsewhere **and must be registered in the driver lane's run steps** (`postgres-mirror` in `tests.yml`); a self-skip alone runs nowhere in CI.
 - Before proposing any CI/driver change: list the existing workflows and driver branches, and cite what production runs.
+- A fixture that only works on one driver is a bug in the fixture, not a reason to branch: an over-wide value for a declared column width, a foreign key pointing at a table that does not exist yet, a JSON path operator on a `text` column. Fix the fixture and the file runs on both.
+- A failed statement inside a PostgreSQL transaction aborts the whole transaction (`25P02`), so a test that deliberately provokes one — a unique-violation guard, a rejected write — needs a savepoint per hostile write. A nested `DB::transaction()` issues exactly that. Never a skip.
+- Every skip must name which of the two categories it is in, in the test or in its docblock.
 
 ## Common Pitfalls
 
