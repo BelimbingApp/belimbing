@@ -9,11 +9,15 @@ name: domain-ci
 # scan. Existing callers remain supported while descriptor-based callers are
 # rolled out on immutable workflow refs.
 #
-# Every supported database driver is a production driver. The `ci` job runs
-# the domain suite on SQLite; the `postgres-mirror` job runs the same suite on
-# PostgreSQL in parallel (see the job of the same name in tests.yml and
-# tests/AGENTS.md "Database Drivers"). Neither lane replaces the other. The two
-# jobs deliberately duplicate their checkout, compose, and toolchain setup
+# Every supported database driver is a production driver. The `sqlite` job
+# runs the domain suite on SQLite; the `postgres-mirror` job runs the same
+# suite on PostgreSQL in parallel and provides the same database contract as
+# the job of that name in tests.yml (see tests/AGENTS.md "Database Drivers").
+# Neither lane replaces the other. The `ci` job is the merge gate: it needs
+# both lanes and fails if either did, so callers' existing required check
+# `ci / ci` covers both drivers with no branch-protection change - rollout
+# order is simply "land this, then callers pick it up from @main". The two
+# lanes deliberately duplicate their checkout, compose, and toolchain setup
 # steps (GitHub Actions has no way to share them); change both together.
 
 on:
@@ -67,7 +71,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  ci:
+  sqlite:
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -210,10 +214,21 @@ jobs:
       DB_CONNECTION: pgsql
       DB_HOST: 127.0.0.1
       DB_PORT: '5432'
-      DB_DATABASE: blb_domain_mirror
+      DB_DATABASE: blb_mirror_source
       DB_USERNAME: postgres
       DB_PASSWORD: postgres
+      MIRROR_TEST_DB_HOST: 127.0.0.1
+      MIRROR_TEST_DB_PORT: 5432
+      MIRROR_TEST_DB_DATABASE: blb_mirror_target
+      MIRROR_TEST_DB_USERNAME: postgres
+      MIRROR_TEST_DB_PASSWORD: postgres
       BLB_POSTGRES_MIRROR_TESTS: 'true'
+      BLB_POSTGRES_FRESHNESS_TESTS: 'true'
+      BLB_FRESHNESS_PG_HOST: 127.0.0.1
+      BLB_FRESHNESS_PG_PORT: 5432
+      BLB_FRESHNESS_PG_DB: blb_freshness_target
+      BLB_FRESHNESS_PG_USER: postgres
+      BLB_FRESHNESS_PG_PASS: postgres
 
     services:
       postgres:
@@ -221,11 +236,11 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: blb_domain_mirror
+          POSTGRES_DB: blb_mirror_source
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U postgres -d blb_domain_mirror"
+          --health-cmd "pg_isready -U postgres -d blb_mirror_source"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -296,8 +311,29 @@ jobs:
       - name: Generate Application Key
         run: php artisan key:generate
 
+      - name: Create isolated mirror and freshness targets
+        run: |
+          psql --host=127.0.0.1 --username=postgres --dbname=postgres --command='CREATE DATABASE blb_mirror_target'
+          psql --host=127.0.0.1 --username=postgres --dbname=postgres --command='CREATE DATABASE blb_freshness_target'
+        env:
+          PGPASSWORD: postgres
+
       - name: Build Assets
         run: bun run build
 
       - name: Run Tests on PostgreSQL
         run: ./vendor/bin/pest "$DOMAIN_PATH"
+
+  # Merge gate. Callers require `ci / ci`; this job carries that name so both
+  # lanes gate merges without any caller or branch-protection change.
+  ci:
+    needs: [sqlite, postgres-mirror]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require both lanes
+        run: |
+          echo "sqlite: ${{ needs.sqlite.result }}"
+          echo "postgres-mirror: ${{ needs.postgres-mirror.result }}"
+          test "${{ needs.sqlite.result }}" = "success"
+          test "${{ needs.postgres-mirror.result }}" = "success"
