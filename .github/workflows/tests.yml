@@ -230,6 +230,7 @@ jobs:
             tests/Feature/Foundation/FrameworkPrimitivesProvisionerTest.php \
             tests/Feature/Database/QueryTest.php \
             tests/Feature/Database/DataShareDiagnosticCaptureTest.php \
+            tests/Feature/Database/DataShareDiagnosticImportTest.php \
             tests/Feature/Database/IncubatingSchemaPreflightTest.php \
             tests/Feature/Schedule/ScheduleCronOverrideTest.php \
             tests/Feature/Schedule/SchedulePageTest.php \
