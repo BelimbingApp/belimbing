@@ -2,7 +2,9 @@
 
 namespace App\Base\Settings\Database\Migrations\Concerns;
 
-use Illuminate\Support\Facades\Cache;
+use App\Base\Settings\Contracts\SettingsService;
+use App\Base\Settings\DTO\Scope;
+use App\Base\Settings\DTO\ScopeType;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -55,11 +57,18 @@ trait RenamesSettingRows
 
     private function forgetSettingRowCache(string $key, ?string $scopeType, ?int $scopeId): void
     {
-        $prefix = (string) config('settings.cache_prefix', 'blb:settings');
-        $scope = $scopeType === null ? 'global' : "{$scopeType}:{$scopeId}";
-        $cacheKey = "{$prefix}:{$scope}:{$key}";
+        // Route through the settings service rather than re-deriving the cache
+        // key by hand: it busts both the shared cache and its request-scoped
+        // memo. A rename that only cleared the cache would leave a stale "miss"
+        // memoized for the new key, so a read later in the same process would
+        // fall back to the definition default instead of the renamed value.
+        $scope = $scopeType === null ? null : match ($scopeType) {
+            ScopeType::COMPANY->value => Scope::company((int) $scopeId),
+            ScopeType::TENANT->value => Scope::tenant((int) $scopeId),
+            ScopeType::USER->value => Scope::user((int) $scopeId),
+            default => null,
+        };
 
-        Cache::forget($cacheKey);
-        Cache::forget($cacheKey.':is-encrypted');
+        app(SettingsService::class)->forgetCached($key, $scope);
     }
 }
