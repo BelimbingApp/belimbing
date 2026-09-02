@@ -17,8 +17,7 @@ class Create extends Component
 
     public string $description = '';
 
-    /** @var int|string|null */
-    public $companyId = null;
+    public ?int $companyId = null;
 
     /**
      * Create a new custom role.
