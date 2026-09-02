@@ -9,10 +9,16 @@ name: domain-ci
 # scan. Existing callers remain supported while descriptor-based callers are
 # rolled out on immutable workflow refs.
 #
-# The test database driver here is a production driver, not a CI shortcut;
-# do not swap it for another. Tests whose mechanism needs a specific driver
-# belong in a driver lane (see the postgres-mirror job in tests.yml and
-# tests/AGENTS.md "Database Drivers"), never in place of this one.
+# Every supported database driver is a production driver. The `sqlite` job
+# runs the domain suite on SQLite; the `postgres-mirror` job runs the same
+# suite on PostgreSQL in parallel and provides the same database contract as
+# the job of that name in tests.yml (see tests/AGENTS.md "Database Drivers").
+# Neither lane replaces the other. The `ci` job is the merge gate: it needs
+# both lanes and fails if either did, so callers' existing required check
+# `ci / ci` covers both drivers with no branch-protection change - rollout
+# order is simply "land this, then callers pick it up from @main". The two
+# lanes deliberately duplicate their checkout, compose, and toolchain setup
+# steps (GitHub Actions has no way to share them); change both together.
 
 on:
   workflow_call:
@@ -65,7 +71,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  ci:
+  sqlite:
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -153,7 +159,7 @@ jobs:
           no-cache: true
 
       - name: Install JS Dependencies
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Install Dependencies
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
@@ -194,3 +200,140 @@ jobs:
             -Dsonar.test.inclusions=${{ env.DOMAIN_PATH }}/**/Tests/**
             -Dsonar.php.coverage.reportPaths=coverage.xml
             -Dsonar.cpd.exclusions=${{ env.DOMAIN_PATH }}/**/Tests/**,${{ env.DOMAIN_PATH }}/**/Database/Migrations/**,${{ env.DOMAIN_PATH }}/**/Config/**,${{ env.DOMAIN_PATH }}/**/Routes/**
+
+  postgres-mirror:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: Testing
+    env:
+      APP_ENV: testing
+      DOMAIN_ID: ${{ inputs.domain-id }}
+      LEGACY_DOMAIN_PATH: ${{ inputs.domain-path }}
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_DATABASE: blb_mirror_source
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      MIRROR_TEST_DB_HOST: 127.0.0.1
+      MIRROR_TEST_DB_PORT: 5432
+      MIRROR_TEST_DB_DATABASE: blb_mirror_target
+      MIRROR_TEST_DB_USERNAME: postgres
+      MIRROR_TEST_DB_PASSWORD: postgres
+      BLB_POSTGRES_MIRROR_TESTS: 'true'
+      BLB_POSTGRES_FRESHNESS_TESTS: 'true'
+      BLB_FRESHNESS_PG_HOST: 127.0.0.1
+      BLB_FRESHNESS_PG_PORT: 5432
+      BLB_FRESHNESS_PG_DB: blb_freshness_target
+      BLB_FRESHNESS_PG_USER: postgres
+      BLB_FRESHNESS_PG_PASS: postgres
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: blb_mirror_source
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d blb_mirror_source"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout platform
+        uses: actions/checkout@v7 # NOSONAR — well-known GitHub-maintained action; tag pinning is acceptable for internal projects
+        with:
+          repository: ${{ inputs.platform-repo }}
+          ref: ${{ inputs.platform-ref }}
+
+      - name: Checkout domain under test
+        uses: actions/checkout@v7 # NOSONAR — well-known GitHub-maintained action; tag pinning is acceptable for internal projects
+        with:
+          path: source-under-test
+          fetch-depth: 0
+
+      - name: Resolve Domain descriptor
+        run: |
+          php scripts/ci/domain-ci.php validate
+          if [ -n "$DOMAIN_ID" ]; then
+            DOMAIN_PATH=$(php scripts/ci/domain-ci.php resolve \
+              --domain-id="$DOMAIN_ID" \
+              --caller-repository="$GITHUB_REPOSITORY" \
+              --workflow-ref="${{ inputs.platform-ref }}" | sed -n 's/^DOMAIN_PATH=//p')
+          else
+            DOMAIN_PATH="$LEGACY_DOMAIN_PATH"
+          fi
+          test -n "$DOMAIN_PATH"
+          echo "DOMAIN_PATH=$DOMAIN_PATH" >> "$GITHUB_ENV"
+          mkdir -p "$(dirname "$DOMAIN_PATH")"
+          mv source-under-test "$DOMAIN_PATH"
+
+      - name: Compose exact cross-domain dependencies
+        run: |
+          php scripts/ci/compose-domain.php --domain-path="$DOMAIN_PATH" --exact > extra-repos.tsv
+          while IFS=$'\t' read -r repo path; do
+            [ -z "$repo" ] && continue
+            ref=$(jq -r --arg repo "$repo" '.domains[] | select(.repo == $repo) | .ref' scripts/ci/domain-repos.json)
+            [[ "$ref" =~ ^[0-9a-f]{40}$ ]]
+            git clone --filter=blob:none --no-checkout "https://github.com/${repo}.git" "$path"
+            git -C "$path" checkout --detach "$ref"
+          done < extra-repos.tsv
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2 # NOSONAR — well-known community PHP action; tag pinning is acceptable for internal projects
+        with:
+          php-version: ${{ inputs.php-version }}
+          extensions: pdo_pgsql, pdo_sqlite, sqlite3
+          tools: composer:v2
+          coverage: none
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2 # NOSONAR — well-known community Bun action; tag pinning is acceptable for internal projects
+        with:
+          bun-version: ${{ inputs.bun-version }}
+          no-cache: true
+
+      - name: Install JS Dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Install Dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Copy Environment File
+        run: cp .env.example .env
+
+      - name: Generate Application Key
+        run: php artisan key:generate
+
+      - name: Create isolated mirror and freshness targets
+        run: |
+          psql --host=127.0.0.1 --username=postgres --dbname=postgres --command='CREATE DATABASE blb_mirror_target'
+          psql --host=127.0.0.1 --username=postgres --dbname=postgres --command='CREATE DATABASE blb_freshness_target'
+        env:
+          PGPASSWORD: postgres
+
+      - name: Build Assets
+        run: bun run build
+
+      - name: Run Tests on PostgreSQL
+        run: ./vendor/bin/pest "$DOMAIN_PATH"
+
+  # Merge gate. Callers require `ci / ci`; this job carries that name so both
+  # lanes gate merges without any caller or branch-protection change.
+  ci:
+    needs: [sqlite, postgres-mirror]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require both lanes
+        run: |
+          echo "sqlite: ${{ needs.sqlite.result }}"
+          echo "postgres-mirror: ${{ needs.postgres-mirror.result }}"
+          test "${{ needs.sqlite.result }}" = "success"
+          test "${{ needs.postgres-mirror.result }}" = "success"
