@@ -73,6 +73,18 @@ return [
 
     'git_executable' => env('BLB_GIT_EXECUTABLE') ?: env('GIT_EXECUTABLE'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Bun Executable
+    |--------------------------------------------------------------------------
+    |
+    | FrankenPHP workers may not inherit the operator shell PATH. Pinning Bun
+    | keeps deployment frontend builds working when Bun lives under ~/.bun/bin.
+    |
+    */
+
+    'bun_executable' => env('BLB_BUN_EXECUTABLE'),
+
     'caddy_server_admin_host' => env('CADDY_SERVER_ADMIN_HOST'),
 
     'caddy_server_admin_port' => env('CADDY_SERVER_ADMIN_PORT'),
