@@ -326,11 +326,61 @@ ensure_bunx_available() {
     return 1
 }
 
+resolve_bun_executable() {
+    if command_exists bun; then
+        command -v bun
+        return 0
+    fi
+
+    if [[ -f "$HOME/.bun/bin/bun" ]]; then
+        printf '%s\n' "$HOME/.bun/bin/bun"
+        return 0
+    fi
+
+    return 1
+}
+
+link_bun_to_service_path() {
+    local bun_path=$1
+
+    if [[ -w '/usr/local/bin' ]]; then
+        ln -sf "$bun_path" /usr/local/bin/bun
+        echo -e "${GREEN}✓${NC} Linked Bun into ${CYAN}/usr/local/bin/bun${NC} for service PATH"
+        return 0
+    fi
+
+    if sudo -n true 2>/dev/null; then
+        sudo ln -sf "$bun_path" /usr/local/bin/bun
+        echo -e "${GREEN}✓${NC} Linked Bun into ${CYAN}/usr/local/bin/bun${NC} for service PATH"
+        return 0
+    fi
+
+    echo -e "${YELLOW}⚠${NC} Could not link Bun into /usr/local/bin — BLB_BUN_EXECUTABLE is pinned in .env instead"
+}
+
+pin_bun_for_long_running_services() {
+    local bun_path
+    bun_path=$(resolve_bun_executable) || {
+        echo -e "${YELLOW}⚠${NC} Bun executable not resolved; skipping BLB_BUN_EXECUTABLE pin" >&2
+        return 0
+    }
+
+    update_env_file "BLB_BUN_EXECUTABLE" "$bun_path"
+    echo -e "${GREEN}✓${NC} Pinned Bun executable in .env: ${CYAN}$bun_path${NC}"
+
+    case "$(detect_os)" in
+        linux|wsl2)
+            link_bun_to_service_path "$bun_path"
+            ;;
+    esac
+}
+
 # Handle successful Bun setup/installation
 handle_bun_success() {
     local bun_version
     bun_version=$(get_bun_version)
     ensure_bunx_available || exit 1
+    pin_bun_for_long_running_services
 
     save_to_setup_state "JS_RUNTIME" "bun"
     save_to_setup_state "BUN_VERSION" "$bun_version"
