@@ -127,18 +127,22 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
         @chmod($path, 0600);
         $state = $this->newSnapshotState($tables, $sourceLabel, $progress);
 
-        // A REPEATABLE READ, read-only snapshot gives a consistent view while
-        // tables stream out. PostgreSQL requires the isolation level to be set
-        // before the transaction's first query, so issue it ahead of the
-        // transaction and only when we are not already inside one (an outer
-        // transaction, such as a test's rollback wrapper, would otherwise fail
-        // with SQLSTATE 25001).
-        if ($source->getDriverName() === 'pgsql' && $source->transactionLevel() === 0) {
-            $source->statement('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
-        }
+        // PostgreSQL's SET TRANSACTION configures the current transaction and
+        // must be its first statement, so it has to run immediately inside the
+        // callback after BEGIN. It can only be applied when this is the
+        // outermost transaction: under an outer transaction (a test rollback
+        // wrapper) the callback runs as a savepoint and PostgreSQL rejects the
+        // statement with SQLSTATE 25001, so it is skipped there.
+        $outermost = $source->transactionLevel() === 0;
 
         try {
-            $source->transaction(fn () => $this->snapshotTables($source, $target, $tables, $handle, $state), 1);
+            $source->transaction(function () use ($source, $target, $tables, $handle, $state, $outermost): void {
+                if ($outermost && $source->getDriverName() === 'pgsql') {
+                    $source->statement('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
+                }
+
+                $this->snapshotTables($source, $target, $tables, $handle, $state);
+            }, 1);
         } finally {
             fclose($handle);
         }
