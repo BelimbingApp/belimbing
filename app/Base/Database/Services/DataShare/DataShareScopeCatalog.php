@@ -136,12 +136,11 @@ class DataShareScopeCatalog
     private function tableDefinition(string $table): DataShareTableDefinition
     {
         $primary = collect(Schema::getIndexes($table))->first(fn (array $index): bool => (bool) $index['primary']);
-        $columns = collect(Schema::getColumns($table))->keyBy('name');
         // A reference carries no nullability: since #529 the mapper applies
         // MATCH SIMPLE (any null local column means unenforced), which does
         // not distinguish a wholly-optional key from a partly-optional one.
         // If a rule ever needs that distinction again, #531 records what the
-        // flag meant and how to re-derive it from $columns.
+        // flag meant and how to re-derive it from Schema::getColumns().
         $references = array_map(function (array $foreignKey): DataShareReferenceDefinition {
             return new DataShareReferenceDefinition(
                 localColumns: array_values($foreignKey['columns']),
