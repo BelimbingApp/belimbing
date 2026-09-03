@@ -140,12 +140,15 @@ class DataShareDestinationMapper
             $values = array_map(fn (string $column): mixed => $desired[$column] ?? null, $reference->localColumns);
             $nonnull = array_filter($values, fn (mixed $value): bool => $value !== null);
 
-            if ($nonnull === [] && $reference->nullable) {
-                continue;
-            }
-
+            // SQL's default MATCH SIMPLE: a composite foreign key with any
+            // null local column is not enforced by the database, so the row
+            // is resolvable regardless of what the other columns hold. The
+            // house pattern `(nullable_entity_id, tenant_id)` is half-null
+            // whenever the optional reference is absent; treating that as
+            // unresolvable planned a conflict for every such row and made
+            // them unrestorable (#528).
             if (count($nonnull) !== count($values)) {
-                return false;
+                continue;
             }
 
             $targetValues = $this->normalizeReferenceValues($reference->targetTable, $reference->targetColumns, $values);

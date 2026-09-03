@@ -904,3 +904,68 @@ it('does not prune an available published offer and requires explicit outgoing c
     $revoked = app(DataSharePackageRetention::class)->prune(includeUnapplied: true);
     expect(array_column($revoked['candidates'], 'path'))->toContain($offer->package_path);
 });
+
+it('plans an insert for a row whose nullable composite foreign key is half-null, as the database itself would accept it', function (): void {
+    // The house pattern for a tenant-safe optional reference: (nullable_id,
+    // tenant_id) -> (id, tenant_id). tenant_id is never null, so the key is
+    // half-null whenever the optional reference is absent. Under MATCH SIMPLE
+    // the database does not enforce such a key; the mapper must not be
+    // stricter than the constraint it models (#528).
+    $parent = 'test_data_share_half_null_parents';
+    $child = 'test_data_share_half_null_children';
+    $scope = 'tests/fixtures/data-share-half-null';
+
+    try {
+        Schema::create($parent, function (Blueprint $table): void {
+            $table->unsignedBigInteger('id')->primary();
+            $table->unsignedBigInteger('tenant_id');
+            $table->unique(['id', 'tenant_id']);
+        });
+        Schema::create($child, function (Blueprint $table) use ($parent): void {
+            $table->unsignedBigInteger('id')->primary();
+            $table->unsignedBigInteger('tenant_id');
+            $table->unsignedBigInteger('parent_id')->nullable();
+            $table->string('label');
+            $table->foreign(['parent_id', 'tenant_id'])->references(['id', 'tenant_id'])->on($parent);
+        });
+        TableRegistry::register($parent, 'Data Share Half-Null Fixture', $scope, 'test');
+        TableRegistry::register($child, 'Data Share Half-Null Fixture', $scope, 'test');
+
+        DB::table($parent)->insert(['id' => 1, 'tenant_id' => 7]);
+        DB::table($child)->insert([
+            ['id' => 10, 'tenant_id' => 7, 'parent_id' => 1, 'label' => 'with parent'],
+            ['id' => 11, 'tenant_id' => 7, 'parent_id' => null, 'label' => 'without parent'],
+        ]);
+
+        becomeGenericDataShareSource();
+        $preview = app(DataSharePackageExporter::class)->preview($scope, [$parent, $child]);
+        $bundle = app(DataShareTransferOfferManager::class)->publish($scope, [$parent, $child], $preview->previewHash, actorId: 9001);
+        $offer = DataShareTransferOffer::query()->where('offer_id', $bundle->offerId)->firstOrFail();
+        $export = new DataShareExportResult($offer->package_id, $offer->package_path, $offer->package_sha256, $offer->bytes, []);
+        DB::table($child)->delete();
+        DB::table($parent)->delete();
+
+        $receipt = receiveGenericDataShare($bundle, $export);
+        $plan = app(DataShareImportPlanner::class)->plan($receipt);
+
+        // Control for the fix: the fully-referenced row was always an insert;
+        // the half-null row was the one classified as a conflict.
+        // primary_key is a JSON column (cast to array), so match in PHP
+        // rather than in SQL, where Postgres refuses json = text.
+        $childActions = $plan->actions()->where('table_name', $child)->orderBy('sequence')->get()
+            ->mapWithKeys(fn ($action): array => [(int) $action->primary_key['id'] => $action->action])
+            ->all();
+
+        expect($childActions)->toBe([10 => 'insert', 11 => 'insert'])
+            ->and($plan->summary['counts'])->toBe(['insert' => 3, 'unchanged' => 0, 'conflict' => 0]);
+
+        app(DataSharePackageApplier::class)->apply($plan, $receipt->package_sha256, $plan->plan_hash, confirmed: true);
+
+        expect(DB::table($child)->where('id', 11)->value('parent_id'))->toBeNull()
+            ->and((int) DB::table($child)->where('id', 10)->value('parent_id'))->toBe(1);
+    } finally {
+        TableRegistry::unregister($child);
+        TableRegistry::unregister($parent);
+        genericShareDropCycle($parent, $child);
+    }
+});
