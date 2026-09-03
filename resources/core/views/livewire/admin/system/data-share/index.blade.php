@@ -258,6 +258,67 @@ if ($instance->role->value === 'development') {
                                     </div>
                                 </dl>
 
+                                @php
+                                    $advisories = $sharePreview['advisories'] ?? [];
+                                    $unredactedSuggestions = collect($advisories)->flatMap(fn ($columns, $table) => collect($columns)->filter(fn ($c) => $c['suggested'] && ! $c['redacted'])->map(fn ($c) => $table.'.'.$c['name']))->values();
+                                    $consequences = collect($advisories)->flatMap(fn ($columns) => collect($columns)->filter(fn ($c) => $c['redacted'] && $c['message'] !== null))->values();
+                                @endphp
+                                {{-- Never inside the disclosure: a closed disclosure that hides the one warning is silence. --}}
+                                @if($unredactedSuggestions->isNotEmpty())
+                                    <div class="mt-4">
+                                        <x-ui.alert variant="warning">
+                                            <p class="font-semibold">{{ __('This package carries columns that look sensitive') }}</p>
+                                            <p class="mt-1">{{ __('Their names match a secret pattern and they are not redacted, so they leave this instance exactly as stored: :columns. Redact any of them below, or publish as is — the choice is yours, and it is made here.', ['columns' => $unredactedSuggestions->implode(', ')]) }}</p>
+                                        </x-ui.alert>
+                                    </div>
+                                @endif
+                                @if($consequences->isNotEmpty())
+                                    <div class="mt-4">
+                                        <x-ui.alert variant="warning">
+                                            <p class="font-semibold">{{ __('What your redactions do at the destination') }}</p>
+                                            <ul class="mt-1 list-disc space-y-1 pl-5">
+                                                @foreach($consequences as $consequence)
+                                                    <li>{{ $consequence['message'] }}</li>
+                                                @endforeach
+                                            </ul>
+                                        </x-ui.alert>
+                                    </div>
+                                @endif
+                                <div class="mt-4 rounded-xl border border-border-default bg-surface-subtle">
+                                    <div class="border-b border-border-default p-4">
+                                        <p class="text-sm font-medium text-ink">{{ __('Redact columns') }}</p>
+                                        <p class="mt-0.5 text-xs text-muted">{{ __('Every column of every selected table is listed. Tick a column and its values leave as null. Suggested columns are only highlighted; nothing is redacted until you tick it. Changing a tick clears the preview, so review again before publishing.') }}</p>
+                                    </div>
+                                    <div class="divide-y divide-border-default">
+                                        @foreach($advisories as $table => $columns)
+                                            <div class="p-4" wire:key="redact-{{ $table }}">
+                                                <p class="break-all font-mono text-xs text-ink">{{ $table }}</p>
+                                                <div class="mt-2 grid gap-2 sm:grid-cols-2">
+                                                    @foreach($columns as $column)
+                                                        <div wire:key="redact-{{ $table }}-{{ $column['name'] }}" class="{{ $column['suggested'] ? 'rounded-md bg-status-warning-subtle p-2' : 'p-2' }}">
+                                                            <x-ui.checkbox
+                                                                id="data-share-redact-{{ $loop->parent->index }}-{{ $loop->index }}"
+                                                                wire:model.live="redactions.{{ $table }}"
+                                                                value="{{ $column['name'] }}"
+                                                                :label="$column['name']"
+                                                                :disabled="in_array('primary_key', $column['roles'], true)"
+                                                            />
+                                                            <p class="mt-0.5 pl-6 text-xs text-muted">
+                                                                {{ $column['type'] }}{{ $column['nullable'] ? '' : ' · '.__('required') }}{{ $column['roles'] !== [] ? ' · '.implode(', ', $column['roles']) : '' }}
+                                                                @if($column['suggested'])
+                                                                    · <span class="font-medium text-status-warning">{{ __('suggested: name looks like a secret') }}</span>
+                                                                @endif
+                                                            </p>
+                                                            @if($column['message'] !== null)
+                                                                <p class="mt-0.5 pl-6 text-xs {{ $column['level'] === 'refused' ? 'text-muted' : 'text-status-warning' }}">{{ $column['message'] }}</p>
+                                                            @endif
+                                                        </div>
+                                                    @endforeach
+                                                </div>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                </div>
                                 <div class="mt-4">
                                     <x-ui.disclosure :title="__('Table manifest')">
                                         <div class="divide-y divide-border-default">

@@ -28,6 +28,7 @@ use App\Base\Database\Services\DataShare\DataSharePackageInbox;
 use App\Base\Database\Services\DataShare\DataSharePackageReader;
 use App\Base\Database\Services\DataShare\DataSharePackageRetention;
 use App\Base\Database\Services\DataShare\DataSharePackageVerifier;
+use App\Base\Database\Services\DataShare\DataShareRedactionAdvisor;
 use App\Base\Database\Services\DataShare\DataShareScopeCatalog;
 use App\Base\Database\Services\DataShare\DataShareSettings;
 use App\Base\Database\Services\DataShare\DataShareTransferOfferManager;
@@ -986,5 +987,246 @@ it('plans an insert for a row whose nullable composite foreign key is half-null,
         TableRegistry::unregister($child);
         TableRegistry::unregister($parent);
         genericShareDropCycle($parent, $child);
+    }
+});
+
+/**
+ * A table with every kind of column the redaction rules distinguish (#530):
+ * a secret-looking NOT NULL column, a secret-looking nullable column, a
+ * nullable foreign key, a unique column, a plain nullable column — and a
+ * primary key. Own scope, own tables, dropped afterwards.
+ *
+ * @return array{string, string, string} [scope, parent, child]
+ */
+function redactionShareFixture(): array
+{
+    $parent = 'test_data_share_redact_parents';
+    $child = 'test_data_share_redact_children';
+    $scope = 'tests/fixtures/data-share-redaction';
+    Schema::create($parent, function (Blueprint $table): void {
+        $table->unsignedBigInteger('id')->primary();
+    });
+    Schema::create($child, function (Blueprint $table) use ($parent): void {
+        $table->unsignedBigInteger('id')->primary();
+        $table->unsignedBigInteger('parent_id')->nullable();
+        $table->string('secret_reference');
+        $table->string('api_token')->nullable();
+        $table->string('code')->nullable()->unique();
+        $table->string('note')->nullable();
+        $table->foreign('parent_id')->references('id')->on($parent);
+    });
+    TableRegistry::register($parent, 'Data Share Redaction Fixture', $scope, 'test');
+    TableRegistry::register($child, 'Data Share Redaction Fixture', $scope, 'test');
+    DB::table($parent)->insert(['id' => 1]);
+    DB::table($child)->insert([
+        ['id' => 10, 'parent_id' => 1, 'secret_reference' => 'ref-10', 'api_token' => 'tok-10', 'code' => 'c-10', 'note' => 'ten'],
+        ['id' => 11, 'parent_id' => null, 'secret_reference' => 'ref-11', 'api_token' => null, 'code' => 'c-11', 'note' => null],
+    ]);
+
+    return [$scope, $parent, $child];
+}
+
+function redactionShareCleanup(string $parent, string $child): void
+{
+    TableRegistry::unregister($child);
+    TableRegistry::unregister($parent);
+    genericShareDropCycle($parent, $child);
+}
+
+it('offers every column for redaction, marks suggestions without ticking them, and refuses only the primary key', function (): void {
+    [$scope, $parent, $child] = redactionShareFixture();
+
+    try {
+        becomeGenericDataShareSource();
+        $preview = app(DataSharePackageExporter::class)->preview($scope, [$parent, $child]);
+        $columns = collect($preview->advisories[$child])->keyBy('name');
+
+        // The general listing: every column, including ones no pattern matches.
+        expect($columns->keys()->all())->toBe(['id', 'parent_id', 'secret_reference', 'api_token', 'code', 'note'])
+            // The matcher decorates: suggested, never redacted on its own.
+            ->and($columns['secret_reference']['suggested'])->toBeTrue()
+            ->and($columns['secret_reference']['redacted'])->toBeFalse()
+            ->and($columns['api_token']['suggested'])->toBeTrue()
+            ->and($columns['note']['suggested'])->toBeFalse()
+            // Roles come from the schema block the payload already writes.
+            ->and($columns['id']['roles'])->toBe(['primary_key'])
+            ->and($columns['parent_id']['roles'])->toBe(['foreign_key'])
+            ->and($columns['code']['roles'])->toBe(['unique'])
+            ->and($columns['id']['level'])->toBe(DataShareRedactionAdvisor::LEVEL_REFUSED)
+            // Nothing redacted, nothing warned, and the report says so.
+            ->and($columns['secret_reference']['message'])->toBeNull()
+            ->and((array) $preview->report['redactions'])->toBe([]);
+
+        expect(fn () => app(DataSharePackageExporter::class)->preview($scope, [$parent, $child], [$child => ['id']]))
+            ->toThrow(DataShareDefinitionException::class, 'primary key');
+        expect(fn () => app(DataSharePackageExporter::class)->preview($scope, [$parent, $child], [$child => ['missing']]))
+            ->toThrow(DataShareDefinitionException::class, 'does not exist');
+        expect(fn () => app(DataSharePackageExporter::class)->preview($scope, [$parent, $child], ['other_table' => ['x']]))
+            ->toThrow(DataShareDefinitionException::class, 'not in this share');
+    } finally {
+        redactionShareCleanup($parent, $child);
+    }
+});
+
+it('names the consequence of each redaction, sized to what the destination will do', function (): void {
+    [$scope, $parent, $child] = redactionShareFixture();
+
+    try {
+        becomeGenericDataShareSource();
+        $preview = app(DataSharePackageExporter::class)->preview($scope, [$parent, $child], [
+            $child => ['secret_reference', 'api_token', 'parent_id', 'code', 'note'],
+        ]);
+        $columns = collect($preview->advisories[$child])->keyBy('name');
+
+        expect($columns['secret_reference']['level'])->toBe(DataShareRedactionAdvisor::LEVEL_UNRESTORABLE)
+            ->and($columns['secret_reference']['message'])->toContain('2 rows')->toContain('unrestorable')
+            ->and($columns['parent_id']['level'])->toBe(DataShareRedactionAdvisor::LEVEL_REFERENCE)
+            ->and($columns['parent_id']['message'])->toContain('silently')
+            ->and($columns['code']['level'])->toBe(DataShareRedactionAdvisor::LEVEL_UNIQUE)
+            // A plain nullable column is not silent: it says the values will not travel.
+            ->and($columns['api_token']['level'])->toBe(DataShareRedactionAdvisor::LEVEL_QUIET)
+            ->and($columns['note']['level'])->toBe(DataShareRedactionAdvisor::LEVEL_QUIET)
+            ->and($columns['note']['message'])->toContain('will not travel')
+            // Normalised, sorted, and inside the hashed report.
+            ->and((array) $preview->report['redactions'])->toBe([$child => ['api_token', 'code', 'note', 'parent_id', 'secret_reference']]);
+    } finally {
+        redactionShareCleanup($parent, $child);
+    }
+});
+
+it('redacts at encode time, binds the map into the preview hash, and the package verifies and plans honestly', function (): void {
+    [$scope, $parent, $child] = redactionShareFixture();
+
+    try {
+        becomeGenericDataShareSource();
+        $exporter = app(DataSharePackageExporter::class);
+        $plain = $exporter->preview($scope, [$parent, $child]);
+        $redacted = $exporter->preview($scope, [$parent, $child], [$child => ['api_token', 'note']]);
+
+        // Same rows, different map: the hash must differ, and publishing the
+        // redacted map against the plain hash must be refused.
+        expect($redacted->previewHash)->not->toBe($plain->previewHash);
+        expect(fn () => app(DataShareTransferOfferManager::class)->publish($scope, [$parent, $child], $plain->previewHash, actorId: 9001, redactions: [$child => ['api_token', 'note']]))
+            ->toThrow(DataSharePackageException::class);
+
+        $bundle = app(DataShareTransferOfferManager::class)->publish($scope, [$parent, $child], $redacted->previewHash, actorId: 9001, redactions: [$child => ['api_token', 'note']]);
+        $offer = DataShareTransferOffer::query()->where('offer_id', $bundle->offerId)->firstOrFail();
+        expect($offer->metadata['redactions'])->toBe([$child => ['api_token', 'note']]);
+
+        // Read the package itself: values null, everything else intact, and
+        // the reader's own fingerprint check passes because the fingerprint
+        // was taken after redaction.
+        $rows = [];
+        $stream = Storage::disk('local')->readStream($offer->package_path);
+
+        try {
+            $manifest = app(DataSharePackageReader::class)->manifest($stream);
+            rewind($stream);
+            app(DataSharePackageReader::class)->inspect($stream, function ($s, $table, array $record) use (&$rows): void {
+                $rows[$table->table][(int) $record['primary_key']['id']] = $record['values'];
+            });
+        } finally {
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }
+
+        expect((array) $manifest['redactions'])->toBe([$child => ['api_token', 'note']])
+            ->and($rows[$child][10]['api_token'])->toBeNull()
+            ->and($rows[$child][10]['note'])->toBeNull()
+            ->and($rows[$child][10]['secret_reference'])->toBe('ref-10')
+            ->and($rows[$child][10]['code'])->toBe('c-10');
+
+        // Honest planning: against its own source the redacted rows differ
+        // from what the destination holds, so they are conflicts, not
+        // "unchanged" — a redacted package is not a faithful copy, by design.
+        $export = new DataShareExportResult($offer->package_id, $offer->package_path, $offer->package_sha256, $offer->bytes, $manifest);
+        $plan = app(DataShareImportPlanner::class)->plan(receiveGenericDataShare($bundle, $export));
+        $childActions = $plan->actions()->where('table_name', $child)->orderBy('sequence')->get()
+            ->mapWithKeys(fn ($action): array => [(int) $action->primary_key['id'] => $action->action])->all();
+        expect($childActions)->toBe([10 => 'conflict', 11 => 'unchanged']);
+    } finally {
+        redactionShareCleanup($parent, $child);
+    }
+});
+
+it('shows the sensitive-column warning outside the manifest disclosure and binds redactions on the Share tab', function (): void {
+    [$scope, $parent, $child] = redactionShareFixture();
+
+    try {
+        $this->actingAs(createAdminUser());
+        $component = Livewire::test(DataShareIndex::class)
+            ->set('scopeName', $scope)
+            ->call('previewShare')
+            ->assertSet('statusVariant', 'success')
+            // Nothing ticked by default; the warning names the suggested columns.
+            ->assertSet('redactions', [])
+            ->assertSee('This package carries columns that look sensitive')
+            ->assertSee($child.'.secret_reference')
+            ->assertSee($child.'.api_token')
+            ->assertSee('Redact columns')
+            ->assertSee('suggested: name looks like a secret');
+
+        // The warning is not inside the disclosure: it appears before the
+        // manifest heading in the rendered output, and it is a heading in the
+        // alert body, not a title attribute (assertSee cannot tell those apart).
+        $html = $component->html();
+        expect(strpos($html, 'This package carries columns that look sensitive'))->toBeLessThan(strpos($html, 'Table manifest'))
+            ->and($html)->not->toContain('title="This package carries columns');
+
+        // The view offers every column, not only the matched ones: an
+        // unmatched column renders a checkbox, the primary key renders one
+        // disabled, and the suggested tint resolves to a real token. The
+        // service layer proved "every column"; this is the view's own control
+        // (a loop over suggested columns only passed every other test).
+        expect($html)->toMatch('/<input[^>]*value="note"[^>]*>/')
+            ->and($html)->toMatch('/<input[^>]*value="id"[^>]*disabled/')
+            ->and($html)->toContain('bg-status-warning-subtle')
+            ->and($html)->toContain('text-status-warning');
+
+        // Ticking an unmatched column works; the preview clears and, once
+        // reviewed again, the map is in the report and the consequence shown.
+        $component->set('redactions', [$child => ['note', 'secret_reference']])
+            ->assertSet('sharePreview', null)
+            ->call('previewShare')
+            ->assertSet('statusVariant', 'success')
+            ->assertSet('sharePreview.redactions.'.$child, ['note', 'secret_reference'])
+            ->assertSee('What your redactions do at the destination')
+            ->assertSee('unrestorable')
+            ->call('publishShare')
+            ->assertSet('statusVariant', 'success');
+
+        $offer = DataShareTransferOffer::query()->latest('id')->firstOrFail();
+        expect($offer->metadata['redactions'])->toBe([$child => ['note', 'secret_reference']]);
+    } finally {
+        redactionShareCleanup($parent, $child);
+    }
+});
+
+it('seeds suggested columns only when the one-line default says tick, and highlights otherwise', function (): void {
+    [$scope, $parent, $child] = redactionShareFixture();
+
+    try {
+        $this->actingAs(createAdminUser());
+        config(['data_share.redaction.suggestions' => 'highlight']);
+        Livewire::test(DataShareIndex::class)
+            ->set('scopeName', $scope)
+            ->call('previewShare')
+            ->assertSet('redactions', []);
+
+        // The owner's ruling is highlight; the tick path exists as a
+        // deliberate one-line default and must work when chosen. The seed
+        // needs a first preview (to know the columns) and then applies on the
+        // next review of a table the operator has not touched.
+        config(['data_share.redaction.suggestions' => 'tick']);
+        $component = Livewire::test(DataShareIndex::class)
+            ->set('scopeName', $scope)
+            ->call('previewShare')
+            ->call('previewShare');
+        expect($component->get('redactions')[$child] ?? [])->toBe(['api_token', 'secret_reference'])
+            ->and($component->get('sharePreview.redactions.'.$child))->toBe(['api_token', 'secret_reference']);
+    } finally {
+        config(['data_share.redaction.suggestions' => 'highlight']);
+        redactionShareCleanup($parent, $child);
     }
 });

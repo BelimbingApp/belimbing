@@ -9,6 +9,7 @@ use App\Base\Database\Livewire\DataShare\Concerns\ManagesDevelopmentTableMirror;
 use App\Base\Database\Livewire\DataShare\Concerns\ManagesTransferOffers;
 use App\Base\Database\Models\DataSharePlan;
 use App\Base\Database\Models\DataShareReceipt;
+use App\Base\Database\Services\DataShare\ColumnRedactor;
 use App\Base\Database\Services\DataShare\DataShareImportPlanner;
 use App\Base\Database\Services\DataShare\DataShareInstanceIdentityResolver;
 use App\Base\Database\Services\DataShare\DataSharePackageApplier;
@@ -49,6 +50,14 @@ class Index extends Component
 
     /** @var array<string, mixed>|null */
     public ?array $sharePreview = null;
+
+    /**
+     * Operator-chosen columns to redact, table → columns (#530). Every column
+     * of a selected table is offered; the name pattern only marks suggestions.
+     *
+     * @var array<string, list<string>>
+     */
+    public array $redactions = [];
 
     public int $maxDownloads = 1;
 
@@ -91,11 +100,13 @@ class Index extends Component
         $this->validateShareSelection();
 
         try {
-            $preview = $exporter->preview($this->scopeName, $this->selectedTables);
+            $this->redactions = $this->selectedRedactions();
+            $preview = $exporter->preview($this->scopeName, $this->selectedTables, $this->redactions);
             $this->sharePreview = [
                 ...$preview->report,
                 'preview_sha256' => $preview->previewHash,
                 'estimated_bytes' => $preview->estimatedBytes,
+                'advisories' => $preview->advisories,
             ];
             $this->setStatus(__('Share preview is ready. No package was written.'), 'success');
         } catch (Throwable $e) {
@@ -120,6 +131,7 @@ class Index extends Component
                 $this->selectedTables,
                 (string) $this->sharePreview['preview_sha256'],
                 maxDownloads: $this->maxDownloads,
+                redactions: $this->selectedRedactions(),
             );
             $this->publishedOfferBundle = $offer->toJson();
             $this->setStatus(__('Transfer offer :offer is published. Copy its bundle from the Published tab.', [
@@ -211,6 +223,49 @@ class Index extends Component
         }
 
         $this->diagnosticPackages = $capture->listPackages();
+    }
+
+    /**
+     * Changing the map invalidates the reviewed preview: publish() would refuse
+     * the stale hash anyway, but the operator should see that a new review
+     * is needed rather than a refusal.
+     */
+    public function updatedRedactions(): void
+    {
+        $this->sharePreview = null;
+    }
+
+    /**
+     * The map restricted to the tables in this share, in a stable shape.
+     * With `data_share.redaction.suggestions` set to `tick`, suggested columns
+     * of a table the operator has not touched start ticked; the ruling's
+     * default is `highlight`, which seeds nothing.
+     *
+     * @return array<string, list<string>>
+     */
+    private function selectedRedactions(): array
+    {
+        $selected = [];
+
+        foreach ($this->selectedTables as $table) {
+            $columns = $this->redactions[$table] ?? null;
+
+            if ($columns === null && config('data_share.redaction.suggestions') === 'tick') {
+                $columns = array_values(array_filter(
+                    array_column($this->sharePreview['advisories'][$table] ?? [], 'name'),
+                    fn (string $column): bool => ColumnRedactor::looksSensitive($column),
+                ));
+            }
+
+            $columns = array_values(array_unique(array_filter(is_array($columns) ? $columns : [], is_string(...))));
+
+            if ($columns !== []) {
+                sort($columns, SORT_STRING);
+                $selected[$table] = $columns;
+            }
+        }
+
+        return $selected;
     }
 
     public function render(DataShareInstanceIdentityResolver $instances): View

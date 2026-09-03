@@ -22,7 +22,11 @@ class RelationalDataSerializer
         private readonly DataShareSettings $settings,
     ) {}
 
-    public function serialize(DataShareScopeDefinition $scope): SerializedDataShareScope
+    /**
+     * @param  array<string, list<string>>  $redactions  table → columns whose values leave as null,
+     *                                                   already normalised by DataShareRedactionAdvisor
+     */
+    public function serialize(DataShareScopeDefinition $scope, array $redactions = []): SerializedDataShareScope
     {
         $this->recordCount = 0;
         $payloads = [];
@@ -35,7 +39,7 @@ class RelationalDataSerializer
                     ]));
                 }
 
-                $payloads[] = $this->serializeTable($table);
+                $payloads[] = $this->serializeTable($table, $redactions[$table->table] ?? []);
             }
         } catch (Throwable $e) {
             foreach ($payloads as $payload) {
@@ -51,8 +55,10 @@ class RelationalDataSerializer
         ]);
     }
 
-    private function serializeTable(DataShareTableDefinition $table): SerializedTablePayload
+    /** @param list<string> $redacted */
+    private function serializeTable(DataShareTableDefinition $table, array $redacted = []): SerializedTablePayload
     {
+        $redacted = array_fill_keys($redacted, true);
         $path = $this->temporaryPath();
         $stream = fopen($path, 'wb');
 
@@ -84,6 +90,15 @@ class RelationalDataSerializer
                 $encoded = [];
 
                 foreach ($row as $column => $value) {
+                    // A redacted column leaves as null, and the fingerprint
+                    // below is taken after redaction: the reader recomputes
+                    // it from the values it reads and refuses a mismatch.
+                    if (isset($redacted[$column])) {
+                        $encoded[$column] = $this->values->encode($table->table, $column, null);
+
+                        continue;
+                    }
+
                     $this->guardScalar($table->table, $column, $value);
                     $encoded[$column] = $this->values->encode($table->table, $column, $value);
                 }
@@ -123,6 +138,7 @@ class RelationalDataSerializer
 
         return new SerializedTablePayload($path, [
             'table' => $table->table,
+            'redacted_columns' => array_keys($redacted),
             'schema_sha256' => $schema['sha256'],
             'sha256' => $sha256,
             'bytes' => $bytes,
