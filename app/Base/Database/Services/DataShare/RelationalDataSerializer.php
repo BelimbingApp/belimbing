@@ -143,7 +143,7 @@ class RelationalDataSerializer
             'sha256' => $sha256,
             'bytes' => $bytes,
             'records' => $records,
-        ]);
+        ], $schema['schema']);
     }
 
     private function guardScalar(string $table, string $column, mixed $value): void
