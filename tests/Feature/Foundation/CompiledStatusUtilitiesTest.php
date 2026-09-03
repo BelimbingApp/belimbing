@@ -11,17 +11,25 @@ use Illuminate\Support\Facades\File;
  * or `text-status-error` from muscle memory compiles to **no rule at all** —
  * no fallback, no build warning, no console error, and no failing test,
  * because `assertSee` matches raw HTML and nothing asserts computed style.
- * Nine such occurrences across seven files, in three different dead
- * spellings, shipped through review that way.
+ * Twenty-five such occurrences across eight files, in three dead spellings
+ * (one view alone held nine), shipped through review that way — a vocabulary
+ * problem, not a handful of typos, which is what earns a permanent check.
+ *
+ * How that list was produced matters for trusting the next one: the issue's
+ * original five files came from grepping three class names already known to
+ * be bad, which finds what one thought to look for. The 25 came from
+ * enumerating every status-colour utility the views use and checking each
+ * against the emitted stylesheet — the method this test runs on every build.
  *
  * Source-level checks cannot catch this: a token can exist in `tokens.css`
  * and still be emitted only in an opacity variant (`…-subtle/40`), so a bare
  * use compiles to nothing while every grep says it is fine. The only
  * authority is the emitted CSS, so that is what this compares against.
  *
- * Scope is deliberately the status-colour families, where the vocabulary is
- * small and every name is meant to be a real token; a check over every
- * Tailwind class in every view would drown in dynamic class strings.
+ * Scope is a deliberate trade, not a limitation: the status-colour families,
+ * where the vocabulary is small and every name is meant to be a real token.
+ * A check over every Tailwind class in every view would drown in dynamic
+ * class strings and be switched off.
  */
 const STATUS_UTILITY_PATTERN = '/(?<![\w-])((?:[a-z-]+:)*(?:bg|text|border|ring|divide|outline|fill|stroke|from|to|via)-(?:status-)?(?:warning|danger|error|success|info)(?:-[a-z]+)*(?:\/\d+)?)(?![\w-])/';
 
@@ -73,8 +81,15 @@ test('every status-colour utility used by a view resolves to a rule in the compi
     $css = compiledStylesheet();
 
     if ($css === null) {
-        // Mechanism skip: this compares against emitted CSS and needs a
-        // build (`bun run build`); CI builds assets before running tests.
+        // A skipped test is green, and this check exists to remove silent
+        // non-detection — so a missing build is only tolerated where a
+        // developer may genuinely not have built. In CI the build step runs
+        // before the suite, and its absence is itself the defect: fail.
+        if (env('CI')) {
+            $this->fail('No compiled stylesheet under public/build/assets in CI: the build step did not run before the tests, so nothing can be verified against emitted CSS.');
+        }
+
+        // Mechanism skip, local only: needs `bun run build`.
         $this->markTestSkipped('mechanism: no compiled stylesheet under public/build/assets; run `bun run build`.');
     }
 
