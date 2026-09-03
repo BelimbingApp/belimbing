@@ -61,9 +61,9 @@ it('migrates the legacy iteration row to the canonical round setting', function 
         'updated_at' => now(),
     ]);
 
-    $migration = require app_path(
+    $migration = requireMigrationOnce(app_path(
         'Core/AI/Database/Migrations/0200_02_01_000017_rename_max_tool_iterations_setting.php',
-    );
+    ));
     $migration->up();
 
     expect(app(AiRuntimeSettings::class)->maxToolRounds())->toBe(64)
