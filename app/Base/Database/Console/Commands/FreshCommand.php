@@ -23,34 +23,49 @@ class FreshCommand extends IlluminateFreshCommand
             return Command::FAILURE;
         }
 
-        if ($this->wipeWouldBeSilentlyRefused()) {
-            $this->components->error('migrate:fresh would drop nothing here: db:wipe refuses this connection, and the refusal is not visible from inside migrate:fresh.');
+        if ($this->wipeWillBeRefused()) {
+            $this->components->warn('The drop below will be refused: db:wipe permits only in-memory SQLite, so this is a migrate in place, not a fresh database.');
             $this->line('');
-            $this->line('  Without this guard the run reports <comment>Dropping all tables ... DONE</comment>, drops');
-            $this->line('  nothing, and then migrates against the schema that was already there --');
-            $this->line('  so a second test run silently exercises the first run\'s schema.');
+            $this->line('  The <comment>Dropping all tables ... DONE</comment> line that follows is not a drop.');
+            $this->line('  Task::render() matches a boolean against an int-backed enum, so it cannot');
+            $this->line('  print anything else. See BelimbingApp/belimbing#525.');
             $this->line('');
-            $this->line('  Use <comment>php artisan migrate --dev</comment> for incubating-schema rebuilds, or drop');
-            $this->line('  and recreate the database yourself if you mean a full wipe.');
+            $this->line('  This is expected and depended upon — see tests/AGENTS.md. If the schema');
+            $this->line('  here is stale, drop and recreate the database; migrate:fresh will not.');
             $this->line('');
-
-            return Command::FAILURE;
         }
 
         return parent::handle();
     }
 
+    private function isDisposableEnvironment(): bool
+    {
+        if (app()->environment(['local', 'testing'])) {
+            return true;
+        }
+
+        $database = $this->input->getOption('database');
+        $connection = $this->migrator->resolveConnection($database);
+
+        return $connection->getDriverName() === 'sqlite'
+            && $connection->getDatabaseName() === ':memory:';
+    }
+
     /**
-     * True when a drop will be attempted, and refused without saying so.
+     * True when the drop this command is about to delegate cannot happen.
      *
-     * Deliberately narrow. On a database with no migration repository there is
-     * nothing to drop, Laravel never calls db:wipe, and migrate:fresh is just
-     * migrate -- which is the case CI is in, since every job gets a new
-     * PostgreSQL service container. Blocking that would break every
-     * RefreshDatabase test for no benefit. What this catches is the reused
-     * database, where the drop matters and its refusal is invisible.
+     * Deliberately does NOT block. Both PostgreSQL CI lanes migrate the test
+     * database in an earlier step and then rely on migrate:fresh degrading to
+     * a plain migrate, and tests/AGENTS.md states that degrade as a rule
+     * authors are expected to work with. Refusing here fails 125 tests on one
+     * lane and 7 on the other — and fails silently, because RefreshDatabase
+     * discards the exit code and the seeder never runs, so the visible error
+     * is a missing platform-operator tenant. That is the same defect this
+     * command is being made honest about, one frame further out.
+     *
+     * So: say what is happening, and let it happen.
      */
-    private function wipeWouldBeSilentlyRefused(): bool
+    private function wipeWillBeRefused(): bool
     {
         $database = $this->input->getOption('database');
 
@@ -65,18 +80,5 @@ class FreshCommand extends IlluminateFreshCommand
                 return false;
             }
         });
-    }
-
-    private function isDisposableEnvironment(): bool
-    {
-        if (app()->environment(['local', 'testing'])) {
-            return true;
-        }
-
-        $database = $this->input->getOption('database');
-        $connection = $this->migrator->resolveConnection($database);
-
-        return $connection->getDriverName() === 'sqlite'
-            && $connection->getDatabaseName() === ':memory:';
     }
 }

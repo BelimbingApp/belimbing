@@ -3,7 +3,7 @@
 namespace App\Base\Database\Console\Commands;
 
 use Illuminate\Console\Command;
-use Illuminate\Database\ConnectionInterface;
+use Illuminate\Database\Connection;
 use Illuminate\Database\Console\WipeCommand as IlluminateWipeCommand;
 use Illuminate\Support\Facades\DB;
 
@@ -42,7 +42,7 @@ class WipeCommand extends IlluminateWipeCommand
      * Task::render(), which matches a boolean against an int-backed enum and
      * falls through to DONE. See BelimbingApp/belimbing#525.
      */
-    public static function permitsWipe(ConnectionInterface $connection): bool
+    public static function permitsWipe(Connection $connection): bool
     {
         return $connection->getDriverName() === 'sqlite'
             && $connection->getDatabaseName() === ':memory:';
