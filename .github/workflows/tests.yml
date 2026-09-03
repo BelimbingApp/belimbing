@@ -88,8 +88,28 @@ jobs:
       - name: Build Assets
         run: bun run build
 
+      # Coverage is produced here and read by the SonarCloud scan below.
+      # Until that scan existed, the project was analysed by SonarCloud's
+      # automatic analysis, which never runs tests, so "coverage on new code"
+      # read 0.0% on every PR by construction (#537). A CI-based scan and
+      # automatic analysis are mutually exclusive on SonarCloud: this step
+      # fails with "automatic analysis is enabled" until the organisation
+      # admin turns it off for BelimbingApp_lara.
       - name: Run Tests
-        run: ./vendor/bin/pest
+        run: ./vendor/bin/pest --coverage-clover=coverage.xml
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarqube-scan-action@v8 # NOSONAR — official SonarSource scanner action; tag pinning is acceptable for internal projects
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
+        with:
+          args: >
+            -Dsonar.projectKey=BelimbingApp_lara
+            -Dsonar.organization=belimbingapp
+            -Dsonar.sources=app,resources/core
+            -Dsonar.tests=tests
+            -Dsonar.php.coverage.reportPaths=coverage.xml
 
   # Every supported database driver is a production driver; the main job's
   # driver is not a stand-in for "real". This lane exists only for tests whose
