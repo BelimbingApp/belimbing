@@ -12,6 +12,5 @@ final readonly class DataShareReferenceDefinition
         public array $localColumns,
         public string $targetTable,
         public array $targetColumns,
-        public bool $nullable,
     ) {}
 }
