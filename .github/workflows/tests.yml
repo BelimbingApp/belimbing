@@ -57,6 +57,13 @@ jobs:
           sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=sqlite/' .env
           sed -i 's/^DB_DATABASE=.*/DB_DATABASE=:memory:/' .env
 
+      # Coverage bookkeeping for the Feature suite exceeds the 512M that
+      # phpunit.xml pins, and PHPUnit applies its <ini> after php.ini and
+      # after -d, so neither raises it: edit the file for this job only
+      # (#537). The runner has 7 GB; local runs keep 512M.
+      - name: Raise the memory limit for coverage
+        run: sed -i 's/name="memory_limit" value="512M"/name="memory_limit" value="2G"/' phpunit.xml && grep -c 'memory_limit" value="2G"' phpunit.xml
+
       - name: Configure Framework Primitives for Testing
         run: |
           bootstrap_admin_file="$RUNNER_TEMP/blb-ci-bootstrap-admin.txt"
@@ -102,15 +109,12 @@ jobs:
       # while each suite completes on its own — measured across six CI runs
       # on #537. The suites already form that boundary in phpunit.xml; this
       # restores it as a process boundary and merges the clover reports.
-      # The limit is passed with -d because phpunit.xml pins memory_limit to
-      # 512M and PHPUnit applies that after php.ini; coverage bookkeeping for
-      # the Feature suite alone exceeds 512M (measured). The runner has 7 GB.
       - name: Run Tests (Unit)
-        run: ./vendor/bin/pest -d memory_limit=2G --testsuite=Unit --coverage-clover=coverage-unit.xml
+        run: ./vendor/bin/pest --testsuite=Unit --coverage-clover=coverage-unit.xml
       - name: Run Tests (Feature)
-        run: ./vendor/bin/pest -d memory_limit=2G --testsuite=Feature --coverage-clover=coverage-feature.xml
+        run: ./vendor/bin/pest --testsuite=Feature --coverage-clover=coverage-feature.xml
       - name: Run Tests (Core, Domains, Extensions)
-        run: ./vendor/bin/pest -d memory_limit=2G --testsuite=Core --testsuite=Domains --testsuite=Extensions --coverage-clover=coverage-modules.xml
+        run: ./vendor/bin/pest --testsuite=Core --testsuite=Domains --testsuite=Extensions --coverage-clover=coverage-modules.xml
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v8 # NOSONAR — official SonarSource scanner action; tag pinning is acceptable for internal projects
