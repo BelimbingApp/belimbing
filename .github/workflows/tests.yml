@@ -114,12 +114,14 @@ jobs:
       - name: Run Tests (Feature)
         run: ./vendor/bin/pest --testsuite=Feature --coverage-clover=coverage-feature.xml
       # These suites are empty in this repository today (domains are composed
-      # and tested by domain-ci.yml; the Integration suite self-skips off
-      # PostgreSQL), so an empty result is not a failure here — but the step
-      # stays, so a Core test added later runs under coverage without anyone
-      # remembering to register it.
-      - name: Run Tests (Core, Domains, Extensions, Integration)
-        run: ./vendor/bin/pest --do-not-fail-on-empty-test-suite --testsuite=Core --testsuite=Domains --testsuite=Extensions --testsuite="PostgreSQL Integration" --coverage-clover=coverage-modules.xml
+      # and tested by domain-ci.yml), so an empty result is not a failure
+      # here — but the step stays, so a Core test added later runs under
+      # coverage without anyone remembering to register it. The Integration
+      # suite is not here: it self-skips off PostgreSQL (an all-skipped run
+      # still exits non-zero) and is registered in the postgres-mirror job.
+      # PHPUnit takes --testsuite once, comma-separated.
+      - name: Run Tests (Core, Domains, Extensions)
+        run: ./vendor/bin/pest --do-not-fail-on-empty-test-suite --testsuite=Core,Domains,Extensions --coverage-clover=coverage-modules.xml
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v8 # NOSONAR — official SonarSource scanner action; tag pinning is acceptable for internal projects
