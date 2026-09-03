@@ -100,8 +100,18 @@ jobs:
       # automatic analysis are mutually exclusive on SonarCloud: this step
       # fails with "automatic analysis is enabled" until the organisation
       # admin turns it off for BelimbingApp_lara.
-      - name: Run Tests
-        run: ./vendor/bin/pest --coverage-clover=coverage.xml
+      # One process per suite, on purpose. A single process that discovers
+      # every suite aborts under any coverage driver with "zend_mm_heap
+      # corrupted" at a fixed point (PHP 8.5.10; same at memory_limit=2G),
+      # while each suite completes on its own — measured across six CI runs
+      # on #537. The suites already form that boundary in phpunit.xml; this
+      # restores it as a process boundary and merges the clover reports.
+      - name: Run Tests (Unit)
+        run: ./vendor/bin/pest --testsuite=Unit --coverage-clover=coverage-unit.xml
+      - name: Run Tests (Feature)
+        run: ./vendor/bin/pest --testsuite=Feature --coverage-clover=coverage-feature.xml
+      - name: Run Tests (Core, Domains, Extensions)
+        run: ./vendor/bin/pest --testsuite=Core --testsuite=Domains --testsuite=Extensions --coverage-clover=coverage-modules.xml
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v8 # NOSONAR — official SonarSource scanner action; tag pinning is acceptable for internal projects
@@ -114,7 +124,7 @@ jobs:
             -Dsonar.organization=belimbingapp
             -Dsonar.sources=app,resources/core
             -Dsonar.tests=tests
-            -Dsonar.php.coverage.reportPaths=coverage.xml
+            -Dsonar.php.coverage.reportPaths=coverage-unit.xml,coverage-feature.xml,coverage-modules.xml
 
   # Every supported database driver is a production driver; the main job's
   # driver is not a stand-in for "real". This lane exists only for tests whose
