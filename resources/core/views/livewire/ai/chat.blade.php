@@ -1,5 +1,8 @@
 <?php
-/** @var \App\Core\AI\Livewire\Chat $this */
+
+use App\Core\AI\Livewire\Chat;
+
+/** @var Chat $this */
 ?>
 <div
     class="h-full flex flex-col"
@@ -499,8 +502,8 @@
                                             <span @class([
                                                 'text-accent' => $titleSuggestionTone === 'success',
                                                 'text-muted' => $titleSuggestionTone === 'info',
-                                                'text-warning' => $titleSuggestionTone === 'warning',
-                                                'text-danger' => $titleSuggestionTone === 'error',
+                                                'text-status-warning' => $titleSuggestionTone === 'warning',
+                                                'text-status-danger' => $titleSuggestionTone === 'error',
                                             ])>
                                                 {{ $titleSuggestionMessage }}
                                             </span>

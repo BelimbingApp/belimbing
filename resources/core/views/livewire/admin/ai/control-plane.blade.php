@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\Settings\DTO\SettingDefinition;
 use App\Core\AI\Enums\LifecycleAction;
 use App\Core\AI\Livewire\ControlPlane;
 use Illuminate\Support\Number;
@@ -9,9 +10,9 @@ use Illuminate\Support\Number;
 /** @var LifecycleAction|null $selectedLifecycleAction */
 /** @var array{label: string, url: string|null}|null $operationsBreadcrumb */
 /** @var bool $canManageRuntimeGuardrails */
-/** @var \App\Base\Settings\DTO\SettingDefinition $maxToolRoundsDefinition */
-/** @var \App\Base\Settings\DTO\SettingDefinition $laraPromptExtensionPathDefinition */
-/** @var \App\Base\Settings\DTO\SettingDefinition $bashToolEnabledDefinition */
+/** @var SettingDefinition $maxToolRoundsDefinition */
+/** @var SettingDefinition $laraPromptExtensionPathDefinition */
+/** @var SettingDefinition $bashToolEnabledDefinition */
 $controlPlaneContext = request()->only(['from', 'returnTo']);
 ?>
 <div>
@@ -118,15 +119,15 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
                             </div>
                             <div class="rounded-2xl border border-border-default bg-surface-card p-card-inner">
                                 <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Stale Runs') }}</p>
-                                <p class="mt-2 text-2xl font-medium tracking-tight {{ ($runHealthCounts['stale_queued'] + $runHealthCounts['stale_running']) > 0 ? 'text-danger' : 'text-ink' }}">{{ $runHealthCounts['stale_queued'] + $runHealthCounts['stale_running'] }}</p>
+                                <p class="mt-2 text-2xl font-medium tracking-tight {{ ($runHealthCounts['stale_queued'] + $runHealthCounts['stale_running']) > 0 ? 'text-status-danger' : 'text-ink' }}">{{ $runHealthCounts['stale_queued'] + $runHealthCounts['stale_running'] }}</p>
                             </div>
                             <div class="rounded-2xl border border-border-default bg-surface-card p-card-inner">
                                 <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Completed Last Hour') }}</p>
-                                <p class="mt-2 text-2xl font-medium tracking-tight text-success">{{ $runHealthCounts['completed_last_hour'] }}</p>
+                                <p class="mt-2 text-2xl font-medium tracking-tight text-status-success">{{ $runHealthCounts['completed_last_hour'] }}</p>
                             </div>
                             <div class="rounded-2xl border border-border-default bg-surface-card p-card-inner">
                                 <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Failed Last Hour') }}</p>
-                                <p class="mt-2 text-2xl font-medium tracking-tight {{ $runHealthCounts['failed_last_hour'] > 0 ? 'text-warning' : 'text-ink' }}">{{ $runHealthCounts['failed_last_hour'] }}</p>
+                                <p class="mt-2 text-2xl font-medium tracking-tight {{ $runHealthCounts['failed_last_hour'] > 0 ? 'text-status-warning' : 'text-ink' }}">{{ $runHealthCounts['failed_last_hour'] }}</p>
                             </div>
                         </div>
                     @endif

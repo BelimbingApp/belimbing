@@ -1,5 +1,8 @@
 <?php
-/** @var \App\Core\AI\Livewire\Providers\CopilotProxySetup $this */
+
+use App\Core\AI\Livewire\Providers\CopilotProxySetup;
+
+/** @var CopilotProxySetup $this */
 ?>
 <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
     <div>
@@ -22,8 +25,8 @@
                     <x-icon name="heroicon-o-check-circle" class="h-3.5 w-3.5 text-status-success" />
                     <span class="text-xs text-status-success">{{ $baseUrlStatusMessage }}</span>
                 @elseif($baseUrlStatus === 'offline')
-                    <x-icon name="heroicon-o-x-circle" class="h-3.5 w-3.5 text-status-error" />
-                    <span class="text-xs text-status-error">{{ $baseUrlStatusMessage }}</span>
+                    <x-icon name="heroicon-o-x-circle" class="h-3.5 w-3.5 text-status-danger" />
+                    <span class="text-xs text-status-danger">{{ $baseUrlStatusMessage }}</span>
                     <button
                         type="button"
                         wire:click="checkBaseUrl"

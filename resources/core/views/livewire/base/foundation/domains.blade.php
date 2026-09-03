@@ -125,7 +125,7 @@
     >
         <x-ui.tab id="installed"><div class="space-y-6">
         @if (count($dependencyIssues) > 0)
-            <div class="rounded-2xl border border-danger-border bg-danger-surface px-4 py-3 text-sm text-danger-ink">
+            <div class="rounded-2xl border border-status-danger-border bg-status-danger-subtle px-4 py-3 text-sm text-status-danger">
                 <div class="font-medium">{{ __('Module dependency issues') }}</div>
                 <ul class="mt-1 list-disc pl-5">
                     @foreach ($dependencyIssues as $row)
@@ -138,7 +138,7 @@
                 </ul>
             </div>
         @else
-            <div class="rounded-2xl border border-success-border bg-success-surface px-4 py-3 text-sm text-success-ink">
+            <div class="rounded-2xl border border-status-success-border bg-status-success-subtle px-4 py-3 text-sm text-status-success">
                 {{ __('All required module dependencies are satisfied.') }}
             </div>
         @endif
@@ -678,7 +678,7 @@
                                     <x-ui.link kind="external" href="{{ $entry->htmlUrl }}" class="font-mono text-xs">{{ $entry->repoName }}</x-ui.link>
                                 </div>
                                 @if ($isInstalled)
-                                    <span class="rounded-full border border-success-border bg-success-surface px-2 py-0.5 text-xs text-success-ink">{{ __('Installed') }}</span>
+                                    <span class="rounded-full border border-status-success-border bg-status-success-subtle px-2 py-0.5 text-xs text-status-success">{{ __('Installed') }}</span>
                                 @else
                                     <span class="rounded-full border border-border-default px-2 py-0.5 text-xs text-muted">{{ $entry->version ?: __('unversioned') }}</span>
                                 @endif

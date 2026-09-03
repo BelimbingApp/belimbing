@@ -548,7 +548,7 @@ $mirrorBlockerMessage = static function (mixed $blocker): string {
             @if($mirrorReview)
                 <div x-show="! mirrorReviewStarting && ! mirrorTransferStarting" class="mt-4 max-h-[65vh] overflow-y-auto">
                     @if($mirrorReviewGlobalBlockers->isNotEmpty())
-                        <div class="mb-3 rounded-md border border-warning/30 bg-warning-subtle px-3 py-2 text-xs leading-5 text-ink">
+                        <div class="mb-3 rounded-md border border-status-warning-border bg-status-warning-subtle px-3 py-2 text-xs leading-5 text-ink">
                             <p class="font-medium">{{ trans_choice('Selection blocker|Selection blockers', $mirrorReviewGlobalBlockers->count()) }}</p>
                             <ul class="mt-1 list-disc space-y-0.5 ps-4 text-muted">
                                 @foreach($mirrorReviewGlobalBlockers as $blocker)
