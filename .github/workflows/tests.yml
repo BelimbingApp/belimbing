@@ -32,7 +32,11 @@ jobs:
           extensions: pdo_sqlite, sqlite3
           tools: composer:v2
           coverage: pcov # xdebug's coverage mode aborted the full suite with "zend_mm_heap corrupted" (#537, run 33746514692); pcov is coverage-only and light
-          ini-values: pcov.directory=app
+          # Coverage data for a suite this size exhausts PHP's default 512M
+          # (measured: the Feature suite alone dies at 512M under pcov, and
+          # the full run corrupts its heap at a fixed point under the same
+          # pressure — #537). The runner has 7 GB.
+          ini-values: pcov.directory=app, memory_limit=2G
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2 # NOSONAR — well-known community Bun action; tag pinning is acceptable for internal projects
@@ -96,17 +100,6 @@ jobs:
       # automatic analysis are mutually exclusive on SonarCloud: this step
       # fails with "automatic analysis is enabled" until the organisation
       # admin turns it off for BelimbingApp_lara.
-      # DIAGNOSTIC (#537): bisect the coverage-mode heap corruption, round 2.
-      - name: Coverage bisect E — Feature suite alone
-        continue-on-error: true
-        run: ./vendor/bin/pest tests/Feature --coverage-clover=cov-e.xml
-      - name: Coverage bisect F — Unit then Feature/AI then Address
-        continue-on-error: true
-        run: ./vendor/bin/pest tests/Unit tests/Feature/AI tests/Feature/Address --coverage-clover=cov-f.xml
-      - name: Coverage bisect G — Unit suite alone
-        continue-on-error: true
-        run: ./vendor/bin/pest tests/Unit --coverage-clover=cov-g.xml
-
       - name: Run Tests
         run: ./vendor/bin/pest --coverage-clover=coverage.xml
 
