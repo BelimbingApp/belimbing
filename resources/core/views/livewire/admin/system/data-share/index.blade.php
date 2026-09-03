@@ -266,15 +266,17 @@ if ($instance->role->value === 'development') {
                                 {{-- Never inside the disclosure: a closed disclosure that hides the one warning is silence. --}}
                                 @if($unredactedSuggestions->isNotEmpty())
                                     <div class="mt-4">
-                                        <x-ui.alert variant="warning" :title="__('This package carries columns that look sensitive')">
-                                            <p>{{ __('Their names match a secret pattern and they are not redacted, so they leave this instance exactly as stored: :columns. Redact any of them below, or publish as is — the choice is yours, and it is made here.', ['columns' => $unredactedSuggestions->implode(', ')]) }}</p>
+                                        <x-ui.alert variant="warning">
+                                            <p class="font-semibold">{{ __('This package carries columns that look sensitive') }}</p>
+                                            <p class="mt-1">{{ __('Their names match a secret pattern and they are not redacted, so they leave this instance exactly as stored: :columns. Redact any of them below, or publish as is — the choice is yours, and it is made here.', ['columns' => $unredactedSuggestions->implode(', ')]) }}</p>
                                         </x-ui.alert>
                                     </div>
                                 @endif
                                 @if($consequences->isNotEmpty())
                                     <div class="mt-4">
-                                        <x-ui.alert variant="warning" :title="__('What your redactions do at the destination')">
-                                            <ul class="list-disc space-y-1 pl-5">
+                                        <x-ui.alert variant="warning">
+                                            <p class="font-semibold">{{ __('What your redactions do at the destination') }}</p>
+                                            <ul class="mt-1 list-disc space-y-1 pl-5">
                                                 @foreach($consequences as $consequence)
                                                     <li>{{ $consequence['message'] }}</li>
                                                 @endforeach
@@ -293,7 +295,7 @@ if ($instance->role->value === 'development') {
                                                 <p class="break-all font-mono text-xs text-ink">{{ $table }}</p>
                                                 <div class="mt-2 grid gap-2 sm:grid-cols-2">
                                                     @foreach($columns as $column)
-                                                        <div wire:key="redact-{{ $table }}-{{ $column['name'] }}" class="{{ $column['suggested'] ? 'rounded-md bg-warning-subtle p-2' : 'p-2' }}">
+                                                        <div wire:key="redact-{{ $table }}-{{ $column['name'] }}" class="{{ $column['suggested'] ? 'rounded-md bg-status-warning-subtle p-2' : 'p-2' }}">
                                                             <x-ui.checkbox
                                                                 id="data-share-redact-{{ $loop->parent->index }}-{{ $loop->index }}"
                                                                 wire:model.live="redactions.{{ $table }}"
@@ -304,11 +306,11 @@ if ($instance->role->value === 'development') {
                                                             <p class="mt-0.5 pl-6 text-xs text-muted">
                                                                 {{ $column['type'] }}{{ $column['nullable'] ? '' : ' · '.__('required') }}{{ $column['roles'] !== [] ? ' · '.implode(', ', $column['roles']) : '' }}
                                                                 @if($column['suggested'])
-                                                                    · <span class="font-medium text-warning">{{ __('suggested: name looks like a secret') }}</span>
+                                                                    · <span class="font-medium text-status-warning">{{ __('suggested: name looks like a secret') }}</span>
                                                                 @endif
                                                             </p>
                                                             @if($column['message'] !== null)
-                                                                <p class="mt-0.5 pl-6 text-xs {{ $column['level'] === 'refused' ? 'text-muted' : 'text-warning' }}">{{ $column['message'] }}</p>
+                                                                <p class="mt-0.5 pl-6 text-xs {{ $column['level'] === 'refused' ? 'text-muted' : 'text-status-warning' }}">{{ $column['message'] }}</p>
                                                             @endif
                                                         </div>
                                                     @endforeach

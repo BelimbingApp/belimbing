@@ -1168,9 +1168,21 @@ it('shows the sensitive-column warning outside the manifest disclosure and binds
             ->assertSee('suggested: name looks like a secret');
 
         // The warning is not inside the disclosure: it appears before the
-        // manifest heading in the rendered output.
+        // manifest heading in the rendered output, and it is a heading in the
+        // alert body, not a title attribute (assertSee cannot tell those apart).
         $html = $component->html();
-        expect(strpos($html, 'This package carries columns that look sensitive'))->toBeLessThan(strpos($html, 'Table manifest'));
+        expect(strpos($html, 'This package carries columns that look sensitive'))->toBeLessThan(strpos($html, 'Table manifest'))
+            ->and($html)->not->toContain('title="This package carries columns');
+
+        // The view offers every column, not only the matched ones: an
+        // unmatched column renders a checkbox, the primary key renders one
+        // disabled, and the suggested tint resolves to a real token. The
+        // service layer proved "every column"; this is the view's own control
+        // (a loop over suggested columns only passed every other test).
+        expect($html)->toMatch('/<input[^>]*value="note"[^>]*>/')
+            ->and($html)->toMatch('/<input[^>]*value="id"[^>]*disabled/')
+            ->and($html)->toContain('bg-status-warning-subtle')
+            ->and($html)->toContain('text-status-warning');
 
         // Ticking an unmatched column works; the preview clears and, once
         // reviewed again, the map is in the report and the consequence shown.
