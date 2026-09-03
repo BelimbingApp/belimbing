@@ -96,19 +96,16 @@ jobs:
       # automatic analysis are mutually exclusive on SonarCloud: this step
       # fails with "automatic analysis is enabled" until the organisation
       # admin turns it off for BelimbingApp_lara.
-      # DIAGNOSTIC (#537): bisect the coverage-mode heap corruption.
-      - name: Coverage bisect A — WebFetchSsrfTest alone
+      # DIAGNOSTIC (#537): bisect the coverage-mode heap corruption, round 2.
+      - name: Coverage bisect E — Feature suite alone
         continue-on-error: true
-        run: ./vendor/bin/pest tests/Feature/AI/WebFetchSsrfTest.php --coverage-clover=cov-a.xml
-      - name: Coverage bisect B — Address alone
+        run: ./vendor/bin/pest tests/Feature --coverage-clover=cov-e.xml
+      - name: Coverage bisect F — Unit then Feature/AI then Address
         continue-on-error: true
-        run: ./vendor/bin/pest tests/Feature/Address --coverage-clover=cov-b.xml
-      - name: Coverage bisect C — WebFetchSsrfTest then Address
+        run: ./vendor/bin/pest tests/Unit tests/Feature/AI tests/Feature/Address --coverage-clover=cov-f.xml
+      - name: Coverage bisect G — Unit suite alone
         continue-on-error: true
-        run: ./vendor/bin/pest tests/Feature/AI/WebFetchSsrfTest.php tests/Feature/Address --coverage-clover=cov-c.xml
-      - name: Coverage bisect D — Feature/AI then Address
-        continue-on-error: true
-        run: ./vendor/bin/pest tests/Feature/AI tests/Feature/Address --coverage-clover=cov-d.xml
+        run: ./vendor/bin/pest tests/Unit --coverage-clover=cov-g.xml
 
       - name: Run Tests
         run: ./vendor/bin/pest --coverage-clover=coverage.xml
