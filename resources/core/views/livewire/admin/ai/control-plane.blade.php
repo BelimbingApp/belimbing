@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\Settings\DTO\SettingDefinition;
 use App\Core\AI\Enums\LifecycleAction;
 use App\Core\AI\Livewire\ControlPlane;
 use Illuminate\Support\Number;
@@ -9,9 +10,9 @@ use Illuminate\Support\Number;
 /** @var LifecycleAction|null $selectedLifecycleAction */
 /** @var array{label: string, url: string|null}|null $operationsBreadcrumb */
 /** @var bool $canManageRuntimeGuardrails */
-/** @var \App\Base\Settings\DTO\SettingDefinition $maxToolRoundsDefinition */
-/** @var \App\Base\Settings\DTO\SettingDefinition $laraPromptExtensionPathDefinition */
-/** @var \App\Base\Settings\DTO\SettingDefinition $bashToolEnabledDefinition */
+/** @var SettingDefinition $maxToolRoundsDefinition */
+/** @var SettingDefinition $laraPromptExtensionPathDefinition */
+/** @var SettingDefinition $bashToolEnabledDefinition */
 $controlPlaneContext = request()->only(['from', 'returnTo']);
 ?>
 <div>

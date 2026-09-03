@@ -31,15 +31,24 @@ use Illuminate\Support\Facades\File;
  * A check over every Tailwind class in every view would drown in dynamic
  * class strings and be switched off.
  */
-const STATUS_UTILITY_PATTERN = '/(?<![\w-])((?:[a-z-]+:)*(?:bg|text|border|ring|divide|outline|fill|stroke|from|to|via)-(?:status-)?(?:warning|danger|error|success|info)(?:-[a-z]+)*(?:\/\d+)?)(?![\w-])/';
+const STATUS_UTILITY_PATTERN = '/(?<![\w-])(!?(?:[a-z0-9-]+(?:\[[^\]]*\])?:)*(?:bg|text|border|ring|divide|outline|fill|stroke|from|to|via)-(?:status-)?(?:warning|danger|error|success|info)(?:-[a-z]+)*(?:\/\d+)?)(?![\w-])/';
 
-/** @return list<array{class: string, file: string, line: int}> */
+/**
+ * The scan root is stated, not defaulted: Tailwind's automatic source
+ * detection reads `resources/core/views` and `app/**\/*.php`, and status
+ * utilities are written as literal strings in PHP too (`StatusVariant`, the
+ * mirror and deployment concerns), so both are walked. Nested domain repos
+ * have their own `@source` lines and their own CI.
+ *
+ * @return list<array{class: string, file: string, line: int}>
+ */
 function statusUtilitiesUsedInViews(): array
 {
     $uses = [];
+    $files = [...File::allFiles(resource_path('core/views')), ...File::allFiles(app_path())];
 
-    foreach (File::allFiles(resource_path('core/views')) as $file) {
-        if (! str_ends_with($file->getFilename(), '.blade.php')) {
+    foreach ($files as $file) {
+        if (! str_ends_with($file->getFilename(), '.php')) {
             continue;
         }
 
@@ -63,9 +72,9 @@ function compiledStylesheet(): ?string
         return null;
     }
 
-    usort($candidates, fn (string $a, string $b): int => filemtime($b) <=> filemtime($a));
-
-    return (string) file_get_contents($candidates[0]);
+    // Every emitted stylesheet, not the newest: a second entrypoint would
+    // otherwise make its selectors look dead.
+    return implode("\n", array_map(fn (string $path): string => (string) file_get_contents($path), $candidates));
 }
 
 function selectorExistsFor(string $class, string $css): bool
@@ -74,7 +83,12 @@ function selectorExistsFor(string $class, string $css): bool
     // pseudo-class (`:hover`) and a bare one in `{` or `,`.
     $escaped = preg_quote(str_replace([':', '/'], ['\\:', '\\/'], $class), '/');
 
-    return preg_match('/\.'.$escaped.'(?![\w-])/', $css) === 1;
+    // The character after the name must not continue it: not a word
+    // character, not a hyphen, and not a backslash — Tailwind escapes `/`, so
+    // `.x-subtle\/40` would otherwise answer for a bare `x-subtle` that has
+    // no rule of its own. That is the opacity-variant case the docblock
+    // names, and it was reachable until this exclusion (review of #542).
+    return preg_match('/\.'.$escaped.'(?![\w\\\\-])/', $css) === 1;
 }
 
 test('every status-colour utility used by a view resolves to a rule in the compiled stylesheet', function (): void {
@@ -85,7 +99,9 @@ test('every status-colour utility used by a view resolves to a rule in the compi
         // non-detection — so a missing build is only tolerated where a
         // developer may genuinely not have built. In CI the build step runs
         // before the suite, and its absence is itself the defect: fail.
-        if (env('CI')) {
+        // Presence of CI, not its value: a runner setting CI=false would be
+        // cast to false by env() and silently return to skipping.
+        if (getenv('CI') !== false) {
             $this->fail('No compiled stylesheet under public/build/assets in CI: the build step did not run before the tests, so nothing can be verified against emitted CSS.');
         }
 

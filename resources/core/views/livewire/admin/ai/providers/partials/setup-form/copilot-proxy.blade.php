@@ -1,5 +1,8 @@
 <?php
-/** @var \App\Core\AI\Livewire\Providers\CopilotProxySetup $this */
+
+use App\Core\AI\Livewire\Providers\CopilotProxySetup;
+
+/** @var CopilotProxySetup $this */
 ?>
 <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
     <div>
