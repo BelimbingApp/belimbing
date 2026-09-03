@@ -1122,7 +1122,7 @@ it('redacts at encode time, binds the map into the preview hash, and the package
         try {
             $manifest = app(DataSharePackageReader::class)->manifest($stream);
             rewind($stream);
-            app(DataSharePackageReader::class)->inspect($stream, function ($s, $table, array $record) use (&$rows): void {
+            app(DataSharePackageReader::class)->inspect($stream, function ($scope, $table, array $record) use (&$rows): void {
                 $rows[$table->table][(int) $record['primary_key']['id']] = $record['values'];
             });
         } finally {
@@ -1179,19 +1179,26 @@ it('shows the sensitive-column warning outside the manifest disclosure and binds
         // disabled, and the suggested tint resolves to a real token. The
         // service layer proved "every column"; this is the view's own control
         // (a loop over suggested columns only passed every other test).
-        expect($html)->toMatch('/<input[^>]*value="note"[^>]*>/')
-            ->and($html)->toMatch('/<input[^>]*value="id"[^>]*disabled/')
+        // Attribute-order independent: Tailwind's disabled: variants put the
+        // word "disabled" in every input's class, so match the real attribute.
+        expect($html)->toMatch('/<input(?=[^>]*value="note")[^>]*>/')
+            ->and($html)->toMatch('/<input(?=[^>]*value="id")(?=[^>]*disabled="disabled")[^>]*>/')
+            ->and($html)->not->toMatch('/<input(?=[^>]*value="note")(?=[^>]*disabled="disabled")[^>]*>/')
             ->and($html)->toContain('bg-status-warning-subtle')
             ->and($html)->toContain('text-status-warning');
 
         // Ticking an unmatched column works; the preview clears and, once
         // reviewed again, the map is in the report and the consequence shown.
         $component->set('redactions', [$child => ['note', 'secret_reference']])
-            ->assertSet('sharePreview', null)
+            ->assertSet('sharePreview.stale', true)
+            ->assertSee('Your redactions changed since this preview')
+            ->call('publishShare')
+            ->assertSet('statusVariant', 'warning')
             ->call('previewShare')
             ->assertSet('statusVariant', 'success')
             ->assertSet('sharePreview.redactions.'.$child, ['note', 'secret_reference'])
             ->assertSee('What your redactions do at the destination')
+            ->assertSee($child.'.secret_reference: ')
             ->assertSee('unrestorable')
             ->call('publishShare')
             ->assertSet('statusVariant', 'success');

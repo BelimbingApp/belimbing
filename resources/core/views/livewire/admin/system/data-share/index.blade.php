@@ -261,10 +261,18 @@ if ($instance->role->value === 'development') {
                                 @php
                                     $advisories = $sharePreview['advisories'] ?? [];
                                     $unredactedSuggestions = collect($advisories)->flatMap(fn ($columns, $table) => collect($columns)->filter(fn ($c) => $c['suggested'] && ! $c['redacted'])->map(fn ($c) => $table.'.'.$c['name']))->values();
-                                    $consequences = collect($advisories)->flatMap(fn ($columns) => collect($columns)->filter(fn ($c) => $c['redacted'] && $c['message'] !== null))->values();
+                                    $consequences = collect($advisories)->flatMap(fn ($columns, $table) => collect($columns)->filter(fn ($c) => $c['redacted'] && $c['message'] !== null)->map(fn ($c) => $table.'.'.$c['name'].': '.$c['message']))->values();
                                 @endphp
                                 {{-- Never inside the disclosure: a closed disclosure that hides the one warning is silence. --}}
                                 @if($unredactedSuggestions->isNotEmpty())
+                                    @if($sharePreview['stale'] ?? false)
+                                        <div class="mt-4">
+                                            <x-ui.alert variant="warning">
+                                                <p class="font-semibold">{{ __('Your redactions changed since this preview') }}</p>
+                                                <p class="mt-1">{{ __('The hash and the warnings below describe the previous choice. Preview again before publishing.') }}</p>
+                                            </x-ui.alert>
+                                        </div>
+                                    @endif
                                     <div class="mt-4">
                                         <x-ui.alert variant="warning">
                                             <p class="font-semibold">{{ __('This package carries columns that look sensitive') }}</p>
@@ -278,7 +286,7 @@ if ($instance->role->value === 'development') {
                                             <p class="font-semibold">{{ __('What your redactions do at the destination') }}</p>
                                             <ul class="mt-1 list-disc space-y-1 pl-5">
                                                 @foreach($consequences as $consequence)
-                                                    <li>{{ $consequence['message'] }}</li>
+                                                    <li>{{ $consequence }}</li>
                                                 @endforeach
                                             </ul>
                                         </x-ui.alert>
@@ -297,7 +305,7 @@ if ($instance->role->value === 'development') {
                                                     @foreach($columns as $column)
                                                         <div wire:key="redact-{{ $table }}-{{ $column['name'] }}" class="{{ $column['suggested'] ? 'rounded-md bg-status-warning-subtle p-2' : 'p-2' }}">
                                                             <x-ui.checkbox
-                                                                id="data-share-redact-{{ $loop->parent->index }}-{{ $loop->index }}"
+                                                                id="data-share-redact-{{ preg_replace('/[^a-z0-9]+/', '-', strtolower($table.'-'.$column['name'])) }}"
                                                                 wire:model.live="redactions.{{ $table }}"
                                                                 value="{{ $column['name'] }}"
                                                                 :label="$column['name']"

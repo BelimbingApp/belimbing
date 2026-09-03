@@ -60,7 +60,7 @@ class DataShareRedactionAdvisor
 
         foreach ($redactions as $tableName => $columns) {
             if (! is_string($tableName) || ! isset($byName[$tableName])) {
-                throw DataShareDefinitionException::invalid(__('redactions name table :table, which is not in this share.', ['table' => (string) $tableName]));
+                throw DataShareDefinitionException::invalid(__('redactions name the table :table, which is not in this share.', ['table' => (string) $tableName]));
             }
 
             $columns = array_values(array_unique(array_filter(is_array($columns) ? $columns : [], is_string(...))));
@@ -74,7 +74,7 @@ class DataShareRedactionAdvisor
 
             foreach ($columns as $column) {
                 if (! in_array($column, $known, true)) {
-                    throw DataShareDefinitionException::invalid(__('redactions name column :column on :table, which does not exist.', ['column' => $column, 'table' => $tableName]));
+                    throw DataShareDefinitionException::invalid(__('redactions name the column :column on :table, which does not exist.', ['column' => $column, 'table' => $tableName]));
                 }
 
                 if (in_array($column, $schema['primary_key'], true)) {
@@ -95,14 +95,16 @@ class DataShareRedactionAdvisor
      * One advisory per column of the table, in schema order.
      *
      * @param  list<string>  $redacted
+     * @param  array<string, mixed>|null  $schema  the schema block already computed for the payload;
+     *                                             omitted, the table is introspected here
      * @return list<array{
      *     name: string, type: string, nullable: bool, roles: list<string>,
      *     suggested: bool, redacted: bool, level: string|null, message: string|null
      * }>
      */
-    public function advise(DataShareTableDefinition $table, array $redacted, int $records): array
+    public function advise(DataShareTableDefinition $table, array $redacted, int $records, ?array $schema = null): array
     {
-        $schema = $this->schemaFingerprint->forTable($table)['schema'];
+        $schema ??= $this->schemaFingerprint->forTable($table)['schema'];
         $foreignKeyColumns = [];
 
         foreach ($schema['foreign_keys'] as $foreignKey) {

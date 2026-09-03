@@ -125,6 +125,12 @@ class Index extends Component
             return;
         }
 
+        if (($this->sharePreview['stale'] ?? false) === true) {
+            $this->setStatus(__('Your redactions changed since this preview. Preview again before publishing.'), 'warning');
+
+            return;
+        }
+
         try {
             $offer = $offers->publish(
                 $this->scopeName,
@@ -226,13 +232,16 @@ class Index extends Component
     }
 
     /**
-     * Changing the map invalidates the reviewed preview: publish() would refuse
-     * the stale hash anyway, but the operator should see that a new review
-     * is needed rather than a refusal.
+     * Changing the map invalidates the reviewed preview. It stays on screen —
+     * the picker and the tick seed need its advisories — but is marked stale
+     * so the operator sees that a new review is needed; publish() refuses a
+     * stale preview here before the exporter would refuse its hash.
      */
     public function updatedRedactions(): void
     {
-        $this->sharePreview = null;
+        if ($this->sharePreview !== null) {
+            $this->sharePreview['stale'] = true;
+        }
     }
 
     /**

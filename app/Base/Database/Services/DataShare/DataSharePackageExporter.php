@@ -45,11 +45,22 @@ class DataSharePackageExporter
 
             // Advisories are derived from the schema and the map, so they are
             // not part of the hashed report; the map is.
-            $records = array_column(array_map(fn ($payload): array => $payload->metadata, $serialized->payloads), 'records', 'table');
+            $payloads = [];
+
+            foreach ($serialized->payloads as $payload) {
+                $payloads[(string) $payload->metadata['table']] = $payload;
+            }
+
             $advisories = [];
 
             foreach ($scope->tables as $table) {
-                $advisories[$table->table] = $this->redactions->advise($table, $redactions[$table->table] ?? [], (int) ($records[$table->table] ?? 0));
+                $payload = $payloads[$table->table] ?? null;
+                $advisories[$table->table] = $this->redactions->advise(
+                    $table,
+                    $redactions[$table->table] ?? [],
+                    (int) ($payload?->metadata['records'] ?? 0),
+                    $payload?->schema ?: null,
+                );
             }
 
             return new DataShareExportPreview($previewHash, $estimatedBytes, $report, $advisories);
