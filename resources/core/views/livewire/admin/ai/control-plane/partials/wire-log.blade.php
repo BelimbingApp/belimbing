@@ -236,7 +236,7 @@ $lifecycleRail = $lifecycleRail ?? null;
                         </summary>
                         @if (($entry['preview_status'] ?? 'full') === 'line_omitted')
                             <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
-                                <p class="text-warning">{{ $entry['payload_pretty'] ?? '{}' }}</p>
+                                <p class="text-status-warning">{{ $entry['payload_pretty'] ?? '{}' }}</p>
                                 <x-ui.button
                                     as="a"
                                     href="{{ route('admin.ai.runs.wire-log-entry', ['runId' => $runId, 'entryNumber' => $entry['entry_number'] ?? (($summary['offset'] ?? 0) + $index + 1)]) }}"

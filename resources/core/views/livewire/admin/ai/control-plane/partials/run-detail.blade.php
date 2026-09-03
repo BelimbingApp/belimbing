@@ -238,12 +238,12 @@ $formatCents = static fn (?int $cents): string => $cents !== null
     {{-- Error details --}}
     @if($run['error_type'] || $run['error_message'])
         <div class="rounded-lg bg-surface-subtle p-3">
-            <span class="text-[11px] uppercase tracking-wider font-semibold text-danger">{{ __('Error') }}</span>
+            <span class="text-[11px] uppercase tracking-wider font-semibold text-status-danger">{{ __('Error') }}</span>
             @if($run['error_type'])
                 <p class="text-xs text-muted mt-1">{{ __('Type') }}: {{ $run['error_type'] }}</p>
             @endif
             @if($run['error_message'])
-                <p class="text-sm text-danger mt-1">{{ $run['error_message'] }}</p>
+                <p class="text-sm text-status-danger mt-1">{{ $run['error_message'] }}</p>
             @endif
         </div>
     @endif

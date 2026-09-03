@@ -118,15 +118,15 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
                             </div>
                             <div class="rounded-2xl border border-border-default bg-surface-card p-card-inner">
                                 <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Stale Runs') }}</p>
-                                <p class="mt-2 text-2xl font-medium tracking-tight {{ ($runHealthCounts['stale_queued'] + $runHealthCounts['stale_running']) > 0 ? 'text-danger' : 'text-ink' }}">{{ $runHealthCounts['stale_queued'] + $runHealthCounts['stale_running'] }}</p>
+                                <p class="mt-2 text-2xl font-medium tracking-tight {{ ($runHealthCounts['stale_queued'] + $runHealthCounts['stale_running']) > 0 ? 'text-status-danger' : 'text-ink' }}">{{ $runHealthCounts['stale_queued'] + $runHealthCounts['stale_running'] }}</p>
                             </div>
                             <div class="rounded-2xl border border-border-default bg-surface-card p-card-inner">
                                 <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Completed Last Hour') }}</p>
-                                <p class="mt-2 text-2xl font-medium tracking-tight text-success">{{ $runHealthCounts['completed_last_hour'] }}</p>
+                                <p class="mt-2 text-2xl font-medium tracking-tight text-status-success">{{ $runHealthCounts['completed_last_hour'] }}</p>
                             </div>
                             <div class="rounded-2xl border border-border-default bg-surface-card p-card-inner">
                                 <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Failed Last Hour') }}</p>
-                                <p class="mt-2 text-2xl font-medium tracking-tight {{ $runHealthCounts['failed_last_hour'] > 0 ? 'text-warning' : 'text-ink' }}">{{ $runHealthCounts['failed_last_hour'] }}</p>
+                                <p class="mt-2 text-2xl font-medium tracking-tight {{ $runHealthCounts['failed_last_hour'] > 0 ? 'text-status-warning' : 'text-ink' }}">{{ $runHealthCounts['failed_last_hour'] }}</p>
                             </div>
                         </div>
                     @endif

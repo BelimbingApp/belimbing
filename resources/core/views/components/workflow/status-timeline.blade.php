@@ -11,10 +11,10 @@
 
     $agentTagStyle = function (?string $tag): ?array {
         return match ($tag) {
-            'agent_progress'    => ['label' => 'Progress',    'class' => 'text-info'],
-            'agent_question'    => ['label' => 'Question',    'class' => 'text-warning'],
-            'agent_deliverable' => ['label' => 'Deliverable', 'class' => 'text-success'],
-            'agent_error'       => ['label' => 'Error',       'class' => 'text-danger'],
+            'agent_progress'    => ['label' => 'Progress',    'class' => 'text-status-info'],
+            'agent_question'    => ['label' => 'Question',    'class' => 'text-status-warning'],
+            'agent_deliverable' => ['label' => 'Deliverable', 'class' => 'text-status-success'],
+            'agent_error'       => ['label' => 'Error',       'class' => 'text-status-danger'],
             default             => null,
         };
     };
