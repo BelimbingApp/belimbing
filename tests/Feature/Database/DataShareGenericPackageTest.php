@@ -1205,6 +1205,22 @@ it('shows the sensitive-column warning outside the manifest disclosure and binds
 
         $offer = DataShareTransferOffer::query()->latest('id')->firstOrFail();
         expect($offer->metadata['redactions'])->toBe([$child => ['note', 'secret_reference']]);
+
+        // The branch nobody clicks: every suggested column already ticked, so
+        // the sensitive-columns alert is gone — a change must still show the
+        // stale alert, on its own, and still block publishing.
+        $component->call('clearPublishedOfferBundle')
+            ->set('redactions', [$child => ['api_token', 'secret_reference']])
+            ->call('previewShare')
+            ->assertSet('statusVariant', 'success')
+            ->assertDontSee('This package carries columns that look sensitive')
+            ->assertDontSee('Your redactions changed since this preview')
+            ->set('redactions', [$child => ['api_token']])
+            ->assertSet('sharePreview.stale', true)
+            ->assertSee('Your redactions changed since this preview')
+            ->assertDontSee('clears the preview')
+            ->call('publishShare')
+            ->assertSet('statusVariant', 'warning');
     } finally {
         redactionShareCleanup($parent, $child);
     }

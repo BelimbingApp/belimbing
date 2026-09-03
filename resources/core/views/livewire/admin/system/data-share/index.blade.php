@@ -264,15 +264,16 @@ if ($instance->role->value === 'development') {
                                     $consequences = collect($advisories)->flatMap(fn ($columns, $table) => collect($columns)->filter(fn ($c) => $c['redacted'] && $c['message'] !== null)->map(fn ($c) => $table.'.'.$c['name'].': '.$c['message']))->values();
                                 @endphp
                                 {{-- Never inside the disclosure: a closed disclosure that hides the one warning is silence. --}}
+                                {{-- Stale first, unconditionally: it must show even when nothing is suggested or everything suggested is already ticked. --}}
+                                @if($sharePreview['stale'] ?? false)
+                                    <div class="mt-4">
+                                        <x-ui.alert variant="warning">
+                                            <p class="font-semibold">{{ __('Your redactions changed since this preview') }}</p>
+                                            <p class="mt-1">{{ __('The hash and the warnings below describe the previous choice. Preview again before publishing.') }}</p>
+                                        </x-ui.alert>
+                                    </div>
+                                @endif
                                 @if($unredactedSuggestions->isNotEmpty())
-                                    @if($sharePreview['stale'] ?? false)
-                                        <div class="mt-4">
-                                            <x-ui.alert variant="warning">
-                                                <p class="font-semibold">{{ __('Your redactions changed since this preview') }}</p>
-                                                <p class="mt-1">{{ __('The hash and the warnings below describe the previous choice. Preview again before publishing.') }}</p>
-                                            </x-ui.alert>
-                                        </div>
-                                    @endif
                                     <div class="mt-4">
                                         <x-ui.alert variant="warning">
                                             <p class="font-semibold">{{ __('This package carries columns that look sensitive') }}</p>
@@ -295,7 +296,7 @@ if ($instance->role->value === 'development') {
                                 <div class="mt-4 rounded-xl border border-border-default bg-surface-subtle">
                                     <div class="border-b border-border-default p-4">
                                         <p class="text-sm font-medium text-ink">{{ __('Redact columns') }}</p>
-                                        <p class="mt-0.5 text-xs text-muted">{{ __('Every column of every selected table is listed. Tick a column and its values leave as null. Suggested columns are only highlighted; nothing is redacted until you tick it. Changing a tick clears the preview, so review again before publishing.') }}</p>
+                                        <p class="mt-0.5 text-xs text-muted">{{ __('Every column of every selected table is listed. Tick a column and its values leave as null. Suggested columns are only highlighted; nothing is redacted until you tick it. Changing a tick keeps this preview on screen but marks it stale; preview again before publishing.') }}</p>
                                     </div>
                                     <div class="divide-y divide-border-default">
                                         @foreach($advisories as $table => $columns)
@@ -305,7 +306,7 @@ if ($instance->role->value === 'development') {
                                                     @foreach($columns as $column)
                                                         <div wire:key="redact-{{ $table }}-{{ $column['name'] }}" class="{{ $column['suggested'] ? 'rounded-md bg-status-warning-subtle p-2' : 'p-2' }}">
                                                             <x-ui.checkbox
-                                                                id="data-share-redact-{{ preg_replace('/[^a-z0-9]+/', '-', strtolower($table.'-'.$column['name'])) }}"
+                                                                id="data-share-redact-{{ md5($table.'.'.$column['name']) }}"
                                                                 wire:model.live="redactions.{{ $table }}"
                                                                 value="{{ $column['name'] }}"
                                                                 :label="$column['name']"
