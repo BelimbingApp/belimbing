@@ -31,7 +31,7 @@ jobs:
           php-version: '8.5'
           extensions: pdo_sqlite, sqlite3
           tools: composer:v2
-          coverage: xdebug
+          coverage: pcov # xdebug's coverage mode aborted the full suite with "zend_mm_heap corrupted" (#537, run 33746514692); pcov is coverage-only and light
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2 # NOSONAR — well-known community Bun action; tag pinning is acceptable for internal projects
