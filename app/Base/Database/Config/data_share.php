@@ -81,10 +81,16 @@ return [
     |
     | Opaque Laravel runtime payloads can contain credentials even when the
     | column name is generic. These Base-owned rules apply only to diagnostic
-    | row capture; bulk exports preserve selected tables exactly.
+    | row capture. Transfer packages preserve selected tables exactly unless
+    | the operator redacts columns in the Share preview (#530): every column
+    | is offered, the name pattern only marks suggestions, and 'suggestions'
+    | says whether suggested columns start highlighted or already ticked.
+    | The owner's ruling is highlight: the export contains what it contains
+    | today until a person acts.
     |
     */
     'redaction' => [
+        'suggestions' => env('DATA_SHARE_REDACTION_SUGGESTIONS', 'highlight'),
         'columns' => [
             'cache' => ['value'],
             'failed_jobs' => ['payload', 'exception'],

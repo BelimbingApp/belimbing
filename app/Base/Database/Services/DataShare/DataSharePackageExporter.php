@@ -23,40 +23,58 @@ class DataSharePackageExporter
         private readonly DataShareInstanceIdentityResolver $instances,
         private readonly DataSharePrivateStorage $storage,
         private readonly DataShareSettings $settings,
+        private readonly DataShareRedactionAdvisor $redactions,
     ) {}
 
     /** @param list<string> $tables */
-    public function preview(string $scopeName, array $tables): DataShareExportPreview
+    /**
+     * @param  list<string>  $tables
+     * @param  array<string, list<string>>  $redactions  operator-chosen columns whose values leave as null (#530)
+     */
+    public function preview(string $scopeName, array $tables, array $redactions = []): DataShareExportPreview
     {
-        [$scope, $serialized] = $this->serializeScope($scopeName, $tables);
+        [$scope, $serialized, $redactions] = $this->serializeScope($scopeName, $tables, $redactions);
 
         try {
-            $report = $this->report($scope, $serialized);
+            $report = $this->report($scope, $serialized, $redactions);
             $previewHash = hash('sha256', CanonicalJson::encode($report));
             $estimatedBytes = strlen(CanonicalJson::encode($report))
                 + array_sum(array_column(array_map(fn ($payload): array => $payload->metadata, $serialized->payloads), 'bytes'))
                 + 128;
             $this->guardPackageSize($estimatedBytes);
 
-            return new DataShareExportPreview($previewHash, $estimatedBytes, $report);
+            // Advisories are derived from the schema and the map, so they are
+            // not part of the hashed report; the map is.
+            $records = array_column(array_map(fn ($payload): array => $payload->metadata, $serialized->payloads), 'records', 'table');
+            $advisories = [];
+
+            foreach ($scope->tables as $table) {
+                $advisories[$table->table] = $this->redactions->advise($table, $redactions[$table->table] ?? [], (int) ($records[$table->table] ?? 0));
+            }
+
+            return new DataShareExportPreview($previewHash, $estimatedBytes, $report, $advisories);
         } finally {
             $serialized->cleanup();
         }
     }
 
-    /** @param list<string> $tables */
+    /**
+     * @param  list<string>  $tables
+     * @param  array<string, list<string>>  $redactions
+     */
     public function export(
         string $scopeName,
         array $tables,
         string $offerId,
         string $expiresAt,
         string $expectedPreviewHash,
+        array $redactions = [],
     ): DataShareExportResult {
-        [$scope, $serialized] = $this->serializeScope($scopeName, $tables);
+        [$scope, $serialized, $redactions] = $this->serializeScope($scopeName, $tables, $redactions);
         $temporaryPackage = null;
 
         try {
-            $report = $this->report($scope, $serialized);
+            $report = $this->report($scope, $serialized, $redactions);
             $previewHash = hash('sha256', CanonicalJson::encode($report));
 
             if (! hash_equals($expectedPreviewHash, $previewHash)) {
@@ -113,9 +131,10 @@ class DataSharePackageExporter
 
     /**
      * @param  list<string>  $tables
-     * @return array{0: DataShareScopeDefinition, 1: SerializedDataShareScope}
+     * @param  array<string, list<string>>  $redactions
+     * @return array{0: DataShareScopeDefinition, 1: SerializedDataShareScope, 2: array<string, list<string>>}
      */
-    private function serializeScope(string $scopeName, array $tables): array
+    private function serializeScope(string $scopeName, array $tables, array $redactions = []): array
     {
         $scope = $this->catalog->scope($scopeName, $tables);
         $maxTables = $this->settings->integer('data_share.transfer_limits.max_tables', 250, 1, 10000);
@@ -124,16 +143,21 @@ class DataSharePackageExporter
             throw DataSharePackageException::tooManyTables($maxTables);
         }
 
-        $serialized = DB::transaction(fn (): SerializedDataShareScope => $this->serializer->serialize($scope));
+        $redactions = $this->redactions->normalize($scope->tables, $redactions);
+        $serialized = DB::transaction(fn (): SerializedDataShareScope => $this->serializer->serialize($scope, $redactions));
 
-        return [$scope, $serialized];
+        return [$scope, $serialized, $redactions];
     }
 
     /** @return array<string, mixed> */
     private function report(
         DataShareScopeDefinition $scope,
         SerializedDataShareScope $serialized,
+        array $redactions = [],
     ): array {
+        // The redaction map sits inside the hashed report on purpose: the
+        // package that is published must be the one that was reviewed,
+        // redactions included, and publish() already refuses a changed hash.
         return [
             'format' => self::FORMAT,
             'scope' => [
@@ -142,6 +166,7 @@ class DataSharePackageExporter
                 'module_path' => $scope->modulePath,
                 'tables' => array_column($scope->tables, 'table'),
             ],
+            'redactions' => $redactions,
             'source' => [
                 ...$this->instances->current()->toArray(),
                 'database_driver' => DB::connection()->getDriverName(),

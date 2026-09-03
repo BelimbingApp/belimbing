@@ -15,6 +15,19 @@ class ColumnRedactor
     private const SECRET_NAME_PATTERN = '/password|secret|token|api[_-]?key|private[_-]?key|credential|passphrase/i';
 
     /**
+     * Does this column name look like it carries a secret?
+     *
+     * A match-means-flag rule fails open as a boundary (a miss exports in
+     * clear), so for transfer packages it is only a *suggestion* shown to the
+     * operator, who may redact any column (#530). Diagnostic capture still
+     * redacts on it unconditionally.
+     */
+    public static function looksSensitive(string $column): bool
+    {
+        return preg_match(self::SECRET_NAME_PATTERN, $column) === 1;
+    }
+
+    /**
      * @param  list<array<string, mixed>>  $rows
      * @return array{rows: list<array<string, mixed>>, redacted_columns: list<string>}
      */

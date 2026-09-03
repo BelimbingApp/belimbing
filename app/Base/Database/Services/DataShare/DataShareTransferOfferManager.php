@@ -32,6 +32,7 @@ class DataShareTransferOfferManager
         string $expectedPreviewHash,
         ?int $actorId = null,
         ?int $maxDownloads = null,
+        array $redactions = [],
     ): DataShareTransferOfferBundle {
         if ($maxDownloads !== null && ($maxDownloads < 1 || $maxDownloads > self::MAX_DOWNLOADS)) {
             throw DataSharePolicyException::invalidMaximumDownloads(self::MAX_DOWNLOADS);
@@ -50,6 +51,7 @@ class DataShareTransferOfferManager
             $offerId,
             $expiresAt->toIso8601String(),
             $expectedPreviewHash,
+            $redactions,
         );
 
         try {
@@ -72,6 +74,7 @@ class DataShareTransferOfferManager
                         'counts' => $export->manifest['counts'],
                         'payloads' => $export->manifest['payloads'],
                         'tables' => $export->manifest['scope']['tables'],
+                        'redactions' => $export->manifest['redactions'],
                     ],
                     'status' => 'published',
                     'expires_at' => $expiresAt,
