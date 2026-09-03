@@ -120,8 +120,16 @@ jobs:
       # suite is not here: it self-skips off PostgreSQL (an all-skipped run
       # still exits non-zero) and is registered in the postgres-mirror job.
       # PHPUnit takes --testsuite once, comma-separated.
+      # PHPUnit does not distinguish an undefined suite name from an empty
+      # one, so --do-not-fail-on-empty-test-suite alone would stay green
+      # after a rename or glob drift while covering nothing: the names are
+      # checked against phpunit.xml first, and a missing one fails the step.
       - name: Run Tests (Core, Domains, Extensions)
-        run: ./vendor/bin/pest --do-not-fail-on-empty-test-suite --testsuite=Core,Domains,Extensions --coverage-clover=coverage-modules.xml
+        run: |
+          for suite in Core Domains Extensions; do
+            grep -q "testsuite name=\"$suite\"" phpunit.xml || { echo "::error::test suite '$suite' is not defined in phpunit.xml"; exit 1; }
+          done
+          ./vendor/bin/pest --do-not-fail-on-empty-test-suite --testsuite=Core,Domains,Extensions --coverage-clover=coverage-modules.xml
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v8 # NOSONAR — official SonarSource scanner action; tag pinning is acceptable for internal projects
@@ -129,12 +137,17 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: https://sonarcloud.io
         with:
+          # sonar.sources includes resources/core, whose .blade.php files Sonar
+          # indexes as PHP, while coverage is scoped to app/: without the
+          # exclusion a Blade-only PR would read 0.0% coverage on new code —
+          # #537's defect reproduced with a gate that can now fail.
           args: >
             -Dsonar.projectKey=BelimbingApp_lara
             -Dsonar.organization=belimbingapp
             -Dsonar.sources=app,resources/core
             -Dsonar.tests=tests
             -Dsonar.php.coverage.reportPaths=coverage-unit.xml,coverage-feature.xml,coverage-modules.xml
+            -Dsonar.coverage.exclusions=resources/**
 
   # Every supported database driver is a production driver; the main job's
   # driver is not a stand-in for "real". This lane exists only for tests whose
