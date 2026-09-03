@@ -32,11 +32,7 @@ jobs:
           extensions: pdo_sqlite, sqlite3
           tools: composer:v2
           coverage: pcov # xdebug's coverage mode aborted the full suite with "zend_mm_heap corrupted" (#537, run 33746514692); pcov is coverage-only and light
-          # Coverage data for a suite this size exhausts PHP's default 512M
-          # (measured: the Feature suite alone dies at 512M under pcov, and
-          # the full run corrupts its heap at a fixed point under the same
-          # pressure — #537). The runner has 7 GB.
-          ini-values: pcov.directory=app, memory_limit=2G
+          ini-values: pcov.directory=app
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2 # NOSONAR — well-known community Bun action; tag pinning is acceptable for internal projects
@@ -106,12 +102,15 @@ jobs:
       # while each suite completes on its own — measured across six CI runs
       # on #537. The suites already form that boundary in phpunit.xml; this
       # restores it as a process boundary and merges the clover reports.
+      # The limit is passed with -d because phpunit.xml pins memory_limit to
+      # 512M and PHPUnit applies that after php.ini; coverage bookkeeping for
+      # the Feature suite alone exceeds 512M (measured). The runner has 7 GB.
       - name: Run Tests (Unit)
-        run: ./vendor/bin/pest --testsuite=Unit --coverage-clover=coverage-unit.xml
+        run: ./vendor/bin/pest -d memory_limit=2G --testsuite=Unit --coverage-clover=coverage-unit.xml
       - name: Run Tests (Feature)
-        run: ./vendor/bin/pest --testsuite=Feature --coverage-clover=coverage-feature.xml
+        run: ./vendor/bin/pest -d memory_limit=2G --testsuite=Feature --coverage-clover=coverage-feature.xml
       - name: Run Tests (Core, Domains, Extensions)
-        run: ./vendor/bin/pest --testsuite=Core --testsuite=Domains --testsuite=Extensions --coverage-clover=coverage-modules.xml
+        run: ./vendor/bin/pest -d memory_limit=2G --testsuite=Core --testsuite=Domains --testsuite=Extensions --coverage-clover=coverage-modules.xml
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v8 # NOSONAR — official SonarSource scanner action; tag pinning is acceptable for internal projects
