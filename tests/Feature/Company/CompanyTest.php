@@ -117,7 +117,7 @@ test('legacy operator company id 1 is deterministically backfilled without chang
     $legacyCompany = Company::query()->findOrFail(1);
     Company::factory()->create(['tenant_id' => $operator->id]);
 
-    $migration = require app_path('Core/Company/Database/Migrations/0200_01_07_001006_backfill_tenant_primary_companies.php');
+    $migration = requireMigrationOnce(app_path('Core/Company/Database/Migrations/0200_01_07_001006_backfill_tenant_primary_companies.php'));
     $migration->up();
 
     expect($operator->id)->toBe(1)
@@ -129,7 +129,7 @@ test('primary-company migration preflight rejects ambiguous customer tenants bef
     $tenant = createTenant(['name' => 'Ambiguous Tenant']);
     Company::factory()->count(2)->create(['tenant_id' => $tenant->id]);
     TenantPrimaryCompany::query()->delete();
-    $migration = require app_path('Core/Company/Database/Migrations/0200_01_07_001006_backfill_tenant_primary_companies.php');
+    $migration = requireMigrationOnce(app_path('Core/Company/Database/Migrations/0200_01_07_001006_backfill_tenant_primary_companies.php'));
 
     expect(fn () => $migration->up())->toThrow(
         RuntimeException::class,
@@ -146,7 +146,7 @@ test('primary-company migration honors an explicit designation for an ambiguous 
         'tenant_id' => $tenant->id,
         'company_id' => $designated->id,
     ]);
-    $migration = require app_path('Core/Company/Database/Migrations/0200_01_07_001006_backfill_tenant_primary_companies.php');
+    $migration = requireMigrationOnce(app_path('Core/Company/Database/Migrations/0200_01_07_001006_backfill_tenant_primary_companies.php'));
 
     $migration->up();
 
@@ -157,7 +157,7 @@ test('primary-company migration treats all live companies as candidates regardle
     $tenant = createTenant(['name' => 'Suspended-company Tenant']);
     $company = Company::factory()->suspended()->create(['tenant_id' => $tenant->id]);
     TenantPrimaryCompany::query()->delete();
-    $migration = require app_path('Core/Company/Database/Migrations/0200_01_07_001006_backfill_tenant_primary_companies.php');
+    $migration = requireMigrationOnce(app_path('Core/Company/Database/Migrations/0200_01_07_001006_backfill_tenant_primary_companies.php'));
 
     $migration->up();
 
@@ -169,7 +169,7 @@ test('primary-company migration rejects mixed-status ambiguity before writing', 
     Company::factory()->active()->create(['tenant_id' => $tenant->id]);
     Company::factory()->suspended()->create(['tenant_id' => $tenant->id]);
     TenantPrimaryCompany::query()->delete();
-    $migration = require app_path('Core/Company/Database/Migrations/0200_01_07_001006_backfill_tenant_primary_companies.php');
+    $migration = requireMigrationOnce(app_path('Core/Company/Database/Migrations/0200_01_07_001006_backfill_tenant_primary_companies.php'));
 
     expect(fn () => $migration->up())->toThrow(
         RuntimeException::class,
@@ -181,7 +181,7 @@ test('primary-company migration rejects mixed-status ambiguity before writing', 
 test('primary-company migration leaves tenants with no live companies unprovisioned', function (): void {
     $tenant = createTenant(['name' => 'Companyless Tenant']);
     TenantPrimaryCompany::query()->delete();
-    $migration = require app_path('Core/Company/Database/Migrations/0200_01_07_001006_backfill_tenant_primary_companies.php');
+    $migration = requireMigrationOnce(app_path('Core/Company/Database/Migrations/0200_01_07_001006_backfill_tenant_primary_companies.php'));
 
     $migration->up();
 
@@ -191,7 +191,7 @@ test('primary-company migration leaves tenants with no live companies unprovisio
 test('primary-company migration rollback does not erase operational assignments', function (): void {
     [$tenant, $company] = createTenantWithCompany(['name' => 'Operational Tenant']);
     app(PrimaryCompanyManager::class)->assign($tenant, $company);
-    $migration = require app_path('Core/Company/Database/Migrations/0200_01_07_001006_backfill_tenant_primary_companies.php');
+    $migration = requireMigrationOnce(app_path('Core/Company/Database/Migrations/0200_01_07_001006_backfill_tenant_primary_companies.php'));
 
     $migration->down();
 

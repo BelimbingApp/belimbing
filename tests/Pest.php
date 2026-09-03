@@ -584,3 +584,18 @@ function cleanupIncubatingTestMigration(string $relativeDir, string $file, strin
     @rmdir(dirname($dir));
     @rmdir(dirname($dir, 2));
 }
+
+/**
+ * Load a migration file that returns an anonymous-class instance, once per
+ * path. A plain `require` re-declares the anonymous class on every call, and
+ * re-declaring classes from a file a coverage driver has instrumented
+ * corrupts PHP's heap (`zend_mm_heap corrupted`, PHP 8.5.10 with pcov and
+ * with xdebug alike — belimbing#537). The instance carries no state between
+ * up()/down(), so sharing it is safe.
+ */
+function requireMigrationOnce(string $path): object
+{
+    static $instances = [];
+
+    return $instances[$path] ??= require $path;
+}

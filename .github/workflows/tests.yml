@@ -31,7 +31,8 @@ jobs:
           php-version: '8.5'
           extensions: pdo_sqlite, sqlite3
           tools: composer:v2
-          coverage: xdebug
+          coverage: pcov # xdebug's coverage mode aborted the full suite with "zend_mm_heap corrupted" (#537, run 33746514692); pcov is coverage-only and light
+          ini-values: pcov.directory=app
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2 # NOSONAR — well-known community Bun action; tag pinning is acceptable for internal projects
@@ -55,6 +56,13 @@ jobs:
         run: |
           sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=sqlite/' .env
           sed -i 's/^DB_DATABASE=.*/DB_DATABASE=:memory:/' .env
+
+      # Coverage bookkeeping for the Feature suite exceeds the 512M that
+      # phpunit.xml pins, and PHPUnit applies its <ini> after php.ini and
+      # after -d, so neither raises it: edit the file for this job only
+      # (#537). The runner has 7 GB; local runs keep 512M.
+      - name: Raise the memory limit for coverage
+        run: sed -i 's/name="memory_limit" value="512M"/name="memory_limit" value="2G"/' phpunit.xml && grep -c 'memory_limit" value="2G"' phpunit.xml
 
       - name: Configure Framework Primitives for Testing
         run: |
@@ -88,8 +96,58 @@ jobs:
       - name: Build Assets
         run: bun run build
 
-      - name: Run Tests
-        run: ./vendor/bin/pest
+      # Coverage is produced here and read by the SonarCloud scan below.
+      # Until that scan existed, the project was analysed by SonarCloud's
+      # automatic analysis, which never runs tests, so "coverage on new code"
+      # read 0.0% on every PR by construction (#537). A CI-based scan and
+      # automatic analysis are mutually exclusive on SonarCloud: this step
+      # fails with "automatic analysis is enabled" until the organisation
+      # admin turns it off for BelimbingApp_lara.
+      # One process per suite, on purpose. A single process that discovers
+      # every suite aborts under any coverage driver with "zend_mm_heap
+      # corrupted" at a fixed point (PHP 8.5.10; same at memory_limit=2G),
+      # while each suite completes on its own — measured across six CI runs
+      # on #537. The suites already form that boundary in phpunit.xml; this
+      # restores it as a process boundary and merges the clover reports.
+      - name: Run Tests (Unit)
+        run: ./vendor/bin/pest --testsuite=Unit --coverage-clover=coverage-unit.xml
+      - name: Run Tests (Feature)
+        run: ./vendor/bin/pest --testsuite=Feature --coverage-clover=coverage-feature.xml
+      # These suites are empty in this repository today (domains are composed
+      # and tested by domain-ci.yml), so an empty result is not a failure
+      # here — but the step stays, so a Core test added later runs under
+      # coverage without anyone remembering to register it. The Integration
+      # suite is not here: it self-skips off PostgreSQL (an all-skipped run
+      # still exits non-zero) and is registered in the postgres-mirror job.
+      # PHPUnit takes --testsuite once, comma-separated.
+      # PHPUnit does not distinguish an undefined suite name from an empty
+      # one, so --do-not-fail-on-empty-test-suite alone would stay green
+      # after a rename or glob drift while covering nothing: the names are
+      # checked against phpunit.xml first, and a missing one fails the step.
+      - name: Run Tests (Core, Domains, Extensions)
+        run: |
+          for suite in Core Domains Extensions; do
+            grep -q "testsuite name=\"$suite\"" phpunit.xml || { echo "::error::test suite '$suite' is not defined in phpunit.xml"; exit 1; }
+          done
+          ./vendor/bin/pest --do-not-fail-on-empty-test-suite --testsuite=Core,Domains,Extensions --coverage-clover=coverage-modules.xml
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarqube-scan-action@v8 # NOSONAR — official SonarSource scanner action; tag pinning is acceptable for internal projects
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
+        with:
+          # sonar.sources includes resources/core, whose .blade.php files Sonar
+          # indexes as PHP, while coverage is scoped to app/: without the
+          # exclusion a Blade-only PR would read 0.0% coverage on new code —
+          # #537's defect reproduced with a gate that can now fail.
+          args: >
+            -Dsonar.projectKey=BelimbingApp_lara
+            -Dsonar.organization=belimbingapp
+            -Dsonar.sources=app,resources/core
+            -Dsonar.tests=tests
+            -Dsonar.php.coverage.reportPaths=coverage-unit.xml,coverage-feature.xml,coverage-modules.xml
+            -Dsonar.coverage.exclusions=resources/**
 
   # Every supported database driver is a production driver; the main job's
   # driver is not a stand-in for "real". This lane exists only for tests whose

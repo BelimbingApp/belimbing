@@ -27,7 +27,7 @@ const ADDRESS_UI_KUALA_LUMPUR_POSTCODE = '50450';
  */
 function addressTenancyMigration(): object
 {
-    return require app_path('Core/Address/Database/Migrations/0200_01_05_000002_add_tenant_to_addresses.php');
+    return requireMigrationOnce(app_path('Core/Address/Database/Migrations/0200_01_05_000002_add_tenant_to_addresses.php'));
 }
 
 /**
