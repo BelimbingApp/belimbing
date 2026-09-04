@@ -15,6 +15,18 @@ test -n "$postgres_tests"
 grep -qx 'tests/Feature/Database/QueryTest.php' <<< "$postgres_tests"
 grep -qx 'tests/Feature/Database/DataShareMirrorUiTest.php' <<< "$postgres_tests"
 grep -q 'postgres-mirror-feature-tests.py' .github/workflows/tests.yml
+postgres_surface_fixture=$(mktemp -d)
+trap 'rm -rf "$postgres_surface_fixture"' EXIT
+mkdir -p "$postgres_surface_fixture/tests/Feature/Database/Nested"
+touch "$postgres_surface_fixture/tests/Feature/Database/Nested/ExampleTest.php"
+grep -qx 'tests/Feature/Database/Nested/ExampleTest.php' \
+    < <(python3 scripts/ci/postgres-mirror-feature-tests.py --root "$postgres_surface_fixture")
+if python3 scripts/ci/postgres-mirror-feature-tests.py --root "$postgres_surface_fixture/empty" >/dev/null 2>&1; then
+    echo 'postgres-mirror feature discovery accepted an empty test surface' >&2
+    exit 1
+fi
+rm -rf "$postgres_surface_fixture"
+trap - EXIT
 
 # The connector's receiver independently validates the payload before using
 # platform_sha as its composed-CI ref. Keep the sender half pinned here so a

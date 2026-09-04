@@ -294,7 +294,10 @@ jobs:
           PLATFORM_OPERATOR_COMPANY_NAME: Belimbing CI
           PLATFORM_OPERATOR_COMPANY_CODE: belimbing_ci
         run: |
-          mapfile -t database_feature_tests < <(python3 scripts/ci/postgres-mirror-feature-tests.py)
+          set -euo pipefail
+          database_feature_test_paths=$(python3 scripts/ci/postgres-mirror-feature-tests.py)
+          mapfile -t database_feature_tests <<< "$database_feature_test_paths"
+          ((${#database_feature_tests[@]} > 0)) || { echo '::error::no PostgreSQL database-feature tests were discovered'; exit 1; }
           ./vendor/bin/pest \
             tests/Feature/Foundation/FrameworkPrimitivesProvisionerTest.php \
             "${database_feature_tests[@]}" \
