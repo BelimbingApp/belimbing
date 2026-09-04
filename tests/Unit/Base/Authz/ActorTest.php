@@ -44,7 +44,17 @@ it('allows process actors to omit company for tenant-scoped work', function (): 
 
     expect($scheduler->validate())->toBeNull()
         ->and($queue->validate())->toBeNull()
-        ->and($console->validate())->toBeNull();
+        ->and($console->validate())->toBeNull()
+        ->and($scheduler->cacheKey())->toBe('scheduler:70:-:9')
+        ->and($scheduler->cacheKey())->not->toBe(
+            (new Actor(PrincipalType::SCHEDULER, 70, companyId: null, tenantId: 10))->cacheKey()
+        );
+});
+
+it('requires tenantId when a process actor omits company', function (): void {
+    $scheduler = new Actor(PrincipalType::SCHEDULER, 70, companyId: null, tenantId: null);
+
+    expect($scheduler->validate())->not->toBeNull();
 });
 
 it('still requires a positive id for process actors', function (): void {
