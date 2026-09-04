@@ -56,17 +56,21 @@ final readonly class Actor
      * Validate minimum actor context for authorization.
      *
      * Returns null when valid, or a denial decision when invalid.
+     *
+     * Process principals (console, scheduler, queue) may omit companyId when
+     * the work is tenant-scoped — BelimbingApp/blb-people#78 — but must carry
+     * tenantId so permission caches cannot collide across tenants. User and
+     * agent actors still require a company.
      */
     public function validate(): ?AuthorizationDecision
     {
-        if ($this->id <= 0 || $this->companyId === null) {
-            return AuthorizationDecision::deny(
-                AuthorizationReasonCode::DENIED_INVALID_ACTOR_CONTEXT,
-                ['actor_validation']
-            );
-        }
+        $tenantScopedProcess = $this->type->isProcess() && $this->companyId === null;
+        $invalid = $this->id <= 0
+            || ($this->companyId === null && ! $this->type->isProcess())
+            || ($tenantScopedProcess && $this->tenantId === null)
+            || ($this->isAgent() && $this->actingForUserId === null);
 
-        if ($this->isAgent() && $this->actingForUserId === null) {
+        if ($invalid) {
             return AuthorizationDecision::deny(
                 AuthorizationReasonCode::DENIED_INVALID_ACTOR_CONTEXT,
                 ['actor_validation']
@@ -78,10 +82,13 @@ final readonly class Actor
 
     /**
      * Cache key representing this actor's identity for permission lookups.
+     *
+     * Tenant is always included so a tenant-scoped process actor
+     * (`companyId` null) cannot share a key with another tenant.
      */
     public function cacheKey(): string
     {
-        return $this->type->value.':'.$this->id.':'.$this->companyId;
+        return $this->type->value.':'.$this->id.':'.($this->companyId ?? '-').':'.($this->tenantId ?? '-');
     }
 
     private static function resolveUserCompanyId(Authenticatable $user): ?int

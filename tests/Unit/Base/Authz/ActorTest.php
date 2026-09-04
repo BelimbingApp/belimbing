@@ -1,6 +1,7 @@
 <?php
 
 use App\Base\Authz\DTO\Actor;
+use App\Base\Authz\Enums\AuthorizationReasonCode;
 use App\Base\Authz\Enums\PrincipalType;
 
 require_once __DIR__.'/../../../Support/Auth/FakeAuthenticatable.php';
@@ -27,4 +28,38 @@ it('builds an actor from a user company_id attribute when company scoped is unav
         ->and($actor->companyId)->toBe(15)
         ->and($actor->actingForUserId)->toBe(5)
         ->and($actor->attributes)->toBe(['source' => 'test']);
+});
+
+it('requires a company for user and agent actors', function (): void {
+    $user = new Actor(PrincipalType::USER, 1, companyId: null, tenantId: 9);
+    $agent = new Actor(PrincipalType::AGENT, 2, companyId: null, actingForUserId: 1, tenantId: 9);
+
+    expect($user->validate()?->reasonCode)->toBe(AuthorizationReasonCode::DENIED_INVALID_ACTOR_CONTEXT)
+        ->and($agent->validate()?->reasonCode)->toBe(AuthorizationReasonCode::DENIED_INVALID_ACTOR_CONTEXT);
+});
+
+it('allows process actors to omit company for tenant-scoped work', function (): void {
+    $scheduler = new Actor(PrincipalType::SCHEDULER, 70, companyId: null, tenantId: 9);
+    $queue = new Actor(PrincipalType::QUEUE, 71, companyId: null, tenantId: 9);
+    $console = new Actor(PrincipalType::CONSOLE, 72, companyId: null, tenantId: 9);
+
+    expect($scheduler->validate())->toBeNull()
+        ->and($queue->validate())->toBeNull()
+        ->and($console->validate())->toBeNull()
+        ->and($scheduler->cacheKey())->toBe('scheduler:70:-:9')
+        ->and($scheduler->cacheKey())->not->toBe(
+            (new Actor(PrincipalType::SCHEDULER, 70, companyId: null, tenantId: 10))->cacheKey()
+        );
+});
+
+it('requires tenantId when a process actor omits company', function (): void {
+    $scheduler = new Actor(PrincipalType::SCHEDULER, 70, companyId: null, tenantId: null);
+
+    expect($scheduler->validate()?->reasonCode)->toBe(AuthorizationReasonCode::DENIED_INVALID_ACTOR_CONTEXT);
+});
+
+it('still requires a positive id for process actors', function (): void {
+    $scheduler = new Actor(PrincipalType::SCHEDULER, 0, companyId: null, tenantId: 9);
+
+    expect($scheduler->validate()?->reasonCode)->toBe(AuthorizationReasonCode::DENIED_INVALID_ACTOR_CONTEXT);
 });
