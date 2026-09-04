@@ -6,6 +6,52 @@ cd "$root"
 bash -n scripts/ci/changed-authorable-php.sh scripts/ci/extension-conformance.sh scripts/ci/mount-guard.sh
 python3 -m json.tool scripts/ci/domain-repos.json >/dev/null
 
+# The connector's receiver independently validates the payload before using
+# platform_sha as its composed-CI ref. Keep the sender half pinned here so a
+# workflow cleanup cannot silently drop the success dependency, narrow secret,
+# or one of the cross-repository contract fields (#551).
+python3 - <<'PY'
+from pathlib import Path
+import re
+
+
+def job_block(source: str, job: str) -> str:
+    pattern = rf'(?ms)^  {re.escape(job)}:\n.*?(?=^  [a-zA-Z0-9_-]+:\n|\Z)'
+    matches = re.findall(pattern, source)
+    assert len(matches) == 1, f'tests.yml must define exactly one {job} job'
+
+    return matches[0]
+
+
+workflow = Path('.github/workflows/tests.yml').read_text(encoding='utf-8')
+dispatch = job_block(workflow, 'notify-people-connector')
+
+required = (
+    "if: github.event_name == 'push' && github.ref == 'refs/heads/main'",
+    'needs:\n      - ci\n      - postgres-mirror',
+    'permissions:\n      contents: read',
+    'PEOPLE_CONNECTOR_DISPATCH_TOKEN: ${{ secrets.PEOPLE_CONNECTOR_DISPATCH_TOKEN }}',
+    "--arg event_type 'belimbing-platform-main-ci-succeeded'",
+    '--arg platform_repository "$PLATFORM_REPOSITORY"',
+    '--arg platform_ref "$PLATFORM_REF"',
+    '--arg platform_sha "$PLATFORM_SHA"',
+    '--arg platform_run_url "$PLATFORM_RUN_URL"',
+    "'{event_type: $event_type, client_payload: {platform_repository: $platform_repository, platform_ref: $platform_ref, platform_sha: $platform_sha, platform_run_url: $platform_run_url}}'",
+    'GH_TOKEN="$PEOPLE_CONNECTOR_DISPATCH_TOKEN" gh api',
+    'repos/BelimbingApp/blb-people-connector/dispatches',
+)
+for contract in required:
+    assert contract in dispatch, f'missing People Connector dispatch contract: {contract}'
+
+assert 'if [[ -z "$PEOPLE_CONNECTOR_DISPATCH_TOKEN" ]]' in dispatch, 'missing explicit-secret failure'
+assert 'continue-on-error:' not in dispatch, 'dispatch failure must fail the platform workflow'
+
+future_job = workflow + '\n  unrelated-future-job:\n    continue-on-error: true\n'
+assert 'continue-on-error:' not in job_block(future_job, 'notify-people-connector'), (
+    'an unrelated later job must not contaminate the dispatch contract'
+)
+PY
+
 # mount-guard.sh: a direct edit under docs/ai-team/ must be refused; the
 # subtree-pull commit shape (and its merge) must pass; unrelated changes must
 # never even inspect the mount. Built in an isolated fixture repo so this

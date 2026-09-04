@@ -308,3 +308,46 @@ jobs:
             tests/Feature/Audit/AuditLogUiTest.php \
             tests/Feature/Core/Geonames \
             tests/Unit/Core/AI/Services/TaskModelRecommendationServiceTest.php
+
+  notify-people-connector:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs:
+      - ci
+      - postgres-mirror
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Dispatch the verified platform revision
+        env:
+          PEOPLE_CONNECTOR_DISPATCH_TOKEN: ${{ secrets.PEOPLE_CONNECTOR_DISPATCH_TOKEN }}
+          PLATFORM_REPOSITORY: ${{ github.repository }}
+          PLATFORM_REF: ${{ github.ref }}
+          PLATFORM_SHA: ${{ github.sha }}
+          PLATFORM_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [[ -z "$PEOPLE_CONNECTOR_DISPATCH_TOKEN" ]]; then
+            echo '::error::PEOPLE_CONNECTOR_DISPATCH_TOKEN is not configured; the connector compatibility run was not dispatched.'
+            exit 1
+          fi
+
+          [[ "$PLATFORM_REPOSITORY" == 'BelimbingApp/belimbing' ]] || { echo "::error::unexpected platform repository: $PLATFORM_REPOSITORY"; exit 1; }
+          [[ "$PLATFORM_REF" == 'refs/heads/main' ]] || { echo "::error::unexpected platform ref: $PLATFORM_REF"; exit 1; }
+          [[ "$PLATFORM_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo '::error::platform SHA is not a full lowercase commit SHA'; exit 1; }
+
+          payload="$RUNNER_TEMP/people-connector-dispatch.json"
+          jq -n \
+            --arg event_type 'belimbing-platform-main-ci-succeeded' \
+            --arg platform_repository "$PLATFORM_REPOSITORY" \
+            --arg platform_ref "$PLATFORM_REF" \
+            --arg platform_sha "$PLATFORM_SHA" \
+            --arg platform_run_url "$PLATFORM_RUN_URL" \
+            '{event_type: $event_type, client_payload: {platform_repository: $platform_repository, platform_ref: $platform_ref, platform_sha: $platform_sha, platform_run_url: $platform_run_url}}' \
+            > "$payload"
+
+          GH_TOKEN="$PEOPLE_CONNECTOR_DISPATCH_TOKEN" gh api \
+            --method POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            --input "$payload" \
+            repos/BelimbingApp/blb-people-connector/dispatches
