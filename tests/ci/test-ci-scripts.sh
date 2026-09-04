@@ -6,6 +6,39 @@ cd "$root"
 bash -n scripts/ci/changed-authorable-php.sh scripts/ci/extension-conformance.sh scripts/ci/mount-guard.sh
 python3 -m json.tool scripts/ci/domain-repos.json >/dev/null
 
+# The connector's receiver independently validates the payload before using
+# platform_sha as its composed-CI ref. Keep the sender half pinned here so a
+# workflow cleanup cannot silently drop the success dependency, narrow secret,
+# or one of the cross-repository contract fields (#551).
+python3 - <<'PY'
+from pathlib import Path
+
+workflow = Path('.github/workflows/tests.yml').read_text()
+marker = '\n  notify-people-connector:\n'
+assert workflow.count(marker) == 1, 'tests.yml must define exactly one People Connector dispatch job'
+dispatch = workflow.split(marker, 1)[1]
+
+required = (
+    "if: github.event_name == 'push' && github.ref == 'refs/heads/main'",
+    'needs:\n      - ci\n      - postgres-mirror',
+    'permissions:\n      contents: read',
+    'PEOPLE_CONNECTOR_DISPATCH_TOKEN: ${{ secrets.PEOPLE_CONNECTOR_DISPATCH_TOKEN }}',
+    "--arg event_type 'belimbing-platform-main-ci-succeeded'",
+    '--arg platform_repository "$PLATFORM_REPOSITORY"',
+    '--arg platform_ref "$PLATFORM_REF"',
+    '--arg platform_sha "$PLATFORM_SHA"',
+    '--arg platform_run_url "$PLATFORM_RUN_URL"',
+    "'{event_type: $event_type, client_payload: {platform_repository: $platform_repository, platform_ref: $platform_ref, platform_sha: $platform_sha, platform_run_url: $platform_run_url}}'",
+    'GH_TOKEN="$PEOPLE_CONNECTOR_DISPATCH_TOKEN" gh api',
+    'repos/BelimbingApp/blb-people-connector/dispatches',
+)
+for contract in required:
+    assert contract in dispatch, f'missing People Connector dispatch contract: {contract}'
+
+assert 'if [[ -z "$PEOPLE_CONNECTOR_DISPATCH_TOKEN" ]]' in dispatch, 'missing explicit-secret failure'
+assert 'continue-on-error:' not in dispatch, 'dispatch failure must fail the platform workflow'
+PY
+
 # mount-guard.sh: a direct edit under docs/ai-team/ must be refused; the
 # subtree-pull commit shape (and its merge) must pass; unrelated changes must
 # never even inspect the mount. Built in an isolated fixture repo so this
