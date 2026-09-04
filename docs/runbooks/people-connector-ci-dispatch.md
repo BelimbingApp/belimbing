@@ -32,11 +32,12 @@ owner-managed fine-grained personal access token selected for only
 permission is needed. Prefer a dedicated machine identity with an expiry and
 recovery owner over a person's general-purpose token.
 
-A GitHub App installation token with the same single-repository Contents write
-permission also satisfies the API contract, but installation tokens are
-short-lived. Mint and refresh those outside this workflow before exposing the
-result as `PEOPLE_CONNECTOR_DISPATCH_TOKEN`; never store an expired installation
-token as though it were a durable secret.
+The current sender supports a fine-grained personal access token. A GitHub App
+is a sound future replacement, but its installation tokens are short-lived and
+must not be stored as this static secret. Supporting an App requires changing
+the sender to mint a fresh installation token on every run from separately
+stored App credentials; periodic out-of-workflow refresh would recreate the
+same owner-memory failure this dispatch is meant to remove.
 
 The workflow retains `contents: read` for its ordinary `GITHUB_TOKEN`. The
 cross-repository token is available only to the dispatch step, is not written
