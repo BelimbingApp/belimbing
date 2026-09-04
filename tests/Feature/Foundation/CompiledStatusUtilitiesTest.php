@@ -31,7 +31,7 @@ use Illuminate\Support\Facades\File;
  * A check over every Tailwind class in every view would drown in dynamic
  * class strings and be switched off.
  */
-const STATUS_UTILITY_PATTERN = '/(?<![\w-])(!?(?:[a-z0-9-]+(?:\[[^\]]*\])?:)*(?:bg|text|border|ring|divide|outline|fill|stroke|from|to|via)-(?:status-)?(?:warning|danger|error|success|info)(?:-[a-z]+)*(?:\/\d+)?)(?![\w-])/';
+const STATUS_UTILITY_PATTERN = '/(?<![\w-])((?:[a-z0-9-]+(?:\[[^\]]*\])?:)*(?:bg|text|border|ring|divide|outline|fill|stroke|from|to|via)-(?:status-)?(?:warning|danger|error|success|info)(?:-[a-z]+)*(?:\/\d+)?!?)(?![\w-])/';
 
 /**
  * The scan root is stated, not defaulted: Tailwind's automatic source
@@ -77,11 +77,22 @@ function compiledStylesheet(): ?string
     return implode("\n", array_map(fn (string $path): string => (string) file_get_contents($path), $candidates));
 }
 
+function cssEscapedClass(string $class): string
+{
+    $escaped = (string) preg_replace_callback('/[^a-zA-Z0-9_-]/', fn (array $match): string => '\\'.$match[0], $class);
+
+    return preg_match('/^\d/', $escaped) === 1
+        ? '\\3'.$escaped[0].' '.substr($escaped, 1)
+        : $escaped;
+}
+
 function selectorExistsFor(string $class, string $css): bool
 {
-    // Tailwind escapes `:` and `/` in selectors; a variant class ends in a
-    // pseudo-class (`:hover`) and a bare one in `{` or `,`.
-    $escaped = preg_quote(str_replace([':', '/'], ['\\:', '\\/'], $class), '/');
+    // CSS escapes more than Tailwind's common `:` and `/`: bracket variants
+    // need escaped brackets, and a leading digit becomes a hex escape plus a
+    // space (`2xl` becomes `\\32 xl`). Escape the whole class before turning it
+    // into a regular expression so a live selector cannot be reported dead.
+    $escaped = preg_quote(cssEscapedClass($class), '/');
 
     // The character after the name must not continue it: not a word
     // character, not a hyphen, and not a backslash — Tailwind escapes `/`, so
@@ -90,6 +101,21 @@ function selectorExistsFor(string $class, string $css): bool
     // names, and it was reachable until this exclusion (review of #542).
     return preg_match('/\.'.$escaped.'(?![\w\\\\-])/', $css) === 1;
 }
+
+test('it recognizes CSS-escaped status utility selectors without accepting their dead spellings', function (): void {
+    $css = '.\\32 xl\\:text-status-warning{color:ok}'
+        .'.min-\\[600px\\]\\:text-status-danger{color:ok}'
+        .'.supports-\\[display\\:grid\\]\\:text-status-info{color:ok}'
+        .'.text-status-success\\!{color:ok}'
+        .'.border-status-info-subtle\\/40{color:ok}';
+
+    expect(selectorExistsFor('2xl:text-status-warning', $css))->toBeTrue()
+        ->and(selectorExistsFor('min-[600px]:text-status-danger', $css))->toBeTrue()
+        ->and(selectorExistsFor('supports-[display:grid]:text-status-info', $css))->toBeTrue()
+        ->and(selectorExistsFor('text-status-success!', $css))->toBeTrue()
+        ->and(selectorExistsFor('2xl:text-warning', $css))->toBeFalse()
+        ->and(selectorExistsFor('border-status-info-subtle', $css))->toBeFalse();
+});
 
 test('every status-colour utility used by a view resolves to a rule in the compiled stylesheet', function (): void {
     $css = compiledStylesheet();
