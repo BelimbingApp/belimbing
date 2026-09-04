@@ -294,15 +294,10 @@ jobs:
           PLATFORM_OPERATOR_COMPANY_NAME: Belimbing CI
           PLATFORM_OPERATOR_COMPANY_CODE: belimbing_ci
         run: |
+          mapfile -t database_feature_tests < <(python3 scripts/ci/postgres-mirror-feature-tests.py)
           ./vendor/bin/pest \
             tests/Feature/Foundation/FrameworkPrimitivesProvisionerTest.php \
-            tests/Feature/Database/QueryTest.php \
-            tests/Feature/Database/DataShareDiagnosticCaptureTest.php \
-            tests/Feature/Database/DataShareDiagnosticImportTest.php \
-            tests/Feature/Database/DataShareGenericPackageTest.php \
-            tests/Feature/Database/DataShareMirrorBackendTest.php \
-            tests/Feature/Database/DataShareMirrorUiTest.php \
-            tests/Feature/Database/IncubatingSchemaPreflightTest.php \
+            "${database_feature_tests[@]}" \
             tests/Feature/Schedule/ScheduleCronOverrideTest.php \
             tests/Feature/Schedule/SchedulePageTest.php \
             tests/Feature/Audit/AuditLogUiTest.php \

@@ -6,6 +6,16 @@ cd "$root"
 bash -n scripts/ci/changed-authorable-php.sh scripts/ci/extension-conformance.sh scripts/ci/mount-guard.sh
 python3 -m json.tool scripts/ci/domain-repos.json >/dev/null
 
+# Database feature tests prove the behaviour most exposed to dialect, schema,
+# and constraint differences. Their PostgreSQL coverage is discovered, not
+# copied into the workflow, so adding a file cannot silently leave it SQLite
+# only (#536).
+postgres_tests=$(python3 scripts/ci/postgres-mirror-feature-tests.py)
+test -n "$postgres_tests"
+grep -qx 'tests/Feature/Database/QueryTest.php' <<< "$postgres_tests"
+grep -qx 'tests/Feature/Database/DataShareMirrorUiTest.php' <<< "$postgres_tests"
+grep -q 'postgres-mirror-feature-tests.py' .github/workflows/tests.yml
+
 # The connector's receiver independently validates the payload before using
 # platform_sha as its composed-CI ref. Keep the sender half pinned here so a
 # workflow cleanup cannot silently drop the success dependency, narrow secret,
