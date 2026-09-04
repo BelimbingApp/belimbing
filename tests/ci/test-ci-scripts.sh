@@ -12,11 +12,19 @@ python3 -m json.tool scripts/ci/domain-repos.json >/dev/null
 # or one of the cross-repository contract fields (#551).
 python3 - <<'PY'
 from pathlib import Path
+import re
 
-workflow = Path('.github/workflows/tests.yml').read_text()
-marker = '\n  notify-people-connector:\n'
-assert workflow.count(marker) == 1, 'tests.yml must define exactly one People Connector dispatch job'
-dispatch = workflow.split(marker, 1)[1]
+
+def job_block(source: str, job: str) -> str:
+    pattern = rf'(?ms)^  {re.escape(job)}:\n.*?(?=^  [a-zA-Z0-9_-]+:\n|\Z)'
+    matches = re.findall(pattern, source)
+    assert len(matches) == 1, f'tests.yml must define exactly one {job} job'
+
+    return matches[0]
+
+
+workflow = Path('.github/workflows/tests.yml').read_text(encoding='utf-8')
+dispatch = job_block(workflow, 'notify-people-connector')
 
 required = (
     "if: github.event_name == 'push' && github.ref == 'refs/heads/main'",
@@ -37,6 +45,11 @@ for contract in required:
 
 assert 'if [[ -z "$PEOPLE_CONNECTOR_DISPATCH_TOKEN" ]]' in dispatch, 'missing explicit-secret failure'
 assert 'continue-on-error:' not in dispatch, 'dispatch failure must fail the platform workflow'
+
+future_job = workflow + '\n  unrelated-future-job:\n    continue-on-error: true\n'
+assert 'continue-on-error:' not in job_block(future_job, 'notify-people-connector'), (
+    'an unrelated later job must not contaminate the dispatch contract'
+)
 PY
 
 # mount-guard.sh: a direct edit under docs/ai-team/ must be refused; the
