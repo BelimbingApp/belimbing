@@ -31,7 +31,7 @@ use Illuminate\Support\Facades\File;
  * A check over every Tailwind class in every view would drown in dynamic
  * class strings and be switched off.
  */
-const STATUS_UTILITY_PATTERN = '/(?<![\w-])((?:[a-z0-9-]+(?:\[[^\]]*\])?:)*(?:bg|text|border|ring|divide|outline|fill|stroke|from|to|via)-(?:status-)?(?:warning|danger|error|success|info)(?:-[a-z]+)*(?:\/\d+)?!?)(?![\w-])/';
+const STATUS_UTILITY_PATTERN = '/(?<![\w!-])((?:[a-z0-9-]+(?:\[[^\]]*\])?:)*(?:bg|text|border|ring|divide|outline|fill|stroke|from|to|via)-(?:status-)?(?:warning|danger|error|success|info)(?:-[a-z]+)*(?:\/\d+)?!?)(?![\w-])/';
 
 /**
  * The scan root is stated, not defaulted: Tailwind's automatic source
@@ -115,6 +115,12 @@ test('it recognizes CSS-escaped status utility selectors without accepting their
         ->and(selectorExistsFor('text-status-success!', $css))->toBeTrue()
         ->and(selectorExistsFor('2xl:text-warning', $css))->toBeFalse()
         ->and(selectorExistsFor('border-status-info-subtle', $css))->toBeFalse();
+});
+
+test('it recognizes Tailwind v4 trailing important status utilities', function (): void {
+    preg_match_all(STATUS_UTILITY_PATTERN, 'class="text-status-success! !text-status-success"', $matches);
+
+    expect($matches[1])->toBe(['text-status-success!']);
 });
 
 test('every status-colour utility used by a view resolves to a rule in the compiled stylesheet', function (): void {
