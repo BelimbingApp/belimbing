@@ -1,8 +1,12 @@
 <?php
 
+use Tests\TestCase;
+
+uses(TestCase::class);
+
 it('keeps the icon registry source in Sonar-indexable line shape', function (): void {
     $lines = file(
-        dirname(__DIR__, 5).'/app/Base/Foundation/View/IconRegistry.php',
+        base_path('app/Base/Foundation/View/IconRegistry.php'),
         FILE_IGNORE_NEW_LINES,
     );
 
