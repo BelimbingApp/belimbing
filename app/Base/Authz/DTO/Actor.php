@@ -56,10 +56,21 @@ final readonly class Actor
      * Validate minimum actor context for authorization.
      *
      * Returns null when valid, or a denial decision when invalid.
+     *
+     * Process principals (console, scheduler, queue) may omit companyId when
+     * the work is tenant-scoped — BelimbingApp/blb-people#78. User and agent
+     * actors still require a company.
      */
     public function validate(): ?AuthorizationDecision
     {
-        if ($this->id <= 0 || $this->companyId === null) {
+        if ($this->id <= 0) {
+            return AuthorizationDecision::deny(
+                AuthorizationReasonCode::DENIED_INVALID_ACTOR_CONTEXT,
+                ['actor_validation']
+            );
+        }
+
+        if ($this->companyId === null && ! $this->type->isProcess()) {
             return AuthorizationDecision::deny(
                 AuthorizationReasonCode::DENIED_INVALID_ACTOR_CONTEXT,
                 ['actor_validation']
