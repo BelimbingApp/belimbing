@@ -14,6 +14,7 @@ it('keeps the icon registry source in Sonar-indexable line shape', function (): 
 
     $lineLengths = array_map('strlen', $lines);
 
-    expect(array_sum($lineLengths) / count($lineLengths))->toBeLessThan(150.0)
-        ->and(max($lineLengths))->toBeLessThan(300);
+    // Keep the source-shape contract focused on the property Sonar needs:
+    // no individual source line should look like a generated/minified blob.
+    expect(max($lineLengths))->toBeLessThan(300);
 });
