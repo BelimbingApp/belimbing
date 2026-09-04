@@ -307,6 +307,7 @@ jobs:
             tests/Feature/Schedule/SchedulePageTest.php \
             tests/Feature/Audit/AuditLogUiTest.php \
             tests/Feature/Core/Geonames \
+            tests/Unit/Base/Database/DatabaseConnectionConfigurationTest.php \
             tests/Unit/Core/AI/Services/TaskModelRecommendationServiceTest.php
 
   notify-people-connector:
