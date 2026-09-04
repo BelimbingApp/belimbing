@@ -61,10 +61,10 @@ return [
             'sslrootcert' => env('DB_SSLROOTCERT'),
         ],
 
-        // Read-only connection for Database Queries feature.
-        // Mirrors the default connection. Read-only is enforced at two levels:
-        // 1. Database: QueryExecutor sets the transaction read-only (PostgreSQL)
-        // 2. Application: QueryExecutor validates SELECT-only queries
+        // Database Queries connection. SQLite reuses the configured `sqlite`
+        // settings; PostgreSQL may use dedicated DB_READONLY_* credentials.
+        // QueryExecutor validates SELECT-only queries and marks PostgreSQL
+        // transactions as read-only.
         'readonly' => match (env('DB_CONNECTION', 'pgsql')) {
             'sqlite' => $sqliteConnection,
             default => [
