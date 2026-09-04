@@ -279,9 +279,13 @@ jobs:
       # the step above created and rely on their own per-test transaction. That
       # is why the migrate step is not optional and why this is one invocation.
       #
-      # Registration is by file name and a typo is silent: the tick stays green
-      # and the file simply does not run. The evidence a file runs here is this
-      # step's test count moving, not its colour (#533). A file belongs here when
+      # Registration is by file name, and the failure that matters is
+      # OMISSION, not misspelling. A path that does not exist fails loudly —
+      # pest exits 2 with "Test file ... not found" and this step goes red. A
+      # file that was never listed runs on SQLite only, passes there, and
+      # nothing anywhere reports that it skipped PostgreSQL. The evidence a
+      # file runs here is this step's test count moving, not its colour
+      # (#533, #541). A file belongs here when
       # what it proves depends on the driver — foreign-key resolution, triggers,
       # constraints — whether or not it self-skips on SQLite.
       - name: Run driver-sensitive tests on PostgreSQL
