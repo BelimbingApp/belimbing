@@ -48,6 +48,7 @@ use App\Base\Database\Services\DataShare\Mirror\SymfonyDataShareMirrorProcessRun
 use App\Base\Database\Services\DevelopmentInstanceGuard;
 use App\Base\Database\Services\DevelopmentSanitizer;
 use App\Base\Database\Services\IncubatingSchemaPreflight;
+use App\Base\Database\Services\ModuleMigrationDependencyChecker;
 use App\Base\Database\Services\SchemaDrift\SchemaDriftInspector;
 use App\Base\Database\Services\SessionStateDevelopmentSanitizer;
 use App\Base\Foundation\Contracts\DataOperationRecorder;
@@ -66,6 +67,11 @@ use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
 class ServiceProvider extends BaseServiceProvider
 {
+    public function boot(ModuleMigrationDependencyChecker $migrationChecker): void
+    {
+        $migrationChecker->assertUniqueTableOwnership();
+    }
+
     /**
      * Register services.
      */

@@ -57,6 +57,22 @@ final class ModuleMigrationDependencyChecker
         throw new ModuleManifestException($this->failureMessage($dependencyIssues, $orderingIssues, $duplicateMigrationNames, $sharedTables, $cycle));
     }
 
+    /**
+     * Source-only boot guard: ownership cannot wait for a migration command.
+     * Use the same declarations and diagnostic as the migration preflight.
+     */
+    public function assertUniqueTableOwnership(): void
+    {
+        $sharedTables = $this->tablesCreatedByMoreThanOneModule(
+            $this->migrationPaths(),
+            $this->reader()->moduleRoots(),
+        );
+
+        if ($sharedTables !== []) {
+            throw new ModuleManifestException($this->failureMessage([], [], [], $sharedTables, []));
+        }
+    }
+
     private function reader(): ModuleManifestReader
     {
         return new ModuleManifestReader([
