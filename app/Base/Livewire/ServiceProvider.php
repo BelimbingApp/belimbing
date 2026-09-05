@@ -3,6 +3,7 @@
 namespace App\Base\Livewire;
 
 use App\Base\Authz\Middleware\AuthorizeCapability;
+use App\Base\Livewire\Console\Commands\LivewireActionsCommand;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 use Livewire\Livewire;
 
@@ -14,6 +15,7 @@ class ServiceProvider extends BaseServiceProvider
     public function register(): void
     {
         $this->app->singleton(ComponentDiscoveryService::class);
+        $this->commands([LivewireActionsCommand::class]);
 
         // Must be the register phase, not boot: ComponentHookRegistry::boot()
         // wires each registered hook into Livewire's mount/hydrate listeners
