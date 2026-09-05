@@ -73,7 +73,7 @@ app/Domains/People/
 
 The Domain is the lifecycle unit. Its Modules are the ownership boundaries. Installing or disabling `People` affects the whole Domain; it does not imply that each contained Module has an independent toggle.
 
-Provider integration does not make two ownership boundaries one Domain. `PeopleConnector` is a separate optional Domain mounted at `app/Domains/PeopleConnector/`, with its own install, enable, update, disable, and uninstall lifecycle. It composes a selected HR provider through an anti-corruption boundary and owns supplemental Skill and Training capabilities; it is not a Module inside `People` and is not a deployment-specific Extension. See `docs/architecture/people-connector.md` for the provider, transport, and data-ownership contract.
+Provider integration does not make two ownership boundaries one Domain. `PeopleConnector` is a separate optional Domain mounted at `app/Domains/PeopleConnector/`, with its own install, enable, update, disable, and uninstall lifecycle. It composes a selected HR provider through an anti-corruption boundary and owns provider connections and synchronization; it is not a Module inside `People` and is not a deployment-specific Extension. See `docs/architecture/people-connector.md` for the provider, transport, and data-ownership contract.
 
 ### Extension shape
 
@@ -188,7 +188,7 @@ The optional `extra.blb` manifest may declare:
 
 Manifests support inventory, dependency health, and migration preflight. They do not replace Composer's PHP dependency resolution, provider independence, or runtime authorization.
 
-`requires-modules` is checked before Module-aware migration commands run. A required optional Domain must be installed and enabled. Non-wildcard constraints require the depended-on Module to publish a compatible version. Migration filename ordering must also keep requiring Modules after the migrations they depend on; see `docs/architecture/database.md`.
+`requires-modules` is checked during provider resolution and again before Module-aware migration commands run. A required optional Domain must be installed and enabled. Non-wildcard constraints require the depended-on Module to publish a compatible version. Migration filename ordering must also keep requiring Modules after the migrations they depend on; see `docs/architecture/database.md`.
 
 Per-migration schema maturity remains declared beside the migration through `IncubatingSchema`. Do not duplicate individual migration maturity in a package or source manifest.
 
@@ -203,7 +203,7 @@ The universal runtime order is:
 3. enabled Domains
 4. Extensions
 
-Alphabetical order within a root makes repeated boots deterministic. Extension-last ordering supports explicit contribution and decoration seams; it is not permission to replace arbitrary container bindings or depend on accidental provider order.
+Within each root, providers follow the topological order of `requires-modules`, using alphabetical filesystem order among ready modules. Providerless modules remain in the graph so transitive requirements are honored. Cycles fail before provider registration with the cycle identities; a requirement on a later root is refused rather than inverting the four-root contract. Missing, disabled, or version-incompatible required modules also fail resolution. Rebuild cached configuration after changing manifests, as for provider changes. Foundation logs the loaded provider sequence at debug after boot, including boots using cached configuration. Extension-last ordering supports explicit contribution and decoration seams; it is not permission to replace arbitrary container bindings or depend on accidental provider order.
 
 Every new cross-root scanner must:
 

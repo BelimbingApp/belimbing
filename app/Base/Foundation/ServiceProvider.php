@@ -41,5 +41,13 @@ class ServiceProvider extends BaseServiceProvider
         // framework's vendor-published views.
         Paginator::defaultView('ui.pagination-links');
         Paginator::defaultSimpleView('ui.pagination-simple-links');
+
+        // Log the loaded order, including when config:cache supplied the
+        // provider list and discovery did not execute in this process.
+        $this->app->booted(function (): void {
+            $this->app->make('log')->debug('Application providers booted.', [
+                'providers' => array_keys($this->app->getLoadedProviders()),
+            ]);
+        });
     }
 }

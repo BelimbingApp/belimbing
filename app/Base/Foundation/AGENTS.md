@@ -9,6 +9,8 @@
 3. enabled Domain modules: `app/Domains/*/*/ServiceProvider.php`
 4. Extension modules: `app/Extensions/*/*/ServiceProvider.php`
 
+Within each root, declared `extra.blb.requires-modules` dependencies determine provider order, with alphabetical filesystem order among ready modules. Providerless modules retain transitive dependencies. Cycles, unavailable/incompatible requirements, and dependencies on later roots refuse provider resolution. Rebuild cached configuration after manifest changes.
+
 Because discovery is automatic, providers must be **independent by default**:
 - Do not rely on another provider being manually registered in bootstrap.
 - Prefer contracts and adapter bindings over direct module-to-module coupling.
