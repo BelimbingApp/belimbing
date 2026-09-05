@@ -34,6 +34,18 @@ describe("required-check producer contract", () => {
         expect(() => auditRequiredChecks(snapshot, changed)).toThrow("Secret scan");
     });
 
+    test("a job disabled by its condition cannot satisfy a required check", () => {
+        const changed = clone(workflows);
+        changed["lint.yml"].jobs.quality.if = false;
+        expect(() => auditRequiredChecks(snapshot, changed)).toThrow("quality");
+    });
+
+    test("a workflow that excludes main pull requests cannot satisfy a required check", () => {
+        const changed = clone(workflows);
+        changed["lint.yml"].on.pull_request = { branches: ["develop"] };
+        expect(() => auditRequiredChecks(snapshot, changed)).toThrow("quality");
+    });
+
     test("removing the Sonar scan cannot be hidden by a job with its label", () => {
         const changed = clone(workflows);
         changed["tests.yml"].jobs.ci.steps = changed["tests.yml"].jobs.ci.steps
