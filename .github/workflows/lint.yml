@@ -48,6 +48,9 @@ jobs:
           bun-version: '1.3.10'
           no-cache: true
 
+      - name: Audit required-check producers
+        run: bun test tests/ci/required-checks.test.ts
+
       - name: Install Dependencies
         run: |
           composer install -q --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
