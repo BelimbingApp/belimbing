@@ -346,10 +346,20 @@ jobs:
         env:
           PGPASSWORD: postgres
 
+      # The migration verifier above owns blb_mirror_source. Give Pest a
+      # separate unmigrated database so RefreshDatabase builds the schema it
+      # exercises rather than relying on migrate:fresh degrading to migrate.
+      - name: Create isolated PostgreSQL test database
+        run: psql --host=127.0.0.1 --username=postgres --dbname=postgres --command='CREATE DATABASE blb_domain_test'
+        env:
+          PGPASSWORD: postgres
+
       - name: Build Assets
         run: bun run build
 
       - name: Run Tests on PostgreSQL
+        env:
+          DB_DATABASE: blb_domain_test
         run: ./vendor/bin/pest "$DOMAIN_PATH"
 
   # Merge gate. Callers require `ci / ci`; this job carries that name so both

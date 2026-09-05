@@ -269,15 +269,11 @@ jobs:
         env:
           PGPASSWORD: postgres
 
-      - name: Migrate the driver-sensitive test database
-        env:
-          DB_DATABASE: blb_driver_sensitive
-        run: php artisan migrate --force --no-interaction
-
-      # RefreshDatabase calls migrate:fresh, whose db:wipe step BLB blocks
-      # outside an in-memory SQLite database — so these tests reuse the schema
-      # the step above created and rely on their own per-test transaction. That
-      # is why the migrate step is not optional and why this is one invocation.
+      # This database intentionally has no migrated schema. RefreshDatabase
+      # then builds the schema it tests, instead of silently degrading from
+      # migrate:fresh to a no-op migrate against a database prepared by an
+      # earlier CI step. Keep the verifier migration above on its dedicated
+      # blb_mirror_source database.
       #
       # Registration is by file name, and the failure that matters is
       # OMISSION, not misspelling. A path that does not exist fails loudly —
