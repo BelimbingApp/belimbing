@@ -40,6 +40,17 @@ jobs:
           bun-version: '1.3.10'
           no-cache: true
 
+      # Cache only installed packages, never application/bootstrap state.
+      # Installs still run on hits: Composer must rebuild this checkout's
+      # autoloader and package discovery after domain composition changes.
+      - name: Restore dependency cache
+        uses: actions/cache@v6 # NOSONAR — official GitHub action
+        with:
+          path: |
+            vendor
+            node_modules
+          key: deps-v1-${{ runner.os }}-${{ runner.arch }}-php8.5-bun1.3.10-${{ hashFiles('composer.lock', 'composer.json', 'bun.lock', 'package.json') }}
+
       - name: Install JS Dependencies
         run: bun install --frozen-lockfile
 
@@ -218,6 +229,17 @@ jobs:
         with:
           bun-version: '1.3.10'
           no-cache: true
+
+      # Cache only installed packages, never application/bootstrap state.
+      # Installs still run on hits: Composer must rebuild this checkout's
+      # autoloader and package discovery after domain composition changes.
+      - name: Restore dependency cache
+        uses: actions/cache@v6 # NOSONAR — official GitHub action
+        with:
+          path: |
+            vendor
+            node_modules
+          key: deps-v1-${{ runner.os }}-${{ runner.arch }}-php8.5-bun1.3.10-${{ hashFiles('composer.lock', 'composer.json', 'bun.lock', 'package.json') }}
 
       - name: Install Dependencies
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
