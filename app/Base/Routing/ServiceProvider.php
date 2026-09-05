@@ -2,7 +2,6 @@
 
 namespace App\Base\Routing;
 
-use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
@@ -26,15 +25,7 @@ class ServiceProvider extends BaseServiceProvider
     {
         $this->forceConfiguredRootUrl();
 
-        $discovered = $this->app->make(RouteDiscoveryService::class)->discover();
-
-        foreach ($discovered['web'] ?? [] as $file) {
-            Route::middleware('web')->group($file);
-        }
-
-        foreach ($discovered['api'] ?? [] as $file) {
-            Route::middleware('api')->prefix('api')->group($file);
-        }
+        $this->app->make(RouteDiscoveryService::class)->registerRoutes();
     }
 
     /**

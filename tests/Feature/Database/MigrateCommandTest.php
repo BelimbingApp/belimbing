@@ -270,3 +270,51 @@ test('migrate command reports orphaned registry entries removed during reconcili
         ->toContain('Removed 1 orphaned table registry entry that no longer matches any declared or live relation.')
         ->toContain('ghost_registry_entry');
 });
+
+test('migration discovery rejects one table created by two modules before the schema collides', function (): void {
+    $owner = 'zz-migration-table-owner-'.bin2hex(random_bytes(4));
+    $first = base_path(MIGRATION_EXTENSION_ROOT.$owner.'/first');
+    $second = base_path(MIGRATION_EXTENSION_ROOT.$owner.'/second');
+
+    foreach ([$first, $second] as $module) {
+        File::ensureDirectoryExists($module.MIGRATION_MIGRATIONS_SUFFIX);
+    }
+
+    // Distinct migration names, so the duplicate-name preflight stays silent and
+    // only the table ownership check can refuse this pair. The files are scanned,
+    // never executed.
+    file_put_contents($first.MIGRATION_MIGRATIONS_SUFFIX.'/2026_01_01_000000_create_first_shared.php', "<?php\n\nSchema::create('zz_shared_owner_table', fn () => null);\n");
+    file_put_contents($second.MIGRATION_MIGRATIONS_SUFFIX.'/2026_01_02_000000_create_second_shared.php', "<?php\n\nSchema::create('zz_shared_owner_table', fn () => null);\n");
+
+    try {
+        runMigrationDiscovery();
+    } catch (ModuleManifestException $exception) {
+        expect($exception->getMessage())
+            ->toContain('zz_shared_owner_table')
+            ->toContain($first.MIGRATION_MIGRATIONS_SUFFIX.'/2026_01_01_000000_create_first_shared.php')
+            ->toContain($second.MIGRATION_MIGRATIONS_SUFFIX.'/2026_01_02_000000_create_second_shared.php');
+
+        return;
+    } finally {
+        File::deleteDirectory(base_path(MIGRATION_EXTENSION_ROOT.$owner));
+    }
+
+    expect(false)->toBeTrue('Expected the table ownership preflight to refuse a table created by two modules.');
+});
+
+test('migration discovery lets one module name the same table in two of its own migrations', function (): void {
+    $owner = 'zz-migration-table-self-'.bin2hex(random_bytes(4));
+    $module = base_path(MIGRATION_EXTENSION_ROOT.$owner.'/only');
+
+    File::ensureDirectoryExists($module.MIGRATION_MIGRATIONS_SUFFIX);
+    file_put_contents($module.MIGRATION_MIGRATIONS_SUFFIX.'/2026_01_01_000000_create_self_table.php', "<?php\n\nSchema::create('zz_self_owned_table', fn () => null);\n");
+    file_put_contents($module.MIGRATION_MIGRATIONS_SUFFIX.'/2026_01_02_000000_recreate_self_table.php', "<?php\n\nSchema::create('zz_self_owned_table', fn () => null);\n");
+
+    try {
+        $command = runMigrationDiscovery();
+
+        expect($command)->toBeInstanceOf(MigrateCommand::class);
+    } finally {
+        File::deleteDirectory(base_path(MIGRATION_EXTENSION_ROOT.$owner));
+    }
+});

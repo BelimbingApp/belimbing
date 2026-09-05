@@ -2,6 +2,7 @@
 
 namespace App\Base\Database\Services;
 
+use App\Base\Database\Models\TableRegistry;
 use App\Base\Foundation\ApplicationTopology;
 use App\Base\Foundation\ModuleManifest\ModuleManifest;
 use App\Base\Foundation\ModuleManifest\ModuleManifestException;
@@ -42,16 +43,18 @@ final class ModuleMigrationDependencyChecker
         $manifests = $reader->all();
         $moduleRoots = $reader->moduleRoots();
 
+        $migrationPaths = $this->migrationPaths();
         $dependencyIssues = $reader->dependencyIssues($manifests);
         $orderingIssues = $this->migrationOrderingIssues($manifests, $moduleRoots);
-        $duplicateMigrationNames = $this->duplicateMigrationNames($this->migrationPaths());
+        $duplicateMigrationNames = $this->duplicateMigrationNames($migrationPaths);
+        $sharedTables = $this->tablesCreatedByMoreThanOneModule($migrationPaths, $moduleRoots);
         $cycle = $this->moduleDependencyCycle($manifests, $moduleRoots);
 
-        if ($dependencyIssues === [] && $orderingIssues === [] && $duplicateMigrationNames === [] && $cycle === []) {
+        if ($dependencyIssues === [] && $orderingIssues === [] && $duplicateMigrationNames === [] && $sharedTables === [] && $cycle === []) {
             return;
         }
 
-        throw new ModuleManifestException($this->failureMessage($dependencyIssues, $orderingIssues, $duplicateMigrationNames, $cycle));
+        throw new ModuleManifestException($this->failureMessage($dependencyIssues, $orderingIssues, $duplicateMigrationNames, $sharedTables, $cycle));
     }
 
     private function reader(): ModuleManifestReader
@@ -181,6 +184,40 @@ final class ModuleMigrationDependencyChecker
     }
 
     /**
+     * One module owns a table. Two modules whose migrations both create the
+     * same table would collide only when the second CREATE TABLE ran, deep
+     * inside a migrate run, with a driver error that names neither module.
+     * The relocation of a module between domains is exactly the case: the
+     * old copy and the new copy are both installed until the old one is
+     * removed. Refuse that pair here, before Laravel starts, naming the
+     * table and both files. A module naming the same table in two of its own
+     * migrations (drop and recreate) is its own business and is not refused.
+     *
+     * @param  list<string>  $paths
+     * @param  array<string, string>  $moduleRoots
+     * @return array<string, array<string, string>> table => module => first declaring file
+     */
+    private function tablesCreatedByMoreThanOneModule(array $paths, array $moduleRoots): array
+    {
+        $declarations = [];
+
+        foreach ($paths as $path) {
+            $module = $this->moduleIdForMigrationPath($path, $moduleRoots) ?? $this->normalizePath(dirname($path, 2));
+
+            foreach (glob($path.'/*_*.php') ?: [] as $file) {
+                foreach (TableRegistry::declaredTableNames($file) as $table) {
+                    $declarations[$table][$module] ??= $file;
+                }
+            }
+        }
+
+        return array_filter(
+            $declarations,
+            fn (array $byModule): bool => count($byModule) > 1,
+        );
+    }
+
+    /**
      * @param  list<ModuleManifest>  $manifests
      * @param  array<string, string>  $moduleRoots
      * @return list<string>
@@ -261,9 +298,10 @@ final class ModuleMigrationDependencyChecker
      * @param  list<array{issue: 'missing'|'incompatible', requiring: string, requiring_module: string, required: string, constraint: string, installed_version?: string}>  $dependencyIssues
      * @param  list<array{requiring: string, required: string, requiring_migration: string, required_migration: string}>  $orderingIssues
      * @param  array<string, list<string>>  $duplicateMigrationNames
+     * @param  array<string, array<string, string>>  $sharedTables
      * @param  list<string>  $cycle
      */
-    private function failureMessage(array $dependencyIssues, array $orderingIssues, array $duplicateMigrationNames, array $cycle): string
+    private function failureMessage(array $dependencyIssues, array $orderingIssues, array $duplicateMigrationNames, array $sharedTables, array $cycle): string
     {
         $lines = ['Module migration dependency preflight failed.'];
 
@@ -303,6 +341,20 @@ final class ModuleMigrationDependencyChecker
                 '- Duplicate migration name %s appears in: %s. Laravel keeps one file per migration name, so rename one of them.',
                 $migration,
                 implode(', ', $files),
+            );
+        }
+
+        foreach ($sharedTables as $table => $byModule) {
+            $owners = [];
+
+            foreach ($byModule as $module => $file) {
+                $owners[] = sprintf('%s (%s)', $module, $file);
+            }
+
+            $lines[] = sprintf(
+                '- Table %s is created by more than one module: %s. One module owns a table; remove or rename the table in every module but its owner.',
+                $table,
+                implode(' and ', $owners),
             );
         }
 
