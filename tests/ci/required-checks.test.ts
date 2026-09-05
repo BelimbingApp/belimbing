@@ -46,6 +46,49 @@ describe("required-check producer contract", () => {
         expect(() => auditRequiredChecks(snapshot, changed)).toThrow("quality");
     });
 
+    test.each(["false", "$" + "{{ false }}"])("literal false condition %s disables a job and its scan", (condition) => {
+        const changed = clone(workflows);
+        changed["tests.yml"].jobs.ci.if = condition;
+        expect(() => auditRequiredChecks(snapshot, changed)).toThrow("SonarCloud Code Analysis");
+        expect(() => auditRequiredChecks(snapshot, changed)).toThrow("ci (app");
+    });
+
+    test.each([
+        { branches: ["**", "!main"] },
+        { branches: ["main", "!m*"] },
+        { "branches-ignore": ["main"] },
+        { "branches-ignore": ["m[a-z]+n"] },
+        { branches: ["m?in"] },
+    ])("filters excluding main cannot produce quality: %j", (filters) => {
+        const changed = clone(workflows);
+        changed["lint.yml"].on = { pull_request: filters };
+        expect(() => auditRequiredChecks(snapshot, changed)).toThrow("quality");
+    });
+
+    test.each([
+        null,
+        { branches: ["main"] },
+        { branches: ["**", "!main", "main"] },
+        { branches: ["m*"] },
+        { branches: ["ma?in"] },
+        { branches: ["m[a-z]+n"] },
+        { "branches-ignore": ["develop"] },
+    ])("filters admitting main retain quality: %j", (filters) => {
+        const changed = clone(workflows);
+        changed["lint.yml"].on = { pull_request_target: filters };
+        expect(auditRequiredChecks(snapshot, changed)).toContain("quality");
+    });
+
+    test("either PR trigger may supply main, including shorthand forms", () => {
+        for (const trigger of ["pull_request", ["push", "pull_request_target"], {
+            pull_request: { branches: ["develop"] }, pull_request_target: { branches: ["main"] },
+        }]) {
+            const changed = clone(workflows);
+            changed["lint.yml"].on = trigger;
+            expect(auditRequiredChecks(snapshot, changed)).toContain("quality");
+        }
+    });
+
     test("removing the Sonar scan cannot be hidden by a job with its label", () => {
         const changed = clone(workflows);
         changed["tests.yml"].jobs.ci.steps = changed["tests.yml"].jobs.ci.steps
