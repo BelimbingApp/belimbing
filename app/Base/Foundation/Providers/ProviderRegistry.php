@@ -24,12 +24,12 @@ class ProviderRegistry
         // Ordering is part of the framework contract:
         // Base infrastructure -> Core -> enabled Domains -> Extensions.
         // This keeps bootstrapping deterministic and prevents subtle dependency breakage.
-        return array_merge(
+        return (new ModuleProviderOrder)->sort(array_merge(
             self::discoverBaseProviders(),
             self::discoverCoreProviders(),
             self::discoverDomainProviders(),
             self::discoverExtensionProviders(),
-        );
+        ));
     }
 
     /**
@@ -108,7 +108,6 @@ class ProviderRegistry
     /**
      * @param  list<string>  $paths
      * @return array<int, class-string<ServiceProvider>>
-     *
      */
     private static function providersFromPaths(array $paths): array
     {
