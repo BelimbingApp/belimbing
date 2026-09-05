@@ -24,6 +24,12 @@
             "path": "app/Domains/Operation",
             "sonar_project_key": "BelimbingApp_blb-operation",
             "ref": "8a21b59ffd37ff4c6a93f135e735926782ea228a"
+        },
+        "people-connector": {
+            "repo": "BelimbingApp/blb-people-connector",
+            "path": "app/Domains/PeopleConnector",
+            "sonar_project_key": "BelimbingApp_blb-people-connector",
+            "ref": "71acfb722de753542366c6691292fccf6054ff5b"
         }
     }
 }
