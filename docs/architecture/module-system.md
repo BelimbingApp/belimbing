@@ -222,7 +222,7 @@ Every new cross-root scanner must:
 | Migrations | `Database/Migrations/` under Base components, Core Modules, Domain Modules, and Extension Modules; plus Laravel `database/migrations/` | Base Database migration commands |
 | Production/dev seeders | `Database/Seeders/` and `Database/Seeders/Dev/` under all four roots | Base Database seeder discovery |
 | Menus | `Config/menu.php` under Base/Core Modules, Domain/Extension source anchors, and Domain/Extension Modules | `App\Base\Menu\Services\MenuDiscoveryService` |
-| Routes | `Routes/web.php` and `Routes/api.php` under Base components, Core Modules, Domain Modules, and Extension Modules | `App\Base\Routing\RouteDiscoveryService` |
+| Routes | `Routes/web.php` and `Routes/api.php` under Base components, Core Modules, Domain Modules, and Extension Modules; a file that registers an HTTP method and URI an earlier file already registered refuses boot with `RouteCollisionException`, because Laravel would otherwise keep only the last route | `App\Base\Routing\RouteDiscoveryService` |
 | Settings | Module-level `Config/settings.php` under all four roots | `App\Base\Settings\ServiceProvider` |
 | Authorization | `Config/authz.php` under all four roots, including an explicit Extension source anchor where needed | `App\Base\Authz\ServiceProvider` |
 | Audit, dashboard, and other contributions | The documented `Config/{surface}.php` under supported Module roots | Owning Base discovery service |

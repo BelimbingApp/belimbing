@@ -242,15 +242,8 @@ class TableRegistry extends Model
      */
     private static function discoverTablesFromFile(string $file): array
     {
-        $contents = file_get_contents($file);
-        if ($contents === false) {
-            return [];
-        }
-
-        // Match Schema::create('table_name', ...) plus the migration-helper
-        // convention ->create*Table('table_name', ...) — helpers must take
-        // the table name as a string literal to stay discoverable.
-        if (! preg_match_all('/(?:Schema::create|->create\w*Table)\(\s*[\'"]([\w]+)[\'"]/', $contents, $matches)) {
+        $tableNames = self::declaredTableNames($file);
+        if ($tableNames === []) {
             return [];
         }
 
@@ -274,7 +267,7 @@ class TableRegistry extends Model
 
         $declaredTables = [];
 
-        foreach ($matches[1] as $tableName) {
+        foreach ($tableNames as $tableName) {
             $declaredTables[$tableName] = [
                 'module_name' => $moduleName,
                 'module_path' => $modulePath,
@@ -283,6 +276,30 @@ class TableRegistry extends Model
         }
 
         return $declaredTables;
+    }
+
+    /**
+     * Table names a migration file declares through Schema::create() or the
+     * migration-helper convention ->create*Table(). Helpers must take the
+     * table name as a string literal to stay discoverable. This is the one
+     * source-level definition of "this migration creates that table"; the
+     * registry and the module migration preflight both read it.
+     *
+     * @param  string  $file  Absolute path to a migration PHP file
+     * @return list<string>
+     */
+    public static function declaredTableNames(string $file): array
+    {
+        $contents = @file_get_contents($file);
+        if ($contents === false) {
+            return [];
+        }
+
+        if (! preg_match_all('/(?:Schema::create|->create\w*Table)\(\s*[\'"]([\w]+)[\'"]/', $contents, $matches)) {
+            return [];
+        }
+
+        return array_values(array_unique($matches[1]));
     }
 
     /**
