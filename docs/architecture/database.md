@@ -27,7 +27,7 @@ This document keeps only the high-level design, naming spec, registry table, and
 
 At a high level, `php artisan migrate --dev` means: incubating rebuild -> migrate -> prod seed -> framework primitives -> dev seed.
 
-Before Module migration paths are registered, BLB scans installed Module manifests from `composer.json` `extra.blb` blocks and validates `requires-modules`. Required Modules must be installed and enabled. `extra.blb.module` is canonical when present; otherwise a conventional identity such as `base/database`, `core/company`, `people/payroll`, or `sb-group/qac` satisfies availability. Version constraints require the required Module to publish `extra.blb.version`. Because Laravel sorts migration files by filename after path discovery, BLB also verifies that every requiring Module's earliest migration filename sorts after the latest migration filename in each required Module that ships migrations. Duplicate migration names across Module paths are blocked because Laravel would otherwise keep only one file for that migration name. A table that migrations in two different Modules both create is blocked before the first migration runs, naming the table and both files, because the second `CREATE TABLE` would otherwise fail deep inside the run with a driver error that names neither Module; a Module may still name the same table in two of its own migrations. The manifest graph is therefore the dependency contract, and filename prefixes remain the deterministic ordering mechanism Laravel can execute. Explicit `--path` scopes choose what Laravel runs, but they do not bypass the global Module dependency preflight.
+Before Module migration paths are registered, BLB scans installed Module manifests from `composer.json` `extra.blb` blocks and validates `requires-modules`. Required Modules must be installed and enabled. `extra.blb.module` is canonical when present; otherwise a conventional identity such as `base/database`, `core/company`, `people/payroll`, or `sb-group/qac` satisfies availability. Version constraints require the required Module to publish `extra.blb.version`. Because Laravel sorts migration files by filename after path discovery, BLB also verifies that every requiring Module's earliest migration filename sorts after the latest migration filename in each required Module that ships migrations. Duplicate migration names across Module paths are blocked because Laravel would otherwise keep only one file for that migration name. A table that migrations in two different enabled Modules both create is blocked at application boot and again before the first migration runs, naming the table and both files, because the second `CREATE TABLE` would otherwise fail deep inside the run with a driver error that names neither Module; a Module may still name the same table in two of its own migrations. The manifest graph is therefore the dependency contract, and filename prefixes remain the deterministic ordering mechanism Laravel can execute. Explicit `--path` scopes choose what Laravel runs, but they do not bypass the global Module dependency preflight. The Database service provider runs the source-only ownership guard at boot, using the same TableRegistry declarations and diagnostic as migration preflight; no registry database table or completed migration is needed.
 
 ---
 
@@ -47,7 +47,7 @@ Migration filenames use the timestamp prefix to encode execution order. The year
 | `0300` | Operation Domain | Operation Modules. |
 | `0310` | Commerce Domain | Commerce Modules. |
 | `0320` | People Domain | People Modules that depend on Core employee/company foundations. |
-| `0330` | PeopleConnector Domain | Provider-neutral People integration and connector-owned Skill and Training Modules. |
+| `0330` | Retained integration-era prefixes | PeopleConnector integration plus People-owned Skills and Training migration history; current ownership is listed below. |
 | `2026+` | Extensions | Deployment-owned Extension Modules using real calendar years. |
 
 ### Manifest Dependency Ordering
@@ -240,17 +240,26 @@ Payroll is a consumer of Leave/Claim/Attendance facts via the Payroll-owned `Pay
 
 The registry table is the dependency graph. Do not duplicate module dependencies in a separate diagram; update the table when ownership, prefix, dependency direction, or tier assignment changes.
 
-### PeopleConnector
+### PeopleConnector and relocated People history
 
-`0330` is reserved for the separate optional `PeopleConnector` Domain mounted at `app/Domains/PeopleConnector/`. Its tables use the `people_connector_{module}_{entity}` owner prefix. The Connector Module is the anti-corruption boundary around the selected HR provider; Skill and Training own supplemental records and never use provider-table or Core Employee foreign keys. Provider identities are tenant-scoped external references with provenance.
+R3/R4 moved Skills and Training to People while preserving their migration
+filenames and existing table names. These retained prefixes identify migration
+history, not current Domain ownership. A composed installation must not retain
+both copies of a relocated Module: the boot and migration ownership guards
+refuse that pair.
 
-| Prefix | Module | Role | Dependencies |
-|--------|--------|------|--------------|
-| `0330_01_01_*` | Connector | Foundation | Base Database, Base Settings, Base Integration, Base Tenancy, Core Company, Core User |
-| `0330_02_01_*` | Skill | Supplemental capability | Connector |
-| `0330_02_03_*` | Training | Supplemental capability | Connector, Skill |
+| Existing prefix | Current owner | Manifest dependencies |
+|--------|--------|------|
+| `0330_01_01_*` | `people-connector/connector` at `PeopleConnector/Connector` | `core/company`, `people/provider` |
+| `0330_02_*` | `people/skills` at `People/Skills` | `people/provider` |
+| `0330_03_*` | `people/training` at `People/Training` | `people/provider`, `people/skills` |
 
-The stable Module IDs are `people-connector/connector`, `people-connector/skill`, and `people-connector/training`. Connector deliberately has no hard dependency on `people/*` or `core/employee`: a same-installation `blb-people` adapter and a remote-provider adapter implement the same provider-neutral port, while connector-owned projections retain only the approved external references and snapshots. The manifest graph must preserve `Connector → Skill → Training` migration order.
+The Connector Module owns provider integration and projections. People owns
+Skills and Training business records, including their retained
+`people_connector_*` table names. Provider identities remain tenant-scoped
+external references with provenance. Current manifests require the
+`people/provider` contract; they do not require Core Employee tables or
+make Skills and Training depend on the optional Connector.
 
 ### Extensions (2026+)
 
