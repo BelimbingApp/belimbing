@@ -11,7 +11,7 @@
             "repo": "BelimbingApp/blb-people",
             "path": "app/Domains/People",
             "sonar_project_key": "BelimbingApp_blb-people",
-            "ref": "e6ea57c9f0eaa07bad2d4c2b33db95bfc4d96d9b"
+            "ref": "6f16718ed1acf8927f8ff2b64806326e27d4ea56"
         },
         "commerce": {
             "repo": "BelimbingApp/blb-commerce",
