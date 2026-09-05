@@ -13,6 +13,8 @@
 
 ## Value
 
+Use [the Livewire action inventory](../docs/guides/livewire-action-inventory.md) to find callable methods and lexical test references. A reference is a search lead, not proof of coverage or authorization.
+
 - The codebase is first-class; tests are support infrastructure.
 - Add or keep tests only when they stop a specific bad code change. If that change is vague, the test is probably not worth its cost.
 - Be skeptical of happy-path-only, smoke-only, or markup-only tests, especially when they restate framework behavior.
