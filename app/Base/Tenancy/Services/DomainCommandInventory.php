@@ -5,6 +5,7 @@ namespace App\Base\Tenancy\Services;
 use App\Base\Tenancy\Console\TenantScopedCommand;
 use Illuminate\Contracts\Console\Kernel as ConsoleKernel;
 use Illuminate\Support\Facades\Artisan;
+use Symfony\Component\Console\Command\Command as SymfonyCommand;
 
 /**
  * Lists Artisan commands owned by Domain modules (`App\Domains\...`).
@@ -32,6 +33,10 @@ final class DomainCommandInventory
         $rows = [];
 
         foreach (Artisan::all() as $name => $command) {
+            if (! is_string($name) || $name === '' || ! $command instanceof SymfonyCommand) {
+                continue;
+            }
+
             $class = $command::class;
 
             if (! str_starts_with($class, 'App\\Domains\\')) {
@@ -44,14 +49,28 @@ final class DomainCommandInventory
             }
 
             $rows[] = [
-                ...$owner,
+                'domain' => $owner['domain'],
+                'module' => $owner['module'],
                 'name' => $name,
                 'class' => $class,
-                'tenant_scoped' => is_subclass_of($class, TenantScopedCommand::class),
+                'tenant_scoped' => is_a($command, TenantScopedCommand::class),
             ];
         }
 
-        usort($rows, fn (array $left, array $right): int => $this->sortKey($left) <=> $this->sortKey($right));
+        usort(
+            $rows,
+            static fn (array $left, array $right): int => [
+                $left['domain'],
+                $left['module'],
+                $left['name'],
+                $left['class'],
+            ] <=> [
+                $right['domain'],
+                $right['module'],
+                $right['name'],
+                $right['class'],
+            ],
+        );
 
         return $rows;
     }
@@ -67,18 +86,15 @@ final class DomainCommandInventory
             return null;
         }
 
-        return [
-            'domain' => $parts[2],
-            'module' => $parts[3],
-        ];
-    }
+        $domain = $parts[2];
+        $module = $parts[3];
+        if ($domain === '' || $module === '') {
+            return null;
+        }
 
-    /**
-     * @param  array{domain: string, module: string, name: string, class: class-string}  $row
-     * @return list<string>
-     */
-    private function sortKey(array $row): array
-    {
-        return [$row['domain'], $row['module'], $row['name'], $row['class']];
+        return [
+            'domain' => $domain,
+            'module' => $module,
+        ];
     }
 }
