@@ -6,6 +6,15 @@
         "ref": "main"
     },
     "sonar_organization": "belimbingapp",
+    "sonar_quality_gate": {
+        "_comment": "Platform (BelimbingApp_lara), People, and PeopleConnector all use this gate (api/qualitygates/get_by_project + show). Measured 2026-09-06: all three return id 9 / Sonar way with new_coverage LT 80. Built-in gate - conditions are not editable; copy before tightening.",
+        "id": 9,
+        "name": "Sonar way",
+        "new_coverage": {
+            "op": "LT",
+            "error": "80"
+        }
+    },
     "domains": {
         "people": {
             "repo": "BelimbingApp/blb-people",
