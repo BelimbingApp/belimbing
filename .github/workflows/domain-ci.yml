@@ -230,6 +230,14 @@ jobs:
       - name: Scan Domain Livewire for raw subject-id request reads
         run: ./vendor/bin/pest --filter='keeps the production Domain Livewire tree free of unallowlisted subject-id request reads'
 
+      # Coverage bookkeeping for a whole domain suite exceeds the 512M that
+      # phpunit.xml pins, and PHPUnit applies its <ini> after php.ini and after
+      # -d, so neither setup-php's ini-values nor `php -d` raises it: edit the
+      # file for this job only, exactly as tests.yml does for the platform
+      # suite (#537). The runner has 7 GB; local runs keep 512M.
+      - name: Raise the memory limit for coverage
+        run: sed -i 's/name="memory_limit" value="512M"/name="memory_limit" value="2G"/' phpunit.xml && grep -c 'memory_limit" value="2G"' phpunit.xml
+
       - name: Run Tests
         run: ./vendor/bin/pest "$DOMAIN_PATH" --coverage-clover=coverage.xml
 
