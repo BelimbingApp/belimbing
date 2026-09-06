@@ -6,6 +6,7 @@ use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
 use App\Base\FeatureFlags\Exceptions\UndeclaredFeatureFlagException;
+use App\Base\FeatureFlags\Services\FeatureFlagDeclarationInventory;
 use App\Base\FeatureFlags\Services\FeatureFlagOverrideHistory;
 use App\Base\FeatureFlags\Services\FeatureFlags;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
@@ -60,21 +61,44 @@ class Index extends Component
         });
     }
 
-    public function render(FeatureFlags $flags, FeatureFlagOverrideHistory $history): View
+    public function render(FeatureFlagDeclarationInventory $declarations, FeatureFlagOverrideHistory $history): View
     {
         $needle = strtolower(trim($this->search));
-        $rows = collect($flags->listForCurrentTenant())
-            ->when($needle !== '', fn ($collection) => $collection->filter(
+        $allDeclaredRows = $declarations->forCurrentTenant();
+        $hasDeclarationConflicts = collect($allDeclaredRows)->contains('conflict', true);
+        $declaredRows = collect($allDeclaredRows);
+        if ($needle !== '') {
+            $declaredRows = $declaredRows->filter(
                 fn (array $row): bool => str_contains(strtolower($row['flag']), $needle)
-                    || str_contains(strtolower($row['module']), $needle)
-                    || str_contains(strtolower($row['description']), $needle),
-            ))
-            ->values()
+                    || collect($row['declarations'])->contains(
+                        fn (array $declaration): bool => str_contains(strtolower($declaration['module']), $needle)
+                            || str_contains(strtolower($declaration['description']), $needle),
+                    ),
+            );
+        }
+
+        $declaredRows = $declaredRows->values()->all();
+        $rows = collect($declaredRows)
+            ->reject(fn (array $row): bool => $row['conflict'])
+            ->map(function (array $row): array {
+                $declaration = $row['declarations'][0];
+
+                return [
+                    'flag' => $row['flag'],
+                    'module' => $declaration['module'],
+                    'description' => $declaration['description'],
+                    'default' => $declaration['default'],
+                    'enabled' => $row['override_enabled'] ?? $declaration['default'],
+                    'overridden' => $row['overridden'],
+                ];
+            })
             ->all();
 
         return view('livewire.admin.system.feature-flags.index', [
             'rows' => $rows,
-            'canManage' => $this->actorCanManage(),
+            'declaredRows' => $declaredRows,
+            'hasDeclarationConflicts' => $hasDeclarationConflicts,
+            'canManage' => ! $hasDeclarationConflicts && $this->actorCanManage(),
             'overrideHistory' => $history->forCurrentTenant(),
         ]);
     }

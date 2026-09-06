@@ -1,13 +1,34 @@
+<?php
+
+use App\Base\FeatureFlags\Livewire\Index;
+
+/** @var Index $this */
+?>
 <div>
     <x-slot name="title">{{ __('Feature Flags') }}</x-slot>
 
     <div class="space-y-section-gap">
         <x-ui.page-header
             :title="__('Feature Flags')"
-            :subtitle="__('Declared module flags for the current tenant. Overrides apply only here; undeclared names cannot be invented.')"
+            :subtitle="__('Review mounted module declarations and tenant-specific overrides.')"
         />
 
         <x-ui.session-flash />
+
+        <x-ui.tabs
+            tabs-id="feature-flags-tabs"
+            :tabs="[
+                ['id' => 'overrides', 'label' => __('Tenant overrides')],
+                ['id' => 'declared', 'label' => __('Declared flags')],
+            ]"
+            default="overrides"
+        >
+            <x-ui.tab id="overrides">
+        @if ($hasDeclarationConflicts)
+            <x-ui.alert variant="warning" class="mb-4">
+                {{ __('Tenant override changes are read-only until duplicate flag declarations are resolved in their owning module manifests.') }}
+            </x-ui.alert>
+        @endif
 
         <x-ui.card>
             <div class="mb-4 max-w-md">
@@ -90,7 +111,7 @@
                 @empty
                     <tr>
                         <td colspan="6" class="px-table-cell-x py-8 text-center text-sm text-muted">
-                            {{ __('No declared feature flags match this tenant.') }}
+                            {{ __('No available tenant overrides match your search.') }}
                         </td>
                     </tr>
                 @endforelse
@@ -153,5 +174,76 @@
                 <p class="text-sm text-muted">{{ __('No override changes recorded for this tenant yet.') }}</p>
             @endforelse
         </x-ui.card>
+            </x-ui.tab>
+
+            <x-ui.tab id="declared">
+                <x-ui.card>
+                    <x-ui.table container="flush" :caption="__('Feature flags declared by mounted modules')">
+                        <x-slot name="head">
+                            <tr>
+                                <x-ui.th>{{ __('Flag') }}</x-ui.th>
+                                <x-ui.th>{{ __('Owner module') }}</x-ui.th>
+                                <x-ui.th>{{ __('Default') }}</x-ui.th>
+                                <x-ui.th>{{ __('Description') }}</x-ui.th>
+                                <x-ui.th>{{ __('Tenant override') }}</x-ui.th>
+                            </tr>
+                        </x-slot>
+
+                        @forelse ($declaredRows as $row)
+                            <tr wire:key="declared-feature-flag-{{ $row['flag'] }}">
+                                <td class="px-table-cell-x py-table-cell-y align-top text-sm">
+                                    <div class="font-medium text-ink">{{ $row['flag'] }}</div>
+                                    @if ($row['conflict'])
+                                        <x-ui.badge variant="danger" class="mt-1">{{ __('Conflict') }}</x-ui.badge>
+                                    @endif
+                                </td>
+                                <td class="px-table-cell-x py-table-cell-y align-top text-sm text-ink">
+                                    <div class="space-y-1">
+                                        @foreach ($row['declarations'] as $declaration)
+                                            <div>{{ $declaration['module'] }}</div>
+                                        @endforeach
+                                    </div>
+                                </td>
+                                <td class="px-table-cell-x py-table-cell-y align-top whitespace-nowrap">
+                                    <div class="space-y-1">
+                                        @foreach ($row['declarations'] as $declaration)
+                                            <div>
+                                                @if ($declaration['default'])
+                                                    <x-ui.badge variant="success">{{ __('On') }}</x-ui.badge>
+                                                @else
+                                                    <x-ui.badge>{{ __('Off') }}</x-ui.badge>
+                                                @endif
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                </td>
+                                <td class="px-table-cell-x py-table-cell-y align-top text-sm text-muted">
+                                    <div class="space-y-1">
+                                        @foreach ($row['declarations'] as $declaration)
+                                            <div>{{ $declaration['description'] !== '' ? $declaration['description'] : __('No description') }}</div>
+                                        @endforeach
+                                    </div>
+                                </td>
+                                <td class="px-table-cell-x py-table-cell-y align-top whitespace-nowrap">
+                                    @if (! $row['overridden'])
+                                        <span class="text-sm text-muted">{{ __('None') }}</span>
+                                    @elseif ($row['override_enabled'])
+                                        <x-ui.badge variant="warning">{{ __('Overridden on') }}</x-ui.badge>
+                                    @else
+                                        <x-ui.badge variant="warning">{{ __('Overridden off') }}</x-ui.badge>
+                                    @endif
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="5" class="px-table-cell-x py-8 text-center text-sm text-muted">
+                                    {{ __('No mounted module declarations match your search.') }}
+                                </td>
+                            </tr>
+                        @endforelse
+                    </x-ui.table>
+                </x-ui.card>
+            </x-ui.tab>
+        </x-ui.tabs>
     </div>
 </div>
