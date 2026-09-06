@@ -6,6 +6,7 @@ use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
 use App\Base\FeatureFlags\Exceptions\UndeclaredFeatureFlagException;
+use App\Base\FeatureFlags\Services\FeatureFlagOverrideHistory;
 use App\Base\FeatureFlags\Services\FeatureFlags;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use Illuminate\Contracts\View\View;
@@ -59,7 +60,7 @@ class Index extends Component
         });
     }
 
-    public function render(FeatureFlags $flags): View
+    public function render(FeatureFlags $flags, FeatureFlagOverrideHistory $history): View
     {
         $needle = strtolower(trim($this->search));
         $rows = collect($flags->listForCurrentTenant())
@@ -74,6 +75,7 @@ class Index extends Component
         return view('livewire.admin.system.feature-flags.index', [
             'rows' => $rows,
             'canManage' => $this->actorCanManage(),
+            'overrideHistory' => $history->forCurrentTenant(),
         ]);
     }
 

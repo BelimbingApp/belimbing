@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\Audit\DTO\RequestContext;
 use App\Base\Audit\Models\AuditMutation;
 use App\Base\Audit\Services\AuditBuffer;
 use App\Base\Authz\Enums\PrincipalType;
@@ -7,6 +8,7 @@ use App\Base\Authz\Models\PrincipalCapability;
 use App\Base\FeatureFlags\Livewire\Index;
 use App\Base\FeatureFlags\Models\FeatureFlagOverride;
 use App\Base\FeatureFlags\Services\FeatureFlagDefinition;
+use App\Base\FeatureFlags\Services\FeatureFlagOverrideHistory;
 use App\Base\FeatureFlags\Services\FeatureFlagRegistry;
 use App\Base\FeatureFlags\Services\FeatureFlags;
 use App\Base\Tenancy\Contracts\TenantContext;
@@ -26,6 +28,18 @@ function featureFlagsUiReplace(FeatureFlagDefinition ...$definitions): FeatureFl
     app(FeatureFlagRegistry::class)->replace($definitions);
 
     return app(FeatureFlags::class);
+}
+
+function featureFlagsUiBindActor(User $user, ?int $tenantId = null): void
+{
+    app()->forgetInstance(RequestContext::class);
+    app()->instance(RequestContext::class, new RequestContext(
+        traceId: 'feature-flags-ui-'.bin2hex(random_bytes(4)),
+        actorType: PrincipalType::USER->value,
+        actorId: (int) $user->id,
+        companyId: (int) $user->company_id,
+        tenantId: $tenantId ?? app(TenantContext::class)->currentTenantId(),
+    ));
 }
 
 function featureFlagsUiFlushAudit(): void
@@ -159,4 +173,89 @@ it('clears an override so the declared default applies again', function (): void
 
     expect($flags->enabled('demo.clear'))->toBeFalse()
         ->and(FeatureFlagOverride::query()->where('flag', 'demo.clear')->exists())->toBeFalse();
+});
+
+it('shows override history for the current tenant and isolates other tenants', function (): void {
+    $alpha = createTenant(['name' => 'Alpha history']);
+    $beta = createTenant(['name' => 'Beta history']);
+    $tenants = app(TenantContext::class);
+    featureFlagsUiReplace(
+        new FeatureFlagDefinition('demo.history', default: false, module: 'base/demo', description: 'History demo'),
+    );
+
+    $admin = createAdminUser();
+    $tenants->set((int) $alpha->id);
+    featureFlagsUiBindActor($admin, (int) $alpha->id);
+    Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->call('toggle', 'demo.history', true)
+        ->assertHasNoErrors();
+    featureFlagsUiFlushAudit();
+
+    $tenants->set((int) $beta->id);
+    featureFlagsUiBindActor($admin, (int) $beta->id);
+    Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->call('toggle', 'demo.history', true)
+        ->assertHasNoErrors();
+    featureFlagsUiFlushAudit();
+
+    $tenants->set((int) $alpha->id);
+    $history = app(FeatureFlagOverrideHistory::class)->forCurrentTenant();
+    expect($history)->toHaveKey('demo.history')
+        ->and($history['demo.history'])->toHaveCount(1)
+        ->and($history['demo.history'][0]['actor'])->toBe($admin->name)
+        ->and($history['demo.history'][0]['tenant_id'])->toBe((int) $alpha->id)
+        ->and($history['demo.history'][0]['old_enabled'])->toBeNull()
+        ->and($history['demo.history'][0]['new_enabled'])->toBeTrue();
+
+    Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->assertSee('Overrides history')
+        ->assertSee($admin->name)
+        ->assertSeeHtml('>'.e((string) $alpha->id).'<');
+
+    // Isolation proof: drop the tenant_id filter and the beta mutation leaks in.
+    $leaky = AuditMutation::query()
+        ->where('subject_name', 'feature-flag')
+        ->where('subject_id', 'demo.history')
+        ->where('source', '!=', 'expanded')
+        ->pluck('tenant_id')
+        ->map(fn ($id) => (int) $id)
+        ->unique()
+        ->sort()
+        ->values()
+        ->all();
+    expect($leaky)->toBe([(int) $alpha->id, (int) $beta->id]);
+});
+
+it('lets a viewer read override history without toggle controls', function (): void {
+    $admin = createAdminUser();
+    featureFlagsUiReplace(
+        new FeatureFlagDefinition('demo.view-history', default: false, module: 'base/demo'),
+    );
+    featureFlagsUiBindActor($admin);
+    Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->call('toggle', 'demo.view-history', true)
+        ->assertHasNoErrors();
+    featureFlagsUiFlushAudit();
+
+    $viewer = User::factory()->create(['company_id' => $admin->company_id]);
+    PrincipalCapability::query()->create([
+        'company_id' => $admin->company_id,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => $viewer->id,
+        'capability_key' => 'admin.system.feature-flags.view',
+        'is_allowed' => true,
+    ]);
+
+    Livewire::actingAs($viewer)
+        ->test(Index::class)
+        ->assertViewHas('canManage', false)
+        ->assertSee('Overrides history')
+        ->assertSee($admin->name)
+        ->assertSee('View only')
+        ->assertDontSeeHtml('wire:click="toggle')
+        ->assertDontSeeHtml('wire:click="clearOverride');
 });

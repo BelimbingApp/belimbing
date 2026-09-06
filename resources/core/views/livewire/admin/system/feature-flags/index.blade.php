@@ -96,5 +96,62 @@
                 @endforelse
             </x-ui.table>
         </x-ui.card>
+
+        <x-ui.card>
+            <h3 class="mb-1 text-sm font-medium text-ink">{{ __('Overrides history') }}</h3>
+            <p class="mb-4 text-sm text-muted">{{ __('Recent override mutations for this tenant only. Viewers can read the trail; only managers can change flags.') }}</p>
+
+            @forelse ($overrideHistory as $flag => $entries)
+                <div class="mb-6 last:mb-0" wire:key="feature-flag-history-{{ $flag }}">
+                    <h4 class="mb-2 font-mono text-sm font-medium text-ink">{{ $flag }}</h4>
+                    <x-ui.table container="flush" :caption="__('Override history for :flag', ['flag' => $flag])">
+                        <x-slot name="head">
+                            <tr>
+                                <th scope="col" class="px-table-cell-x py-table-cell-y text-left text-xs font-medium text-muted uppercase tracking-wider">{{ __('When') }}</th>
+                                <th scope="col" class="px-table-cell-x py-table-cell-y text-left text-xs font-medium text-muted uppercase tracking-wider">{{ __('Actor') }}</th>
+                                <th scope="col" class="px-table-cell-x py-table-cell-y text-left text-xs font-medium text-muted uppercase tracking-wider">{{ __('Tenant') }}</th>
+                                <th scope="col" class="px-table-cell-x py-table-cell-y text-left text-xs font-medium text-muted uppercase tracking-wider">{{ __('From') }}</th>
+                                <th scope="col" class="px-table-cell-x py-table-cell-y text-left text-xs font-medium text-muted uppercase tracking-wider">{{ __('To') }}</th>
+                            </tr>
+                        </x-slot>
+                        @foreach ($entries as $entry)
+                            <tr wire:key="feature-flag-history-{{ $flag }}-{{ $loop->index }}">
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">
+                                    @if ($entry['occurred_at'])
+                                        <x-ui.datetime :value="$entry['occurred_at']" />
+                                    @else
+                                        —
+                                    @endif
+                                </td>
+                                <td class="px-table-cell-x py-table-cell-y text-sm text-ink">{{ $entry['actor'] }}</td>
+                                <td class="px-table-cell-x py-table-cell-y text-sm tabular-nums text-muted">{{ $entry['tenant_id'] }}</td>
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm">
+                                    @if ($entry['old_enabled'] === null)
+                                        <span class="text-muted">{{ __('—') }}</span>
+                                    @elseif ($entry['old_enabled'])
+                                        <x-ui.badge variant="success">{{ __('On') }}</x-ui.badge>
+                                    @else
+                                        <x-ui.badge>{{ __('Off') }}</x-ui.badge>
+                                    @endif
+                                </td>
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm">
+                                    @if ($entry['event'] === 'deleted')
+                                        <span class="text-muted">{{ __('Default') }}</span>
+                                    @elseif ($entry['new_enabled'] === null)
+                                        <span class="text-muted">{{ __('—') }}</span>
+                                    @elseif ($entry['new_enabled'])
+                                        <x-ui.badge variant="success">{{ __('On') }}</x-ui.badge>
+                                    @else
+                                        <x-ui.badge>{{ __('Off') }}</x-ui.badge>
+                                    @endif
+                                </td>
+                            </tr>
+                        @endforeach
+                    </x-ui.table>
+                </div>
+            @empty
+                <p class="text-sm text-muted">{{ __('No override changes recorded for this tenant yet.') }}</p>
+            @endforelse
+        </x-ui.card>
     </div>
 </div>
