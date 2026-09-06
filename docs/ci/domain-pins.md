@@ -78,11 +78,78 @@ The built-in gate cannot have its conditions edited; tightening requires copying
 When advancing Domain pins, keep each Domain's `sonar_project_key` pointed at that shared gate rather than
 assuming a looser Domain-specific threshold.
 
+## Workflow concurrency
+
+[PR #636](https://github.com/BelimbingApp/belimbing/pull/636) groups the
+[platform tests](../../.github/workflows/tests.yml) and
+[quality](../../.github/workflows/lint.yml) runs by workflow and ref. A newer
+push to the same PR cancels the older run, including that test run's SQLite
+suites and PostgreSQL mirror. The workflows remain separate groups, so a
+quality run cannot cancel the test workflow.
+
+Main runs use a unique `github.run_id` group suffix and disable
+`cancel-in-progress`: this preserves both running and pending main runs.
+The [reusable Domain workflow](../../.github/workflows/domain-ci.yml) applies
+the same policy with a `domain-ci-` prefix to distinguish its group from the
+caller. A Domain adopts this behavior only when its pinned reusable workflow
+revision includes #636; a platform descriptor update alone does not change an
+older caller workflow. Record the exact run and attempt when comparing timings:
+a cancelled older PR run is not evidence that its tests passed.
+
+## Read the timing summary
+
+[PR #677](https://github.com/BelimbingApp/belimbing/pull/677) replaced the closed,
+unmerged #624 and added a **Per-run timing summary** to the platform `ci` job's
+GitHub Actions summary. Rows identify Job, Suite, Wall (s), Tests, and Assertions
+for Unit, each Feature shard, and the combined Core/Domain/Extension invocation. The
+[recorder](../../scripts/ci/record-pest-timing.sh) measures each Pest process's
+elapsed time, including its coverage work but excluding job setup. Its test count
+includes reported passed, failed, skipped, and other footer statuses; it is not
+a passed-test count. The wrapper preserves Pest's exit status.
+
+The matrix jobs upload `platform-timing-<suite>` JSON artifacts with one-day
+retention. The `ci` job downloads these and runs the
+[aggregator](../../scripts/ci/aggregate-pest-timing.py). Its sum is total recorded
+Pest process time, not workflow elapsed time: concurrent invocations overlap.
+Use the Actions job timestamps to measure the critical path, queueing, and setup;
+these rows do not time `postgres-mirror`, quality, or Domain caller jobs. Compare
+the same composition, suite membership, and run attempt before claiming a gain.
+The aggregate is published after the suite-success check; a failed or cancelled
+run need not have a complete aggregate table.
+
+## Feature shard membership and coverage
+
+[PR #674](https://github.com/BelimbingApp/belimbing/pull/674) replaced the closed,
+unmerged #610. The platform matrix runs `Unit`, `Feature-a`, and `Feature-b`
+concurrently, one Pest process per invocation. Feature remains one logical suite
+in `phpunit.xml`; CI divides its first-level directories using the committed
+[membership map](../../scripts/ci/platform-feature-shards.json). The Unit lane
+also runs the combined Core/Domain/Extension invocation. This does not compose
+optional Domains into the platform checkout or change the Domain caller's tests.
+
+After adding, moving, or removing a Feature directory, add its measured
+`wall_seconds` to the committed
+[timing summary](../../scripts/ci/platform-feature-shard-timings.json), then
+regenerate the map with
+`python3 scripts/ci/platform-feature-shards.py --write-balanced` and confirm it
+with `--validate-only` ([PR #692](https://github.com/BelimbingApp/belimbing/pull/692)
+replaced the hand-kept map with longest-processing-time placement from that
+file). The [validator](../../scripts/ci/platform-feature-shards.py) refuses
+missing or unknown directories, overlap, empty test directories, loose top-level
+`*Test.php` files, and any Feature test file that is not owned by exactly one
+shard. Use the per-shard timing rows to refresh the summary instead of assuming
+equal directory counts mean equal execution time.
+
+Each matrix lane uploads `platform-coverage-<suite>`. The aggregate `ci` job
+requires `coverage-unit.xml`, `coverage-feature-a.xml`, `coverage-feature-b.xml`,
+and `coverage-modules.xml`, then supplies all four paths to Sonar. `ci` remains
+the aggregate check; a failed, skipped, or cancelled matrix lane does not become
+a successful aggregate. Preserve the complete report set when changing shards.
+The PostgreSQL mirror remains a separate job with its own driver-sensitive set.
+
 ## Pending CI composition work (not yet on main)
 
 These follow-ups belong next to the pin and composition docs once they land; do not treat open PRs as
 established procedure:
 
-- Feature suite sharding across parallel matrix lanes: [issue #576](https://github.com/BelimbingApp/belimbing/issues/576) / [PR #610](https://github.com/BelimbingApp/belimbing/pull/610).
-- Composed-application smoke test at the pinned People and PeopleConnector refs: [issue #600](https://github.com/BelimbingApp/belimbing/issues/600) / [PR #604](https://github.com/BelimbingApp/belimbing/pull/604).
-
+- Composed-application smoke test at the pinned People and PeopleConnector refs: [issue #600](https://github.com/BelimbingApp/belimbing/issues/600) / [PR #675](https://github.com/BelimbingApp/belimbing/pull/675), replacing closed, unmerged [PR #604](https://github.com/BelimbingApp/belimbing/pull/604).
