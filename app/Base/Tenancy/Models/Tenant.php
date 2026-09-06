@@ -12,6 +12,12 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 
 /**
+ * @property int $id
+ * @property int|null $parent_id
+ * @property string $name
+ * @property string $status
+ * @property bool $is_platform_operator
+ *
  * A tenant is the platform's outer data-isolation and subscription boundary.
  * Companies remain the inner organizational boundary inside a tenant.
  *
