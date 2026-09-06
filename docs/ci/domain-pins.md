@@ -148,7 +148,10 @@ file). The [validator](../../scripts/ci/platform-feature-shards.py) refuses
 missing or unknown directories, overlap, empty test directories, loose top-level
 `*Test.php` files, and any Feature test file that is not owned by exactly one
 shard. Use the per-shard timing rows to refresh the summary instead of assuming
-equal directory counts mean equal execution time.
+equal directory counts mean equal execution time. Operators can dispatch
+[refresh-feature-shard-timings](../../.github/workflows/refresh-feature-shard-timings.yml)
+to rewrite the summary from Feature-* suite timing artifacts and open a PR
+with the rebalanced shard map ([#695](https://github.com/BelimbingApp/belimbing/issues/695)).
 
 Each matrix lane uploads `platform-coverage-<suite>`. The aggregate `ci` job
 requires `coverage-unit.xml`, `coverage-feature-a.xml`, `coverage-feature-b.xml`,
