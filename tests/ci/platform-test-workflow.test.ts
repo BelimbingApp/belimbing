@@ -14,20 +14,26 @@ const step = (steps: any[], name: string) => {
     return found;
 };
 
-test("Unit and Feature run concurrently, with neither failed lane cancelling the other", () => {
+test("Unit and Feature shards run concurrently, with neither failed lane cancelling the other", () => {
     expect(workflow.jobs.suites).toBeDefined();
     expect(workflow.jobs.suites.needs).toBeUndefined();
     expect(workflow.jobs.suites.strategy).toEqual({
-        "fail-fast": false, matrix: { suite: ["Unit", "Feature"] },
+        "fail-fast": false,
+        matrix: { suite: ["Unit", "Feature-a", "Feature-b"] },
     });
-    for (const suite of ["Unit", "Feature"]) {
-        const command = step(suiteSteps(), "Run Tests (" + suite + ")");
-        expect(command.if).toBe("matrix.suite == '" + suite + "'");
-        expect(command.env.MATRIX_SUITE).toContain("matrix.suite");
-        expect(command.env.TIMING_DIR).toBe("timing");
-        expect(command.run).toContain("scripts/ci/record-pest-timing.sh " + suite + " --");
-        expect(command.run).toContain("--testsuite=" + suite + " --coverage-clover=coverage-" + suite.toLowerCase() + ".xml");
-    }
+    const unit = step(suiteSteps(), "Run Tests (Unit)");
+    expect(unit.if).toBe("matrix.suite == 'Unit'");
+    expect(unit.env.MATRIX_SUITE).toContain("matrix.suite");
+    expect(unit.env.TIMING_DIR).toBe("timing");
+    expect(unit.run).toContain("scripts/ci/record-pest-timing.sh Unit --");
+    expect(unit.run).toContain("--testsuite=Unit --coverage-clover=coverage-unit.xml");
+    const feature = step(suiteSteps(), "Run Tests (Feature shard)");
+    expect(feature.if).toBe("startsWith(matrix.suite, 'Feature-')");
+    expect(feature.env.MATRIX_SUITE).toContain("matrix.suite");
+    expect(feature.env.TIMING_DIR).toBe("timing");
+    expect(feature.run).toContain("scripts/ci/platform-feature-shards.py");
+    expect(feature.run).toContain("scripts/ci/record-pest-timing.sh");
+    expect(feature.run).toContain('coverage-feature-${shard}.xml');
     const modules = step(suiteSteps(), "Run Tests (Core, Domains, Extensions)");
     expect(modules.if).toBe("matrix.suite == 'Unit'");
     expect(modules.run).toContain("scripts/ci/record-pest-timing.sh Core,Domains,Extensions --");
@@ -42,7 +48,7 @@ test("all expected reports are uploaded and downloaded by exact artifact name", 
     expect(timingUpload.with.path).toBe("timing/*.json");
     expect(timingUpload.with["if-no-files-found"]).toBe("error");
     expect(timingUpload.with.name).toContain("platform-timing-");
-    for (const suite of ["Unit", "Feature"]) {
+    for (const suite of ["Unit", "Feature-a", "Feature-b"]) {
         expect(step(gateSteps(), "Download " + suite + " coverage").with.name).toBe("platform-coverage-" + suite);
     }
     const timingDownload = step(gateSteps(), "Download suite timing");
@@ -78,7 +84,12 @@ test("the required ci check always runs and requires successful suites before an
 
 test("the analysis gate refuses every missing or empty report, including module coverage", () => {
     const command = step(gateSteps(), "Require all coverage reports").run;
-    const reports = ["coverage-unit.xml", "coverage-feature.xml", "coverage-modules.xml"];
+    const reports = [
+        "coverage-unit.xml",
+        "coverage-feature-a.xml",
+        "coverage-feature-b.xml",
+        "coverage-modules.xml",
+    ];
     const directory = mkdtempSync(join(tmpdir(), "blb-coverage-gate-"));
     try {
         for (const absent of [null, ...reports]) {
@@ -97,11 +108,33 @@ test("the analysis gate refuses every missing or empty report, including module 
     }
 });
 
-test("all three reports feed one Sonar scan and downstream dispatch still requires both drivers", () => {
+test("all shard reports feed one Sonar scan and downstream dispatch still requires both drivers", () => {
     const scans = Object.values(workflow.jobs).flatMap((job: any) => job.steps ?? [])
         .filter((entry: any) => entry.uses?.startsWith("SonarSource/sonarqube-scan-action@"));
     expect(scans).toHaveLength(1);
-    expect((scans[0] as any).with.args).toContain("sonar.php.coverage.reportPaths=coverage-unit.xml,coverage-feature.xml,coverage-modules.xml");
+    expect((scans[0] as any).with.args).toContain(
+        "sonar.php.coverage.reportPaths=coverage-unit.xml,coverage-feature-a.xml,coverage-feature-b.xml,coverage-modules.xml",
+    );
     expect(workflow.jobs["notify-people-connector"].needs).toEqual(["ci", "postgres-mirror"]);
     expect(workflow.jobs["postgres-mirror"].steps.some((entry: any) => entry.name === "Run native and portable mirror integration tests")).toBeTrue();
+});
+
+test("committed Feature shards are disjoint and cover every Feature test file exactly once", () => {
+    const validation = spawnSync("python3", ["scripts/ci/platform-feature-shards.py", "--validate-only"], {
+        cwd: root,
+        encoding: "utf-8",
+    });
+    expect(validation.status).toBe(0);
+    expect(validation.stdout).toContain("ok:");
+    expect(validation.stdout).toContain("test files");
+    for (const shard of ["a", "b"]) {
+        const listed = spawnSync("python3", ["scripts/ci/platform-feature-shards.py", shard], {
+            cwd: root,
+            encoding: "utf-8",
+        });
+        expect(listed.status).toBe(0);
+        const paths = listed.stdout.trim().split("\n").filter(Boolean);
+        expect(paths.length).toBeGreaterThan(0);
+        expect(paths.every((entry) => entry.startsWith("tests/Feature/"))).toBe(true);
+    }
 });
