@@ -67,8 +67,8 @@ class DomainEloquentModelBoundaryRuleTest extends RuleTestCase
             $root.'/app/Domains/Beta/Provider/Services/NotAModel.php',
         ], [
             [$message, 26],
+            [$message, 28],
             [$message, 30],
-            [$message, 34],
         ]);
     }
 
