@@ -20,6 +20,53 @@ recognizes a trusted shape. If the prose policy and installed mechanism differ,
 keep the refusal visible and ask the steward to reconcile it at the source.
 
 
+## Reviewer-test clearance
+
+[Package PR #101](https://github.com/BelimbingApp/ai-team/pull/101), imported by
+[Belimbing PR #654](https://github.com/BelimbingApp/belimbing/pull/654), makes a
+reviewer's failing test eligible for one author correction without a second
+read. The installed [review gate](ai-team/scripts/review_gate.sh) owns the exact
+grammar; this is a narrow alternative to ordinary exact-head acceptance.
+
+The independent reviewer pushes the failing test commit and posts a **PR review**
+bound to that commit, using these markers (replace both SHA placeholders with
+the same full 40-character test commit SHA):
+
+```text
+**From:** <reviewer-id>
+
+**HEAD reviewed:** <test-commit-sha>
+
+**Verdict:** changes required
+
+**Finding test commit:** <test-commit-sha>
+
+**Clearance:** exact-head CI
+```
+
+The review's API `commit_id`, `HEAD reviewed`, and `Finding test commit` must
+agree. Use unique marker lines; an issue comment does not bind a review. The
+reviewer must differ from the PR's sole author identity. The author makes the
+test pass in the **immediate next commit**, pushes it, and runs the normal
+`gate.sh` and `land.sh` flow once required CI is green for that correction head.
+Both the test commit and correction must be single-parent commits. A second
+correction, intervening commit, or merge falls outside this clearance path;
+obtain ordinary exact-head acceptance instead. Do not rewrite reviewed history
+to manufacture the required ancestry.
+
+There is also a marker-only form: omit `Verdict` when the same reviewer already
+accepted the failing test commit's immediate parent. That earlier acceptance
+must precede the marker review. Without it, a marker-only review grants no
+clearance; the `changes required` form above supplies its own verdict. A newer
+review from that reviewer supersedes their earlier evidence, and dismissed or
+unbound evidence does not qualify.
+
+Placement, authorization-boundary, and contract findings that cannot be expressed
+as tests still require the reviewer to read and accept the corrected exact head.
+Missing markers, mismatched SHAs, or unprovable ancestry likewise fall back to
+ordinary acceptance. A review-gate pass alone does not establish that tests ran:
+the full gate still verifies required checks, holds, and the lane before landing.
+
 ## GitHub API rate-limit playbook
 
 On 2026-09-06, the shared account exhausted its GraphQL primary quota. For example, [Connector #191](https://github.com/BelimbingApp/blb-people-connector/pull/191) had an exact-head acceptance and green checks, but the landing script could not read the PR. The underlying error was `API rate limit already exceeded for user ID`; the script's shorter `cannot read PR` message was not a review rejection or an operational halt. The direct GraphQL response reported `remaining: 0` and reset at `2026-09-06T01:58:05Z` (09:58:05 Asia/Kuala_Lumpur). That is historical evidence, not a reusable reset schedule. The incident query selected both `.resources.core` and `.resources.graphql`: the latter reported 5,000 remaining while the direct GraphQL response reported zero. This was a measured disagreement, not a comparison with the REST core bucket. The original reviewer independently reproduced the discrepancy and a misleading REST reset time in [the incident follow-up](https://github.com/BelimbingApp/belimbing/pull/625#issuecomment-5556416071). Do not infer the cause from the differing counters or use that REST summary to override the actual GraphQL failure or reset time.
