@@ -78,11 +78,29 @@ The built-in gate cannot have its conditions edited; tightening requires copying
 When advancing Domain pins, keep each Domain's `sonar_project_key` pointed at that shared gate rather than
 assuming a looser Domain-specific threshold.
 
+## Workflow concurrency
+
+[PR #636](https://github.com/BelimbingApp/belimbing/pull/636) groups the
+[platform tests](../../.github/workflows/tests.yml) and
+[quality](../../.github/workflows/lint.yml) runs by workflow and ref. A newer
+push to the same PR cancels the older run, including that test run's SQLite
+suites and PostgreSQL mirror. The workflows remain separate groups, so a
+quality run cannot cancel the test workflow.
+
+Main runs use a unique `github.run_id` group suffix and disable
+`cancel-in-progress`: this preserves both running and pending main runs.
+The [reusable Domain workflow](../../.github/workflows/domain-ci.yml) applies
+the same policy with a `domain-ci-` prefix to distinguish its group from the
+caller. A Domain adopts this behavior only when its pinned reusable workflow
+revision includes #636; a platform descriptor update alone does not change an
+older caller workflow. Record the exact run and attempt when comparing timings:
+a cancelled older PR run is not evidence that its tests passed.
+
 ## Pending CI composition work (not yet on main)
 
 These follow-ups belong next to the pin and composition docs once they land; do not treat open PRs as
 established procedure:
 
-- Feature suite sharding across parallel matrix lanes: [issue #576](https://github.com/BelimbingApp/belimbing/issues/576) / [PR #610](https://github.com/BelimbingApp/belimbing/pull/610).
-- Composed-application smoke test at the pinned People and PeopleConnector refs: [issue #600](https://github.com/BelimbingApp/belimbing/issues/600) / [PR #604](https://github.com/BelimbingApp/belimbing/pull/604).
-
+- Feature suite sharding across parallel matrix lanes: [issue #576](https://github.com/BelimbingApp/belimbing/issues/576) / [PR #674](https://github.com/BelimbingApp/belimbing/pull/674), replacing closed, unmerged [PR #610](https://github.com/BelimbingApp/belimbing/pull/610). Current main runs Unit and Feature concurrently; it does not yet split Feature into shards.
+- Per-run job and suite timing summaries: [issue #614](https://github.com/BelimbingApp/belimbing/issues/614) / [PR #677](https://github.com/BelimbingApp/belimbing/pull/677), replacing closed, unmerged [PR #624](https://github.com/BelimbingApp/belimbing/pull/624).
+- Composed-application smoke test at the pinned People and PeopleConnector refs: [issue #600](https://github.com/BelimbingApp/belimbing/issues/600) / [PR #675](https://github.com/BelimbingApp/belimbing/pull/675), replacing closed, unmerged [PR #604](https://github.com/BelimbingApp/belimbing/pull/604).
