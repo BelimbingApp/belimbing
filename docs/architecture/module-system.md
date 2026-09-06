@@ -193,6 +193,58 @@ Manifests support inventory, dependency health, migration preflight, and feature
 
 Per-migration schema maturity remains declared beside the migration through `IncubatingSchema`. Do not duplicate individual migration maturity in a package or source manifest.
 
+### Module feature flags
+
+The declaration, tenant resolution, override storage, and listing command shipped
+together in [PR #660](https://github.com/BelimbingApp/belimbing/pull/660).
+Declare flags in the owning Module's `composer.json` under
+`extra.blb.feature-flags`. Each stable flag identity maps to an object with a
+boolean `default` and a human-readable `description`, for example:
+
+```json
+"feature-flags": {
+  "demo.preview": { "default": false, "description": "Enable the demo preview" }
+}
+```
+
+This fragment belongs inside `extra.blb`; it is not a top-level Composer key.
+Use explicit booleans. The [manifest reader](../../app/Base/Foundation/ModuleManifest/ModuleManifestReader.php)
+normalizes an omitted default to `false` and an omitted description to an empty
+string. The [registry](../../app/Base/FeatureFlags/Services/FeatureFlagRegistry.php)
+collects declarations through the application topology and manifest reader,
+excludes disabled optional Domains, and sorts by flag identity. Identities must
+be unique across Modules: duplicates throw `DuplicateFeatureFlagException`.
+
+Inject [FeatureFlags](../../app/Base/FeatureFlags/Services/FeatureFlags.php)
+(`App\Base\FeatureFlags\Services\FeatureFlags`) into consumers and call
+`enabled('demo.preview')`. Resolution requires the current tenant through
+`TenantContext`; there is no implicit tenant or caller-supplied tenant argument.
+For that tenant, a persisted override takes precedence over the descriptor
+default, including an explicit `false` override of a `true` default.
+`override('demo.preview', true)` stores an override and
+`clearOverride('demo.preview')` restores the declared default. Storage is
+[`base_feature_flag_overrides`](../../app/Base/FeatureFlags/Database/Migrations/0100_01_27_000000_create_base_feature_flag_overrides_table.php),
+with one row per `(tenant_id, flag)`. Reads fall back to defaults when the service
+cannot establish that the override table exists; writes require the migration.
+These service methods do not authorize an operator: the calling application
+surface must enforce its own authorization before changing overrides. Flags do
+not replace access-control checks.
+
+Reading, overriding, or clearing an undeclared name throws
+`UndeclaredFeatureFlagException` with `Feature flag [<name>] is not declared in
+any module descriptor.` Declare the flag in an enabled owning Module and correct
+the consumer's name; an undeclared flag is not treated as disabled.
+
+For operators, `php artisan blb:feature-flags` lists Flag, Module, Default,
+Enabled, Overridden, and Description for the current tenant;
+`php artisan blb:feature-flags --json` emits the same resolved inventory as
+`flag`, `module`, `default`, `enabled`, `overridden`, and `description` fields.
+The [command](../../app/Base/FeatureFlags/Console/Commands/ListFeatureFlagsCommand.php)
+has no tenant-selection or mutation option: the invoking runtime must already
+establish tenant context. Without it, the command exits with failure and
+`No tenant is in context. Set a tenant before listing feature flags.` An empty
+declared set succeeds (an explanatory table-mode message or `[]` in JSON).
+
 ## Discovery Contract
 
 Discovery is convention-based, centralized, deterministic, and ownership-aware. Adding a conforming Module integrates its supported surfaces without editing a central registration list.
