@@ -1,0 +1,4 @@
+{
+    "name": "alpha/sibling",
+    "extra": {"blb": {"module": "alpha/sibling"}}
+}
