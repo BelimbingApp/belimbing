@@ -36,35 +36,11 @@ final class GuardMutator
         $absoluteSource = $this->assertReadableFile($sourcePath, 'source');
         $absoluteTest = $this->assertReadableFile($testPath, 'test');
 
-        $original = file_get_contents($absoluteSource);
-        if ($original === false) {
-            throw new GuardMutationException("Unable to read source file [{$absoluteSource}].");
-        }
-
+        $original = $this->readFile($absoluteSource);
         [$lineNumber, $removedLine, $mutated] = $this->removeExactlyOneMatch($original, $lineOrPattern);
 
         $before = $this->invokeRunner($absoluteTest);
-        $after = null;
-        $restored = false;
-
-        try {
-            if (file_put_contents($absoluteSource, $mutated) === false) {
-                throw new GuardMutationException("Unable to write mutated source file [{$absoluteSource}].");
-            }
-
-            $after = $this->invokeRunner($absoluteTest);
-        } finally {
-            $written = file_put_contents($absoluteSource, $original);
-            $restored = $written !== false && file_get_contents($absoluteSource) === $original;
-        }
-
-        if (! $restored) {
-            throw new GuardMutationException("Failed to restore source file [{$absoluteSource}] after mutation.");
-        }
-
-        if ($after === null) {
-            throw new GuardMutationException("Mutation run did not complete for [{$absoluteSource}].");
-        }
+        $after = $this->mutateRunRestore($absoluteSource, $original, $mutated, $absoluteTest);
 
         $result = [
             'file' => $absoluteSource,
@@ -79,6 +55,23 @@ final class GuardMutator
         $result['markdown'] = $this->formatMarkdown($result);
 
         return $result;
+    }
+
+    /**
+     * @return array{passed: int|null, failed: int|null, assertions: int|null, exit_code: int, output: string}
+     */
+    private function mutateRunRestore(string $absoluteSource, string $original, string $mutated, string $absoluteTest): array
+    {
+        $this->writeFile($absoluteSource, $mutated);
+
+        try {
+            return $this->invokeRunner($absoluteTest);
+        } finally {
+            $this->writeFile($absoluteSource, $original);
+            if (file_get_contents($absoluteSource) !== $original) {
+                throw new GuardMutationException("Failed to restore source file [{$absoluteSource}] after mutation.");
+            }
+        }
     }
 
     /**
@@ -104,28 +97,8 @@ final class GuardMutator
      */
     private function removeExactlyOneMatch(string $contents, string $lineOrPattern): array
     {
-        $lines = preg_split("/\r\n|\n|\r/", $contents) ?: [];
-        $endsWithNewline = str_ends_with($contents, "\n") || str_ends_with($contents, "\r");
-
-        // A trailing empty segment from a final newline is not a real source line.
-        if ($endsWithNewline && $lines !== [] && end($lines) === '') {
-            array_pop($lines);
-        }
-
-        $matches = [];
-        if (ctype_digit($lineOrPattern)) {
-            $target = (int) $lineOrPattern;
-            if ($target < 1 || $target > count($lines)) {
-                throw new GuardMutationException("Line [{$lineOrPattern}] is out of range for the source file (".count($lines).' lines).');
-            }
-            $matches[] = $target;
-        } else {
-            foreach ($lines as $index => $line) {
-                if (str_contains($line, $lineOrPattern)) {
-                    $matches[] = $index + 1;
-                }
-            }
-        }
+        [$lines, $endsWithNewline] = $this->splitLines($contents);
+        $matches = $this->matchingLineNumbers($lines, $lineOrPattern);
 
         if ($matches === []) {
             throw new GuardMutationException("Pattern [{$lineOrPattern}] matched zero lines.");
@@ -146,6 +119,46 @@ final class GuardMutator
         }
 
         return [$lineNumber, $removedLine, $mutated];
+    }
+
+    /**
+     * @param  list<string>  $lines
+     * @return list<int>
+     */
+    private function matchingLineNumbers(array $lines, string $lineOrPattern): array
+    {
+        if (ctype_digit($lineOrPattern)) {
+            $target = (int) $lineOrPattern;
+            if ($target < 1 || $target > count($lines)) {
+                throw new GuardMutationException("Line [{$lineOrPattern}] is out of range for the source file (".count($lines).' lines).');
+            }
+
+            return [$target];
+        }
+
+        $matches = [];
+        foreach ($lines as $index => $line) {
+            if (str_contains($line, $lineOrPattern)) {
+                $matches[] = $index + 1;
+            }
+        }
+
+        return $matches;
+    }
+
+    /**
+     * @return array{0: list<string>, 1: bool}
+     */
+    private function splitLines(string $contents): array
+    {
+        $lines = preg_split("/\r\n|\n|\r/", $contents) ?: [];
+        $endsWithNewline = str_ends_with($contents, "\n") || str_ends_with($contents, "\r");
+
+        if ($endsWithNewline && $lines !== [] && end($lines) === '') {
+            array_pop($lines);
+        }
+
+        return [$lines, $endsWithNewline];
     }
 
     /**
@@ -236,6 +249,23 @@ final class GuardMutator
         }
 
         return $absolute;
+    }
+
+    private function readFile(string $absolute): string
+    {
+        $contents = file_get_contents($absolute);
+        if ($contents === false) {
+            throw new GuardMutationException("Unable to read source file [{$absolute}].");
+        }
+
+        return $contents;
+    }
+
+    private function writeFile(string $absolute, string $contents): void
+    {
+        if (file_put_contents($absolute, $contents) === false) {
+            throw new GuardMutationException("Unable to write source file [{$absolute}].");
+        }
     }
 
     private function absolutePath(string $path): string
