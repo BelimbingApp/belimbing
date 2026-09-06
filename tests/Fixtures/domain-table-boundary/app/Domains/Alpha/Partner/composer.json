@@ -1,0 +1,1 @@
+{"name":"alpha/partner","extra":{"blb":{"module":"alpha/partner","requires-modules":{"beta/provider":"*"}}}}

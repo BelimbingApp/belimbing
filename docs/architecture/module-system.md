@@ -185,6 +185,7 @@ The optional `extra.blb` manifest may declare:
 - `requires-modules`: hard Module dependencies and version constraints;
 - `optional-modules`: integrations that may be absent;
 - `publishes-events` and `consumes-events`: cross-Module event surfaces;
+- `shared-tables`: tables explicitly exported to directly requiring Modules for raw-query access;
 - `feature-flags`: map of stable flag identities to `{ default, description }` for per-tenant resolution through `App\Base\FeatureFlags\Services\FeatureFlags` (undeclared names refuse; `blb:feature-flags` lists the set).
 
 Manifests support inventory, dependency health, migration preflight, and feature-flag discovery. They do not replace Composer's PHP dependency resolution, provider independence, or runtime authorization.

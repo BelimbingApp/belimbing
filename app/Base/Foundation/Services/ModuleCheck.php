@@ -2,7 +2,6 @@
 
 namespace App\Base\Foundation\Services;
 
-use App\Base\Database\Models\TableRegistry;
 use App\Base\Foundation\ApplicationTopology;
 use App\Base\Foundation\ModuleManifest\ModuleManifest;
 use App\Base\Foundation\ModuleManifest\ModuleManifestReader;
@@ -21,7 +20,10 @@ use Illuminate\Contracts\Foundation\Application;
  */
 final class ModuleCheck
 {
-    public function __construct(private readonly Application $app) {}
+    public function __construct(
+        private readonly Application $app,
+        private readonly ModuleTableOwnershipScanner $tableOwnership,
+    ) {}
 
     /**
      * @return array{
@@ -372,28 +374,22 @@ final class ModuleCheck
      */
     private function tableCollisions(array $composition, array $roots): array
     {
-        $owners = [];
         $refusals = [];
+        $scopedRoots = array_intersect_key($roots, array_flip($composition));
 
-        foreach ($composition as $module) {
-            $path = $roots[$module] ?? null;
-            if ($path === null) {
+        foreach ($this->tableOwnership->scan($scopedRoots) as $table => $owners) {
+            $prior = $owners[0] ?? null;
+            if ($prior === null) {
                 continue;
             }
 
-            foreach (glob($path.DIRECTORY_SEPARATOR.'Database'.DIRECTORY_SEPARATOR.'Migrations'.DIRECTORY_SEPARATOR.'*.php') ?: [] as $file) {
-                foreach (TableRegistry::declaredTableNames($file) as $table) {
-                    $prior = $owners[$table] ?? null;
-                    if ($prior !== null && $prior !== $module) {
-                        $refusals[] = sprintf(
-                            'collision: table %s is created by %s and %s',
-                            $table,
-                            $prior,
-                            $module,
-                        );
-                    }
-                    $owners[$table] ??= $module;
-                }
+            foreach (array_slice($owners, 1) as $module) {
+                $refusals[] = sprintf(
+                    'collision: table %s is created by %s and %s',
+                    $table,
+                    $prior,
+                    $module,
+                );
             }
         }
 
@@ -520,17 +516,11 @@ final class ModuleCheck
     private function tablesFor(array $composition, array $roots): array
     {
         $tables = [];
+        $scopedRoots = array_intersect_key($roots, array_flip($composition));
 
-        foreach ($composition as $module) {
-            $path = $roots[$module] ?? null;
-            if ($path === null) {
-                continue;
-            }
-
-            foreach (glob($path.DIRECTORY_SEPARATOR.'Database'.DIRECTORY_SEPARATOR.'Migrations'.DIRECTORY_SEPARATOR.'*.php') ?: [] as $file) {
-                foreach (TableRegistry::declaredTableNames($file) as $table) {
-                    $tables[] = $module.': '.$table;
-                }
+        foreach ($this->tableOwnership->scan($scopedRoots) as $table => $owners) {
+            foreach ($owners as $module) {
+                $tables[] = $module.': '.$table;
             }
         }
 
