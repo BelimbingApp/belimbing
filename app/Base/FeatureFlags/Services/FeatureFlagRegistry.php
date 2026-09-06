@@ -19,6 +19,9 @@ final class FeatureFlagRegistry
     /** @var array<string, FeatureFlagDefinition>|null */
     private ?array $definitions = null;
 
+    /** @var array<string, list<FeatureFlagDefinition>>|null */
+    private ?array $declarations = null;
+
     public function __construct(
         private readonly ?ModuleManifestReader $reader = null,
     ) {}
@@ -29,6 +32,17 @@ final class FeatureFlagRegistry
     public function all(): array
     {
         return $this->definitions ??= $this->build();
+    }
+
+    /**
+     * Group every manifest declaration by flag for read-only diagnostics.
+     * Runtime resolution remains strict through all(), get(), and has().
+     *
+     * @return array<string, list<FeatureFlagDefinition>>
+     */
+    public function declarations(): array
+    {
+        return $this->declarations ??= $this->buildDeclarations();
     }
 
     public function get(string $flag): FeatureFlagDefinition
@@ -67,6 +81,7 @@ final class FeatureFlagRegistry
         }
         ksort($map);
         $this->definitions = $map;
+        $this->declarations = array_map(fn (FeatureFlagDefinition $definition): array => [$definition], $map);
     }
 
     /**
@@ -74,31 +89,47 @@ final class FeatureFlagRegistry
      */
     private function build(): array
     {
-        $reader = $this->reader ?? new ModuleManifestReader(
-            array_map(base_path(...), ApplicationTopology::relativeRoots()),
-        );
-
         $map = [];
-        foreach ($reader->all() as $manifest) {
-            $this->ingestManifest($manifest, $map);
+        foreach ($this->declarations() as $flag => $declarations) {
+            if (count($declarations) > 1) {
+                throw DuplicateFeatureFlagException::forFlag(
+                    $flag,
+                    $declarations[0]->module,
+                    $declarations[1]->module,
+                );
+            }
+            $map[$flag] = $declarations[0];
         }
-        ksort($map);
 
         return $map;
     }
 
     /**
-     * @param  array<string, FeatureFlagDefinition>  $map
+     * @return array<string, list<FeatureFlagDefinition>>
      */
-    private function ingestManifest(ModuleManifest $manifest, array &$map): void
+    private function buildDeclarations(): array
+    {
+        $reader = $this->reader ?? new ModuleManifestReader(
+            array_map(base_path(...), ApplicationTopology::relativeRoots()),
+        );
+        $grouped = [];
+
+        foreach ($reader->all() as $manifest) {
+            $this->ingestManifest($manifest, $grouped);
+        }
+        ksort($grouped);
+
+        return $grouped;
+    }
+
+    /**
+     * @param  array<string, list<FeatureFlagDefinition>>  $grouped
+     */
+    private function ingestManifest(ModuleManifest $manifest, array &$grouped): void
     {
         foreach ($manifest->featureFlags as $flag => $meta) {
             $flag = (string) $flag;
-            if (array_key_exists($flag, $map)) {
-                throw DuplicateFeatureFlagException::forFlag($flag, $map[$flag]->module, $manifest->module);
-            }
-
-            $map[$flag] = new FeatureFlagDefinition(
+            $grouped[$flag][] = new FeatureFlagDefinition(
                 flag: $flag,
                 default: (bool) ($meta['default'] ?? false),
                 module: $manifest->module !== '' ? $manifest->module : $manifest->name,

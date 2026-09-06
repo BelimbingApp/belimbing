@@ -12,8 +12,8 @@ use App\Base\FeatureFlags\Services\FeatureFlagDefinition;
 use App\Base\FeatureFlags\Services\FeatureFlagOverrideHistory;
 use App\Base\FeatureFlags\Services\FeatureFlagRegistry;
 use App\Base\FeatureFlags\Services\FeatureFlags;
-use App\Base\Tenancy\Contracts\TenantContext;
 use App\Base\Foundation\ModuleManifest\ModuleManifestReader;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\Company\Models\Company;
 use App\Core\User\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -293,7 +293,7 @@ it('shows duplicate manifest declarations as one conflict row naming both module
 
     try {
         app()->instance(FeatureFlagDeclarationInventory::class, new FeatureFlagDeclarationInventory(
-            new ModuleManifestReader([$root.'/app/Base']),
+            new FeatureFlagRegistry(new ModuleManifestReader([$root.'/app/Base'])),
             app(TenantContext::class),
         ));
 
@@ -307,7 +307,9 @@ it('shows duplicate manifest declarations as one conflict row naming both module
             })
             ->assertSee('Declared flags')
             ->assertSee('Conflict')
-            ->assertSeeInOrder(['base/one', 'base/two']);
+            ->assertSeeInOrder(['base/one', 'base/two'])
+            ->set('search', 'does-not-match')
+            ->assertViewHas('canManage', false);
     } finally {
         File::deleteDirectory($root);
     }
@@ -320,10 +322,11 @@ it('shows only the ambient tenant override on declared flags', function (): void
     ]);
 
     try {
-        $alpha = createTenant(['name' => 'Alpha declarations']);
+        $admin = createAdminUser();
+        $alphaId = app(TenantContext::class)->requireTenantId();
         $beta = createTenant(['name' => 'Beta declarations']);
         FeatureFlagOverride::query()->create([
-            'tenant_id' => $alpha->id,
+            'tenant_id' => $alphaId,
             'flag' => 'demo.tenant',
             'enabled' => false,
         ]);
@@ -332,13 +335,13 @@ it('shows only the ambient tenant override on declared flags', function (): void
             'flag' => 'demo.tenant',
             'enabled' => true,
         ]);
-        app(TenantContext::class)->set((int) $alpha->id);
+        app(TenantContext::class)->set($alphaId);
         app()->instance(FeatureFlagDeclarationInventory::class, new FeatureFlagDeclarationInventory(
-            new ModuleManifestReader([$root.'/app/Base']),
+            new FeatureFlagRegistry(new ModuleManifestReader([$root.'/app/Base'])),
             app(TenantContext::class),
         ));
 
-        Livewire::actingAs(createAdminUser())
+        Livewire::actingAs($admin)
             ->test(Index::class)
             ->assertViewHas('declaredRows', fn (array $rows): bool => count($rows) === 1
                 && $rows[0]['overridden'] === true
