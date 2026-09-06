@@ -23,9 +23,14 @@ test("Unit and Feature run concurrently, with neither failed lane cancelling the
     for (const suite of ["Unit", "Feature"]) {
         const command = step(suiteSteps(), "Run Tests (" + suite + ")");
         expect(command.if).toBe("matrix.suite == '" + suite + "'");
+        expect(command.env.MATRIX_SUITE).toContain("matrix.suite");
+        expect(command.env.TIMING_DIR).toBe("timing");
+        expect(command.run).toContain("scripts/ci/record-pest-timing.sh " + suite + " --");
         expect(command.run).toContain("--testsuite=" + suite + " --coverage-clover=coverage-" + suite.toLowerCase() + ".xml");
     }
-    expect(step(suiteSteps(), "Run Tests (Core, Domains, Extensions)").if).toBe("matrix.suite == 'Unit'");
+    const modules = step(suiteSteps(), "Run Tests (Core, Domains, Extensions)");
+    expect(modules.if).toBe("matrix.suite == 'Unit'");
+    expect(modules.run).toContain("scripts/ci/record-pest-timing.sh Core,Domains,Extensions --");
 });
 
 test("all expected reports are uploaded and downloaded by exact artifact name", () => {
@@ -33,9 +38,21 @@ test("all expected reports are uploaded and downloaded by exact artifact name", 
     expect(upload.with.path).toBe("coverage-*.xml");
     expect(upload.with["if-no-files-found"]).toBe("error");
     expect(upload.with.name).toContain("matrix.suite");
+    const timingUpload = step(suiteSteps(), "Upload suite timing");
+    expect(timingUpload.with.path).toBe("timing/*.json");
+    expect(timingUpload.with["if-no-files-found"]).toBe("error");
+    expect(timingUpload.with.name).toContain("platform-timing-");
     for (const suite of ["Unit", "Feature"]) {
         expect(step(gateSteps(), "Download " + suite + " coverage").with.name).toBe("platform-coverage-" + suite);
     }
+    const timingDownload = step(gateSteps(), "Download suite timing");
+    expect(timingDownload.with.pattern).toBe("platform-timing-*");
+    expect(timingDownload.with["merge-multiple"]).toBe(true);
+    expect(timingDownload.with.path).toBe("timing");
+    expect(step(gateSteps(), "Publish per-run timing summary").run)
+        .toContain("scripts/ci/aggregate-pest-timing.py timing");
+    expect(gateSteps().indexOf(step(gateSteps(), "Publish per-run timing summary")))
+        .toBeLessThan(gateSteps().indexOf(step(gateSteps(), "SonarCloud Scan")));
     expect(gateSteps().indexOf(step(gateSteps(), "Require all coverage reports")))
         .toBeLessThan(gateSteps().indexOf(step(gateSteps(), "SonarCloud Scan")));
 });
