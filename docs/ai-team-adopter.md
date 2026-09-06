@@ -18,3 +18,39 @@ this host-owned note stays outside its subtree.
 Documentation, plans and CI wiring need no reviewer only when the installed gate
 recognizes a trusted shape. If the prose policy and installed mechanism differ,
 keep the refusal visible and ask the steward to reconcile it at the source.
+
+
+## GitHub API rate-limit playbook
+
+On 2026-09-06, the shared account exhausted its GraphQL primary quota. For example, [Connector #191](https://github.com/BelimbingApp/blb-people-connector/pull/191) had an exact-head acceptance and green checks, but the landing script could not read the PR. The underlying error was `API rate limit already exceeded for user ID`; the script's shorter `cannot read PR` message was not a review rejection or an operational halt. The direct GraphQL response reported `remaining: 0` and reset at `2026-09-06T01:58:05Z` (09:58:05 Asia/Kuala_Lumpur). That is historical evidence, not a reusable reset schedule. A REST rate-limit summary looked unused during the same incident, so it did not establish that GraphQL reads could proceed.
+
+### Identify the exhausted API
+
+The following command paths were checked with GitHub CLI **2.74.1**. High-level commands can make several requests or short-circuit locally depending on selected fields; do not infer transport solely from the command's name.
+
+| Command family | Verified API dependency | Evidence |
+|---|---|---|
+| `gh issue create` | GraphQL creation mutation | Upstream [IssueCreate](https://github.com/cli/cli/blob/v2.74.1/api/queries_issue.go#L262); source inspection, no diagnostic issue created. |
+| `gh pr create` | GraphQL creation mutation and optional metadata mutations | Upstream [CreatePullRequest](https://github.com/cli/cli/blob/v2.74.1/api/queries_pr.go#L537); source inspection, no diagnostic PR created. |
+| `gh issue comment`, `gh pr comment` | New comments use the shared GraphQL comment mutation | Upstream [shared comment handler](https://github.com/cli/cli/blob/v2.74.1/pkg/cmd/pr/shared/commentable.go#L151) and [CommentCreate](https://github.com/cli/cli/blob/v2.74.1/api/queries_comments.go#L56); no diagnostic comment posted. |
+| `gh issue view`, `gh issue list`, `gh pr view`, `gh pr list` | Normal remote reads use GraphQL | Read-only request traces on this repository: issue view/list with `--json number`, PR view with `--json headRefOid`, PR list with `--json number`, all used `POST /graphql`. A PR-number-only view returned locally without a request, so that is not a transport probe. |
+| `gh pr checks` | GraphQL check queries | Read-only trace used `POST /graphql`; upstream [checks query](https://github.com/cli/cli/blob/v2.74.1/pkg/cmd/pr/checks/checks.go#L281). A watch can therefore keep consuming the shared quota. |
+| `gh api repos/BelimbingApp/belimbing/pulls/611` | REST | Read-only trace used `GET /repos/BelimbingApp/belimbing/pulls/611`. |
+| `gh api graphql` | GraphQL | Read-only `rateLimit` trace used `POST /graphql`. The [CLI manual](https://cli.github.com/manual/gh_api) defines the endpoint selection; `gh api` is not inherently REST. |
+
+Use the failed response's rate-limit headers when available. If they were lost by a wrapper, make one small diagnostic query with the same host and authentication context:
+
+```bash
+gh api graphql -f query='query { rateLimit { remaining resetAt used } }'
+```
+
+Use its `resetAt` for an exhausted primary quota. Do not repeatedly ask for quota or run a checks watch while waiting. For a secondary-limit response, honor `retry-after`; if absent, GitHub directs a wait of at least one minute and increasing backoff on repeated failures. These are distinct conditions: the incident's zero remaining points demonstrated primary exhaustion, regardless of a helper comment calling it secondary. See [GitHub's rate-limit guidance](https://docs.github.com/en/graphql/overview/rate-limits-and-query-limits-for-the-graphql-api).
+
+### Continue safely and resume once
+
+1. Save the PR number, exact accepted head, last known check result, error and reset time locally. Stop the failed polling loop and tell the steward once through an available channel; avoid turning one unavailable API into repeated board requests. Continue independent local work that does not require a new claim.
+2. REST can supply read-only situational information while its own limits permit. For example, the PR read above returns the live head and merge state; it does not replace the complete gate. Missing API data means **unknown**, never an empty review queue, a green check or proof that no halt exists.
+3. After the reset/backoff, re-read the PR once. If already merged, run cleanup. If still open, retry the canonical landing command at the accepted head; the script must revalidate checks, holds, closing references and review state. A changed head requires the normal workflow, not reuse of stale evidence.
+4. Do not edit claim/hold labels, force a merge, switch identities, waive failing checks, or replace the canonical gate with a hand-written REST merge to get around quota exhaustion.
+
+The deployment-local `/home/kiat/repo/laravel/.ai-team-steward-tick.sh` uses REST endpoints for its board/check scan and invokes the installed `land.sh` for landings. Its outer REST path does not make the invoked gate GraphQL-independent. That helper belongs to the appointed steward or explicitly assigned backstop, not ordinary authors; use the current role instructions for dispatch. It is not part of the mounted package and this note does not grant authority to run it. The [package workflow](ai-team/README.md#heartbeat-stopping-and-cleanup) remains the recovery boundary.
