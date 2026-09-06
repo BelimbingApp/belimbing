@@ -37,3 +37,24 @@ For comparison with a module-specific hand inventory, select that component and
 The command reports all three and their test references. Shared pagination or
 notification helpers stay separately visible rather than being mistaken for
 additional module-owned business actions.
+
+## CI ratchet (module-owned debt)
+
+Domain CI fails when a Domain's count of **module-owned** actions with no
+lexical test reference rises above the committed baseline in
+`tests/ci/livewire-actions-baselines/{domain-id}.json`.
+
+```bash
+php artisan blb:livewire-actions --domain=People \
+  --check-baseline=tests/ci/livewire-actions-baselines/people.json
+```
+
+When you cover existing debt, lower `module_owned_unreferenced` in the same PR:
+
+```bash
+php artisan blb:livewire-actions --domain=People \
+  --write-baseline=tests/ci/livewire-actions-baselines/people.json
+```
+
+The check still uses lexical references (not coverage). Raising a baseline is a
+deliberate debt increase and should be rare.
