@@ -1,0 +1,2959 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
+			identifier: larastan.noEnvCallsOutsideOfConfig
+			count: 6
+			path: app/Base/AI/Config/ai.php
+
+		-
+			message: '#^Call to function is_array\(\) with array\<string, mixed\> will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Base/AI/Console/Commands/AiCatalogSyncCommand.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>value" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Base/AI/DTO/ExecutionControls.php
+
+		-
+			message: '#^Method App\\Base\\AI\\Providers\\Help\\CloudflareAiGatewayHelp\:\:documentationUrl\(\) never returns null so it can be removed from the return type\.$#'
+			identifier: return.unusedType
+			count: 1
+			path: app/Base/AI/Providers/Help/CloudflareAiGatewayHelp.php
+
+		-
+			message: '#^Method App\\Base\\AI\\Providers\\Help\\CopilotProxyHelp\:\:documentationUrl\(\) never returns null so it can be removed from the return type\.$#'
+			identifier: return.unusedType
+			count: 1
+			path: app/Base/AI/Providers/Help/CopilotProxyHelp.php
+
+		-
+			message: '#^Method App\\Base\\AI\\Providers\\Help\\GithubCopilotHelp\:\:documentationUrl\(\) never returns null so it can be removed from the return type\.$#'
+			identifier: return.unusedType
+			count: 1
+			path: app/Base/AI/Providers/Help/GithubCopilotHelp.php
+
+		-
+			message: '#^Method App\\Base\\AI\\Providers\\Help\\LmStudioHelp\:\:documentationUrl\(\) never returns null so it can be removed from the return type\.$#'
+			identifier: return.unusedType
+			count: 1
+			path: app/Base/AI/Providers/Help/LmStudioHelp.php
+
+		-
+			message: '#^Method App\\Base\\AI\\Providers\\Help\\OllamaHelp\:\:documentationUrl\(\) never returns null so it can be removed from the return type\.$#'
+			identifier: return.unusedType
+			count: 1
+			path: app/Base/AI/Providers/Help/OllamaHelp.php
+
+		-
+			message: '#^Offset 0 on array\{list\<string\>\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/AI/Services/ModelCatalogQueryService.php
+
+		-
+			message: '#^Parameter &\$output by\-ref type of method App\\Base\\AI\\Services\\ModelCatalogQueryService\:\:pushOperator\(\) expects list\<string\>, non\-empty\-list\<string\|null\> given\.$#'
+			identifier: parameterByRef.type
+			count: 1
+			path: app/Base/AI/Services/ModelCatalogQueryService.php
+
+		-
+			message: '#^Left side of \|\| is always false\.$#'
+			identifier: booleanOr.leftAlwaysFalse
+			count: 1
+			path: app/Base/AI/Services/PdfToTextRunner.php
+
+		-
+			message: '#^PHPDoc tag @return with type Generator\<int, array\<string, mixed\>, mixed, mixed\> is incompatible with native type string\.$#'
+			identifier: return.phpDocType
+			count: 1
+			path: app/Base/AI/Services/Protocols/AbstractLlmProtocolClient.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>userMessage" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Base/AI/Services/Protocols/AbstractLlmProtocolClient.php
+
+		-
+			message: '#^Parameter &\$reasoningBlocks by\-ref type of method App\\Base\\AI\\Services\\Protocols\\AnthropicMessagesProtocolClient\:\:accumulateAnthropicContentBlock\(\) expects list\<array\<string, mixed\>\>, non\-empty\-list\<array\<mixed\>\> given\.$#'
+			identifier: parameterByRef.type
+			count: 1
+			path: app/Base/AI/Services/Protocols/AnthropicMessagesProtocolClient.php
+
+		-
+			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 3
+			path: app/Base/AI/Services/ProviderDiscoveryService.php
+
+		-
+			message: '#^Result of \|\| is always true\.$#'
+			identifier: booleanOr.alwaysTrue
+			count: 1
+			path: app/Base/AI/Services/ProviderDiscoveryService.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between null and null will always evaluate to true\.$#'
+			identifier: identical.alwaysTrue
+			count: 1
+			path: app/Base/AI/Services/ProviderDiscoveryService.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between mixed and null will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: app/Base/AI/Services/ProviderMapping/OpenAiRequestMapperHelpers.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between App\\Base\\AI\\Enums\\AiApiType\:\:AnthropicMessages and App\\Base\\AI\\Enums\\AiApiType\:\:AnthropicMessages will always evaluate to true\.$#'
+			identifier: identical.alwaysTrue
+			count: 1
+			path: app/Base/AI/Services/ProviderMapping/ProviderCapabilityRegistry.php
+
+		-
+			message: '#^Call to function is_string\(\) with ''application/json''\|''pi''\|''pi \(php\)''\|''responses…''\|''text/event\-stream'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Base/AI/Services/ProviderMapping/ProviderRequestHeaderResolver.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between ''application/json''\|''pi''\|''pi \(php\)''\|''responses…''\|''text/event\-stream'' and '''' will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: app/Base/AI/Services/ProviderMapping/ProviderRequestHeaderResolver.php
+
+		-
+			message: '#^Call to function is_array\(\) with array\<0\|1\|2, resource\> will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Base/AI/Services/ShellCommandRunner.php
+
+		-
+			message: '#^Expression on left side of \?\? is not nullable\.$#'
+			identifier: nullCoalesce.expr
+			count: 3
+			path: app/Base/AI/Services/WebFetchService.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between string and null will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: app/Base/AI/Services/WebFetchService.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\<array\{title\: string, url\: string, snippet\: string\}\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: app/Base/AI/Services/WebSearchService.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between mixed and null will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: app/Base/AI/Services/WebSearchService.php
+
+		-
+			message: '#^Variable \$excerpts on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.variable
+			count: 1
+			path: app/Base/AI/Services/WebSearchService.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Base/Audit/DTO/RequestContext.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>tenantId" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Base/Audit/DTO/RequestContext.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditAction\:\:\$is_retained\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Audit/Livewire/AuditLog/Actions.php
+
+		-
+			message: '#^Offset ''id'' on array\{name\: string, id\: int\|string, identifier\?\: string\|null\} in isset\(\) always exists and is not nullable\.$#'
+			identifier: isset.offset
+			count: 1
+			path: app/Base/Audit/Livewire/AuditLog/Concerns/InteractsWithSourceHistory.php
+
+		-
+			message: '#^Offset ''name'' on array\{name\: string, id\: int\|string, identifier\?\: string\|null\} in isset\(\) always exists and is not nullable\.$#'
+			identifier: isset.offset
+			count: 1
+			path: app/Base/Audit/Livewire/AuditLog/Concerns/InteractsWithSourceHistory.php
+
+		-
+			message: '#^Call to function method_exists\(\) with \$this\(App\\Base\\Audit\\Livewire\\AuditLog\\Mutations\) and ''resetPage'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Base/Audit/Livewire/AuditLog/Mutations.php
+
+		-
+			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Audit\\Models\\AuditAction\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
+			identifier: property.phpDocType
+			count: 1
+			path: app/Base/Audit/Models/AuditAction.php
+
+		-
+			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Audit\\Models\\AuditMutation\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
+			identifier: property.phpDocType
+			count: 1
+			path: app/Base/Audit/Models/AuditMutation.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditAction\:\:\$actor_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditDomainLifecycleLedger.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditAction\:\:\$actor_type\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditDomainLifecycleLedger.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditAction\:\:\$occurred_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditDomainLifecycleLedger.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditAction\:\:\$payload\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditDomainLifecycleLedger.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditAction\:\:\$event\.$#'
+			identifier: property.notFound
+			count: 6
+			path: app/Base/Audit/Services/AuditLogPresenter.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditAction\:\:\$payload\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditLogPresenter.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditAction\:\:\$url\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditLogPresenter.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$auditable_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditLogPresenter.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$auditable_type\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditLogPresenter.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$new_values\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditLogPresenter.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$old_values\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditLogPresenter.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$subject_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditLogPresenter.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$subject_identifier\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditLogPresenter.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$subject_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditLogPresenter.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$actor_role\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditSourceHistory.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$auditable_id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Audit/Services/AuditSourceHistory.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$auditable_type\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Audit/Services/AuditSourceHistory.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$event\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Base/Audit/Services/AuditSourceHistory.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$occurred_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditSourceHistory.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$source\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditSourceHistory.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$subject_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditSourceHistory.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$subject_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditSourceHistory.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$trace_id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Audit/Services/AuditSourceHistory.php
+
+		-
+			message: '#^Call to an undefined method App\\Base\\Audit\\Services\\AuditSourceHistory\:\:lowerCoalescedExpression\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditSourceHistory.php
+
+		-
+			message: '#^Offset ''id'' on array\{name\: string, id\: int\|string, identifier\?\: string\|null\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Audit/Services/AuditSourceHistory.php
+
+		-
+			message: '#^Offset ''name'' on array\{name\: string, id\: int\|string, identifier\?\: string\|null\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Audit/Services/AuditSourceHistory.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditAction\:\:\$actor_role\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditTraceTimeline.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditAction\:\:\$event\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditTraceTimeline.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditAction\:\:\$ip_address\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditTraceTimeline.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditAction\:\:\$occurred_at\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Audit/Services/AuditTraceTimeline.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditAction\:\:\$url\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditTraceTimeline.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditAction\:\:\$user_agent\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditTraceTimeline.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$actor_role\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditTraceTimeline.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$auditable_type\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditTraceTimeline.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$event\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Base/Audit/Services/AuditTraceTimeline.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$occurred_at\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Audit/Services/AuditTraceTimeline.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$source\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditTraceTimeline.php
+
+		-
+			message: '#^Parameter \#1 \$array of function usort contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 1
+			path: app/Base/Audit/Services/AuditTraceTimeline.php
+
+		-
+			message: '#^Parameter \#2 \$callback of function usort contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 1
+			path: app/Base/Audit/Services/AuditTraceTimeline.php
+
+		-
+			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$company_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Authz/Database/Seeders/Dev/DevAuthzCompanyAssignmentSeeder.php
+
+		-
+			message: '#^Match arm comparison between ''module'' and ''module'' is always true\.$#'
+			identifier: match.alwaysTrue
+			count: 2
+			path: app/Base/Authz/Livewire/Capabilities/Index.php
+
+		-
+			message: '#^Parameter \#1 \$capabilities of method App\\Base\\Authz\\Livewire\\Capabilities\\Index\:\:sortCapabilities\(\) expects Illuminate\\Support\\Collection\<int, object\>, Illuminate\\Support\\Collection\<string, object\{key\: string, domain\: string, resource\: string, action\: string, module\: string\}&stdClass\> given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Base/Authz/Livewire/Capabilities/Index.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\Role\:\:\$code\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Authz/Livewire/Roles/Show.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\Role\:\:\$company_id\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Base/Authz/Livewire/Roles/Show.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\Role\:\:\$is_system\.$#'
+			identifier: property.notFound
+			count: 7
+			path: app/Base/Authz/Livewire/Roles/Show.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\Role\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Authz/Livewire/Roles/Show.php
+
+		-
+			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$company_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Authz/Livewire/Roles/Show.php
+
+		-
+			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$email\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Authz/Livewire/Roles/Show.php
+
+		-
+			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 4
+			path: app/Base/Authz/Livewire/Roles/Show.php
+
+		-
+			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$pivot_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Authz/Livewire/Roles/Show.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$capability_key\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Authz/Livewire/Roles/Show.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Authz/Livewire/Roles/Show.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Base/Authz/Livewire/Roles/Show.php
+
+		-
+			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Authz\\Models\\DecisionLog\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
+			identifier: property.phpDocType
+			count: 1
+			path: app/Base/Authz/Models/DecisionLog.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\PrincipalCapability\:\:\$principal_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Authz/Models/PrincipalCapability.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\PrincipalCapability\:\:\$principal_type\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Authz/Models/PrincipalCapability.php
+
+		-
+			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Authz\\Models\\PrincipalCapability\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
+			identifier: property.phpDocType
+			count: 1
+			path: app/Base/Authz/Models/PrincipalCapability.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\PrincipalRole\:\:\$principal_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Authz/Models/PrincipalRole.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\PrincipalRole\:\:\$principal_type\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Authz/Models/PrincipalRole.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\PrincipalRole\:\:\$role_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Authz/Models/PrincipalRole.php
+
+		-
+			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Authz\\Models\\PrincipalRole\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
+			identifier: property.phpDocType
+			count: 1
+			path: app/Base/Authz/Models/PrincipalRole.php
+
+		-
+			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Authz\\Models\\Role\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
+			identifier: property.phpDocType
+			count: 1
+			path: app/Base/Authz/Models/Role.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between int and null will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: app/Base/Authz/Models/Role.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\RoleCapability\:\:\$role_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Authz/Models/RoleCapability.php
+
+		-
+			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Authz\\Models\\RoleCapability\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
+			identifier: property.phpDocType
+			count: 1
+			path: app/Base/Authz/Models/RoleCapability.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\PrincipalCapability\:\:\$capability_key\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Authz/Services/EffectivePermissions.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\PrincipalCapability\:\:\$is_allowed\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Authz/Services/EffectivePermissions.php
+
+		-
+			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Authz/Services/ImpersonationManager.php
+
+		-
+			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Base/Dashboard/Services/DashboardLayout.php
+
+		-
+			message: '#^Trait App\\Base\\Database\\Concerns\\BelongsToCompany is used zero times and is not analysed\.$#'
+			identifier: trait.unused
+			count: 1
+			path: app/Base/Database/Concerns/BelongsToCompany.php
+
+		-
+			message: '#^Trait App\\Base\\Database\\Concerns\\BelongsToCompanyAndEmployee is used zero times and is not analysed\.$#'
+			identifier: trait.unused
+			count: 1
+			path: app/Base/Database/Concerns/BelongsToCompanyAndEmployee.php
+
+		-
+			message: '#^Trait App\\Base\\Database\\Concerns\\BelongsToEmployee is used zero times and is not analysed\.$#'
+			identifier: trait.unused
+			count: 1
+			path: app/Base/Database/Concerns/BelongsToEmployee.php
+
+		-
+			message: '#^Trait App\\Base\\Database\\Concerns\\HasActiveInactiveStatus is used zero times and is not analysed\.$#'
+			identifier: trait.unused
+			count: 1
+			path: app/Base/Database/Concerns/HasActiveInactiveStatus.php
+
+		-
+			message: '#^Trait App\\Base\\Database\\Concerns\\HasCompanyScopedExternalLifecycle is used zero times and is not analysed\.$#'
+			identifier: trait.unused
+			count: 1
+			path: app/Base/Database/Concerns/HasCompanyScopedExternalLifecycle.php
+
+		-
+			message: '#^Trait App\\Base\\Database\\Concerns\\HasEffectiveDateRange is used zero times and is not analysed\.$#'
+			identifier: trait.unused
+			count: 1
+			path: app/Base/Database/Concerns/HasEffectiveDateRange.php
+
+		-
+			message: '#^Trait App\\Base\\Database\\Concerns\\TracksExternalSource is used zero times and is not analysed\.$#'
+			identifier: trait.unused
+			count: 1
+			path: app/Base/Database/Concerns/TracksExternalSource.php
+
+		-
+			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
+			identifier: larastan.noEnvCallsOutsideOfConfig
+			count: 3
+			path: app/Base/Database/Config/backup.php
+
+		-
+			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
+			identifier: larastan.noEnvCallsOutsideOfConfig
+			count: 3
+			path: app/Base/Database/Config/data_share.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$offer_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Console/Commands/FetchDataShareTransferOfferCommand.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$package_id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Database/Console/Commands/FetchDataShareTransferOfferCommand.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$package_sha256\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Console/Commands/FetchDataShareTransferOfferCommand.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Console/Commands/FetchDataShareTransferOfferCommand.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$package_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Console/Commands/InspectDataSharePackageCommand.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$package_path\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Console/Commands/InspectDataSharePackageCommand.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$seeder_class\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Console/Commands/MigrateCommand.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:markAsCompleted\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Base/Database/Console/Commands/MigrateCommand.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:markAsFailed\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Base/Database/Console/Commands/MigrateCommand.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:markAsRunning\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Base/Database/Console/Commands/MigrateCommand.php
+
+		-
+			message: '#^Negated boolean expression is always true\.$#'
+			identifier: booleanNot.alwaysTrue
+			count: 1
+			path: app/Base/Database/Console/Commands/MigrateCommand.php
+
+		-
+			message: '#^Result of \|\| is always true\.$#'
+			identifier: booleanOr.alwaysTrue
+			count: 2
+			path: app/Base/Database/Console/Commands/MigrateCommand.php
+
+		-
+			message: '#^Unreachable statement \- code above always terminates\.$#'
+			identifier: deadCode.unreachable
+			count: 1
+			path: app/Base/Database/Console/Commands/MigrateCommand.php
+
+		-
+			message: '#^Call to function is_array\(\) with array\<int, string\|null\> will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Base/Database/Console/Commands/MirrorTablesCommand.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlan\:\:\$plan_hash\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Database/Console/Commands/PlanDataSharePackageCommand.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlan\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Database/Console/Commands/PlanDataSharePackageCommand.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlan\:\:\$summary\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Database/Console/Commands/PlanDataSharePackageCommand.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$package_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Console/Commands/PlanDataSharePackageCommand.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$package_sha256\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Console/Commands/PlanDataSharePackageCommand.php
+
+		-
+			message: '#^Offset ''dev'' on array\{0\: int, 1\: int, 2\: int, 3\: int, 4\: int, 5\: int, 6\: int, 7\: int, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Database/Console/Commands/StageBackupCommand.php
+
+		-
+			message: '#^Offset ''ino'' on array\{0\: int, 1\: int, 2\: int, 3\: int, 4\: int, 5\: int, 6\: int, 7\: int, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Database/Console/Commands/StageBackupCommand.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$expires_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/DTO/DataShare/DataSharePackageExpectation.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$offer_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/DTO/DataShare/DataSharePackageExpectation.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$package_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/DTO/DataShare/DataSharePackageExpectation.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$package_sha256\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/DTO/DataShare/DataSharePackageExpectation.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$scope_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/DTO/DataShare/DataSharePackageExpectation.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$source_instance_id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Database/DTO/DataShare/DataSharePackageExpectation.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$source_role\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/DTO/DataShare/DataSharePackageExpectation.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$bytes\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Database/Http/Controllers/DownloadDataShareTransferOfferController.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$offer_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Http/Controllers/DownloadDataShareTransferOfferController.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$package_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Http/Controllers/DownloadDataShareTransferOfferController.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$package_path\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Base/Database/Http/Controllers/DownloadDataShareTransferOfferController.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$package_sha256\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Http/Controllers/DownloadDataShareTransferOfferController.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between resource\|null and false will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: app/Base/Database/Http/Controllers/DownloadDataShareTransferOfferController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>backupId" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Base/Database/Livewire/Backups/Index.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>encryptionMode" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Base/Database/Livewire/Backups/Index.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>sizeBytes" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Base/Database/Livewire/Backups/Index.php
+
+		-
+			message: '#^Offset ''message'' on \*NEVER\* on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 2
+			path: app/Base/Database/Livewire/DataShare/Concerns/TestsAndPreparesMirrorConnection.php
+
+		-
+			message: '#^Offset ''reachable'' on array\{configured\: bool, available\: bool, reachable\: bool, driver\: string\|null, local_role\: string\|null, remote_role\: string\|null, server_version\: string\|null, pg_dump_version\: string\|null, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 2
+			path: app/Base/Database/Livewire/DataShare/Concerns/TestsAndPreparesMirrorConnection.php
+
+		-
+			message: '#^Call to function is_array\(\) with list\<non\-falsy\-string\> will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Base/Database/Livewire/DataShare/Concerns/ValidatesDataShareSettings.php
+
+		-
+			message: '#^Offset ''host'' on array\{scheme\?\: string, host\: string, port\?\: int\<0, 65535\>, user\?\: string, pass\?\: string, path\?\: string, query\?\: string, fragment\?\: string\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Database/Livewire/DataShare/Concerns/ValidatesDataShareSettings.php
+
+		-
+			message: '#^Offset ''user'' on array\{scheme\?\: string, host\: string, port\?\: int\<0, 65535\>, user\: string, pass\?\: string, path\?\: string, query\?\: string, fragment\?\: string\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Database/Livewire/DataShare/Concerns/ValidatesDataShareSettings.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlan\:\:\$plan_hash\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Database/Livewire/DataShare/Index.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlan\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/DataShare/Index.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$expires_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/DataShare/Index.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$metadata\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/DataShare/Index.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$offer_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/DataShare/Index.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$package_id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Database/Livewire/DataShare/Index.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$package_sha256\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Database/Livewire/DataShare/Index.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$received_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/DataShare/Index.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$scope_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/DataShare/Index.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$source_instance_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/DataShare/Index.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/DataShare/Index.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$bytes\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/DataShare/Index.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$download_count\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/DataShare/Index.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$expires_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/DataShare/Index.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$last_downloaded_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/DataShare/Index.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$max_downloads\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/DataShare/Index.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$offer_id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Database/Livewire/DataShare/Index.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$package_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/DataShare/Index.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$package_sha256\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/DataShare/Index.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$revoked_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/DataShare/Index.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$scope_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/DataShare/Index.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$source_instance_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/DataShare/Index.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$source_role\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/DataShare/Index.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/DataShare/Index.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$updated_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/DataShare/Index.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/DataShare/Index.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$plan_hash\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/DataShare/Index.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/DataShare/Index.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$summary\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/DataShare/Index.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Base\\Database\\Models\\DataShareReceipt\>\:\:map\(\) contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 1
+			path: app/Base/Database/Livewire/DataShare/Index.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Base\\Database\\Models\\DataShareTransferOffer\>\:\:map\(\) contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 1
+			path: app/Base/Database/Livewire/DataShare/Index.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Livewire\\DataShare\\Settings\:\:\$hasSavedSupabaseAccessToken\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/DataShare/Settings.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Livewire\\DataShare\\Settings\:\:\$savedSupabaseProject\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Database/Livewire/DataShare/Settings.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\TableRegistry\:\:\$schema_state\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/DatabaseTables/Index.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\TableRegistry\:\:\$source_declared\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/DatabaseTables/Index.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:transform\(\) expects callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: App\\Base\\Database\\Models\\TableRegistry, Closure\(App\\Base\\Database\\Models\\TableRegistry\)\: App\\Base\\Database\\Models\\TableRegistry given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Base/Database/Livewire/DatabaseTables/Index.php
+
+		-
+			message: '#^Access to property \$id on an unknown class App\\Base\\Database\\Livewire\\DatabaseTables\\User\.$#'
+			identifier: class.notFound
+			count: 1
+			path: app/Base/Database/Livewire/DatabaseTables/Show.php
+
+		-
+			message: '#^Class App\\Base\\Database\\Livewire\\DatabaseTables\\User not found\.$#'
+			identifier: class.notFound
+			count: 1
+			path: app/Base/Database/Livewire/DatabaseTables/Show.php
+
+		-
+			message: '#^Access to an undefined property App\\Core\\AI\\Models\\AiProvider\:\:\$base_url\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/Queries/Show.php
+
+		-
+			message: '#^Access to an undefined property App\\Core\\AI\\Models\\AiProvider\:\:\$connection_config\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/Queries/Show.php
+
+		-
+			message: '#^Access to an undefined property App\\Core\\AI\\Models\\AiProvider\:\:\$credentials\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/Queries/Show.php
+
+		-
+			message: '#^Access to an undefined property App\\Core\\AI\\Models\\AiProvider\:\:\$display_name\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Database/Livewire/Queries/Show.php
+
+		-
+			message: '#^Access to an undefined property App\\Core\\AI\\Models\\AiProvider\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Database/Livewire/Queries/Show.php
+
+		-
+			message: '#^Access to an undefined property App\\Core\\AI\\Models\\AiProviderModel\:\:\$model_id\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Base/Database/Livewire/Queries/Show.php
+
+		-
+			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$email\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/Queries/Show.php
+
+		-
+			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Base/Database/Livewire/Queries/Show.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Core\\User\\Models\\User\>\:\:map\(\) contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 1
+			path: app/Base/Database/Livewire/Queries/Show.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>description" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Base/Database/Livewire/Queries/Show.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Base/Database/Livewire/Queries/Show.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>prompt" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Base/Database/Livewire/Queries/Show.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>sql_query" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Base/Database/Livewire/Queries/Show.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\TableRegistry\:\:\$schema_state\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/SchemaIncubation/Index.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\TableRegistry\:\:\$source_declared\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Livewire/SchemaIncubation/Index.php
+
+		-
+			message: '#^Offset ''source_declared'' on array\{state\: string, source_declared\: bool\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 3
+			path: app/Base/Database/Livewire/SchemaIncubation/Index.php
+
+		-
+			message: '#^Offset ''state'' on array\{state\: string, source_declared\: bool\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Database/Livewire/SchemaIncubation/Index.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\<string\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: app/Base/Database/Livewire/SchemaIncubation/Index.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:transform\(\) expects callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: App\\Base\\Database\\Models\\TableRegistry, Closure\(App\\Base\\Database\\Models\\TableRegistry\)\: App\\Base\\Database\\Models\\TableRegistry given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Base/Database/Livewire/SchemaIncubation/Index.php
+
+		-
+			message: '#^PHPDoc type array\<string\> of property App\\Base\\Database\\Models\\SeederRegistry\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
+			identifier: property.phpDocType
+			count: 1
+			path: app/Base/Database/Models/SeederRegistry.php
+
+		-
+			message: '#^PHPDoc type array\<string\> of property App\\Base\\Database\\Models\\TableRegistry\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
+			identifier: property.phpDocType
+			count: 1
+			path: app/Base/Database/Models/TableRegistry.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between non\-empty\-list\<string\> and array\{\} will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: app/Base/Database/Models/TableRegistry.php
+
+		-
+			message: '#^Access to an undefined property App\\Core\\Company\\Models\\Company\:\:\$tenant_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Seeders/DevSeeder.php
+
+		-
+			message: '#^Anonymous function with return type void returns null but should not return anything\.$#'
+			identifier: return.void
+			count: 1
+			path: app/Base/Database/Seeders/DevSeeder.php
+
+		-
+			message: '#^Dead catch \- SodiumException is never thrown in the try block\.$#'
+			identifier: catch.neverThrown
+			count: 1
+			path: app/Base/Database/Services/Backup/Encryption/AppKeyEncryption.php
+
+		-
+			message: '#^PHPDoc tag @param references unknown parameter\: \$config$#'
+			identifier: parameter.notFound
+			count: 1
+			path: app/Base/Database/Services/Backup/Encryption/EncryptionModeRegistry.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\<string\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: app/Base/Database/Services/Backup/Encryption/EncryptionModeRegistry.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationRun\:\:\$direction\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationRun\:\:\$is_forced\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationRun\:\:\$local_instance_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationRun\:\:\$operation_type\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationRun\:\:\$remote_instance_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationRun\:\:\$source\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationRun\:\:\$total_rows_affected\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationRun\:\:\$transfer_mode\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationTableSummary\:\:\$rows_deleted\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationTableSummary\:\:\$rows_inserted\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationTableSummary\:\:\$rows_updated\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
+
+		-
+			message: '#^Call to function method_exists\(\) with App\\Core\\User\\Models\\User and ''getCompanyId'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
+
+		-
+			message: '#^Call to function method_exists\(\) with App\\Core\\User\\Models\\User and ''principalType'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
+
+		-
+			message: '#^Instanceof between string and App\\Base\\Database\\Enums\\DataOperationStatus will always evaluate to false\.$#'
+			identifier: instanceof.alwaysFalse
+			count: 1
+			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
+
+		-
+			message: '#^Method App\\Base\\Database\\Services\\DataOperation\\LedgerDataOperationRecorder\:\:projectSemanticAction\(\) is unused\.$#'
+			identifier: method.unused
+			count: 1
+			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
+
+		-
+			message: '#^Method App\\Base\\Database\\Services\\DataOperation\\LedgerDataOperationRecorder\:\:sumAffected\(\) is unused\.$#'
+			identifier: method.unused
+			count: 1
+			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
+
+		-
+			message: '#^Result of \|\| is always true\.$#'
+			identifier: booleanOr.alwaysTrue
+			count: 1
+			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between string and App\\Base\\Database\\Enums\\DataOperationStatus\:\:Running will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 3
+			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between null and null will always evaluate to true\.$#'
+			identifier: identical.alwaysTrue
+			count: 1
+			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
+
+		-
+			message: '#^Unreachable statement \- code above always terminates\.$#'
+			identifier: deadCode.unreachable
+			count: 3
+			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>value" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between non\-empty\-array\<mixed, mixed\> and array\{\} will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: app/Base/Database/Services/DataShare/Concerns/ValidatesDiagnosticPackages.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlan\:\:\$plan_hash\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$package_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$scope_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$source_instance_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$target_instance_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$bytes\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$expires_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$offer_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$package_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$package_sha256\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$published_by_actor_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$scope_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$source_instance_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$package_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$scope_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$source_instance_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$target_instance_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$package_path\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Database/Services/DataShare/DataShareImportPlanner.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$package_sha256\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Base/Database/Services/DataShare/DataShareImportPlanner.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between resource\|null and false will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareImportPlanner.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlan\:\:\$destination_fingerprint\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataSharePackageApplier.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlan\:\:\$plan_hash\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Database/Services/DataShare/DataSharePackageApplier.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlan\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataSharePackageApplier.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlan\:\:\$summary\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataSharePackageApplier.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlanAction\:\:\$action\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataSharePackageApplier.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlanAction\:\:\$destination_fingerprint\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataSharePackageApplier.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlanAction\:\:\$incoming_fingerprint\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataSharePackageApplier.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlanAction\:\:\$primary_key_hash\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Database/Services/DataShare/DataSharePackageApplier.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlanAction\:\:\$scope_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataSharePackageApplier.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlanAction\:\:\$sequence\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataSharePackageApplier.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlanAction\:\:\$table_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataSharePackageApplier.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$package_id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Database/Services/DataShare/DataSharePackageApplier.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$package_path\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Database/Services/DataShare/DataSharePackageApplier.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$package_sha256\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Database/Services/DataShare/DataSharePackageApplier.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataSharePackageApplier.php
+
+		-
+			message: '#^Parameter \#1 \$receipt of static method App\\Base\\Database\\DTO\\DataShare\\DataSharePackageExpectation\:\:fromReceipt\(\) expects App\\Base\\Database\\Models\\DataShareReceipt, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataSharePackageApplier.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between resource\|null and false will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataSharePackageApplier.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between resource\|null and false will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataSharePackageExporter.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$offer_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataSharePackageInbox.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$package_sha256\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataSharePackageInbox.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$scope_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataSharePackageInbox.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$source_instance_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataSharePackageInbox.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$target_instance_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataSharePackageInbox.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between resource\|null and false will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataSharePackageInbox.php
+
+		-
+			message: '#^Offset ''schema'' on non\-empty\-array\<string, mixed\> on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataSharePackageReader.php
+
+		-
+			message: '#^Parameter \#1 \$context of function hash_final expects HashContext, resource given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataSharePackageReader.php
+
+		-
+			message: '#^Parameter \#1 \$context of function hash_update expects HashContext, resource given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Base/Database/Services/DataShare/DataSharePackageReader.php
+
+		-
+			message: '#^Parameter \#3 \$payloadHash of method App\\Base\\Database\\Services\\DataShare\\DataSharePackageReader\:\:readPayloadLine\(\) expects resource, HashContext given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataSharePackageReader.php
+
+		-
+			message: '#^Parameter \#4 \$packageHash of method App\\Base\\Database\\Services\\DataShare\\DataSharePackageReader\:\:readPayloadLine\(\) expects resource, HashContext given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataSharePackageReader.php
+
+		-
+			message: '#^Parameter \#5 \$payloadHash of method App\\Base\\Database\\Services\\DataShare\\DataSharePackageReader\:\:validatePayloadCompletion\(\) expects resource, HashContext given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataSharePackageReader.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$metadata\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataSharePackageRetention.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$received_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataSharePackageRetention.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataSharePackageRetention.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between resource\|null and false will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 2
+			path: app/Base/Database/Services/DataShare/DataSharePackageVerifier.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between resource\|null and false will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareRecoveryPoint.php
+
+		-
+			message: '#^Call to function is_array\(\) with list\<string\> will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareRedactionAdvisor.php
+
+		-
+			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareRedactionAdvisor.php
+
+		-
+			message: '#^Unused result of "xor" operator\.$#'
+			identifier: logicalXor.resultUnused
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareSchemaCompatibility.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$bytes\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$download_count\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$expires_at\.$#'
+			identifier: property.notFound
+			count: 5
+			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$last_downloaded_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$max_downloads\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$metadata\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$offer_id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$package_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$package_sha256\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$scope_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$secret\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$secret_hash\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$source_instance_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$source_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$source_role\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 7
+			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
+
+		-
+			message: '#^If condition is always false\.$#'
+			identifier: if.alwaysFalse
+			count: 1
+			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\<array\<string, mixed\>\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: app/Base/Database/Services/DataShare/DependencyClosureResolver.php
+
+		-
+			message: '#^Offset ''package_id'' on non\-empty\-array\<mixed\> on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Database/Services/DataShare/DiagnosticRowCapture.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\<int\|string\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: app/Base/Database/Services/DataShare/DiagnosticRowCapture.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareMirrorObservation\:\:\$acknowledged_generation\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/Mirror/DataShareMirrorCatalog.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareMirrorObservation\:\:\$observed_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataShare/Mirror/DataShareMirrorCatalog.php
+
+		-
+			message: '#^Offset ''unique'' on array\{name\: string, columns\: list\<string\>, type\: string, unique\: bool, primary\: bool\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Database/Services/DataShare/Mirror/DataShareMirrorDependencyInspector.php
+
+		-
+			message: '#^Offset ''action'' on array\{table\: string, action\: string, local_rows\?\: int, remote_rows\?\: int\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Database/Services/DataShare/Mirror/DataShareMirrorManager.php
+
+		-
+			message: '#^Offset ''table'' on array\{table\: string, action\: string, local_rows\?\: int, remote_rows\?\: int\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Database/Services/DataShare/Mirror/DataShareMirrorManager.php
+
+		-
+			message: '#^Template type TReturn of method App\\Base\\Database\\Services\\DataShare\\Mirror\\DataShareMirrorOperationLock\:\:run\(\) is not referenced in a parameter\.$#'
+			identifier: method.templateTypeNotInParameter
+			count: 1
+			path: app/Base/Database/Services/DataShare/Mirror/DataShareMirrorOperationLock.php
+
+		-
+			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Base/Database/Services/DataShare/Mirror/DataShareMirrorReviewer.php
+
+		-
+			message: '#^Parameter \#1 \$array \(non\-empty\-list\<non\-falsy\-string\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: app/Base/Database/Services/DataShare/Mirror/DataShareMirrorReviewer.php
+
+		-
+			message: '#^Right side of \|\| is always false\.$#'
+			identifier: booleanOr.rightAlwaysFalse
+			count: 1
+			path: app/Base/Database/Services/DataShare/Mirror/DataShareMirrorReviewer.php
+
+		-
+			message: '#^Offset ''nullable'' on array\{name\: string, type\: string, type_name\: string, collation\: string\|null, nullable\: bool, default\: mixed, auto_increment\: bool, comment\: string\|null, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Database/Services/DataShare/Mirror/DataShareMirrorSchemaComparator.php
+
+		-
+			message: '#^Offset ''primary'' on \*NEVER\* on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Database/Services/DataShare/Mirror/DataShareMirrorSchemaComparator.php
+
+		-
+			message: '#^Offset ''primary'' on array\{name\: string, columns\: list\<string\>, type\: string, unique\: bool, primary\: bool\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 2
+			path: app/Base/Database/Services/DataShare/Mirror/DataShareMirrorSchemaComparator.php
+
+		-
+			message: '#^Offset ''type'' on array\{name\: string, type\: string, type_name\: string, collation\: string\|null, nullable\: bool, default\: mixed, auto_increment\: bool, comment\: string\|null, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Database/Services/DataShare/Mirror/DataShareMirrorSchemaComparator.php
+
+		-
+			message: '#^Offset ''type_name'' on \*NEVER\* on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Database/Services/DataShare/Mirror/DataShareMirrorSchemaComparator.php
+
+		-
+			message: '#^Offset ''unique'' on array\{name\: string, columns\: list\<string\>, type\: string, unique\: bool, primary\: bool\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 2
+			path: app/Base/Database/Services/DataShare/Mirror/DataShareMirrorSchemaComparator.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\<string\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 4
+			path: app/Base/Database/Services/DataShare/Mirror/DataShareMirrorSchemaComparator.php
+
+		-
+			message: '#^Offset ''auto_increment'' on array\{name\: string, type\: string, type_name\: string, collation\: string\|null, nullable\: bool, default\: mixed, auto_increment\: bool, comment\: string\|null, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Database/Services/DataShare/Mirror/PortableDataShareMirrorEngine.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\<string\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: app/Base/Database/Services/DataShare/Mirror/PortableDataShareMirrorEngine.php
+
+		-
+			message: '#^Offset ''type'' on array\{name\: string, type\: string, type_name\: string, collation\: string\|null, nullable\: bool, default\: mixed, auto_increment\: bool, comment\: string\|null, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Database/Services/DataShare/Mirror/PortableDataShareMirrorValueCodec.php
+
+		-
+			message: '#^Offset ''type_name'' on \*NEVER\* on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Database/Services/DataShare/Mirror/PortableDataShareMirrorValueCodec.php
+
+		-
+			message: '#^Instanceof between App\\Base\\Database\\DTO\\DataShare\\Mirror\\DataShareMirrorConnectionStatus and App\\Base\\Database\\DTO\\DataShare\\Mirror\\DataShareMirrorConnectionStatus will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: app/Base/Database/Services/DataShare/Mirror/SupabaseMirrorSetupService.php
+
+		-
+			message: '#^Right side of && is always true\.$#'
+			identifier: booleanAnd.rightAlwaysTrue
+			count: 2
+			path: app/Base/Database/Services/DataShare/Mirror/SupabaseMirrorSetupService.php
+
+		-
+			message: '#^Method App\\Base\\Database\\Services\\IncubatingSchemaProductionPolicy\:\:ranMigrations\(\) should return array\<string, true\> but returns array\<string, bool\>\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Base/Database/Services/IncubatingSchemaProductionPolicy.php
+
+		-
+			message: '#^Offset 1 on array\{non\-empty\-list\<string\>, non\-empty\-list\<non\-empty\-string\>\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Database/Services/IncubatingSchemaProductionPolicy.php
+
+		-
+			message: '#^Offset ''tables'' on array\{file\: non\-empty\-string, tables\: non\-empty\-list\<string\>\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Database/Services/MigrationIncubationManager.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\<\(int\|string\)\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: app/Base/Database/Services/QueryExecutor.php
+
+		-
+			message: '#^Parameter &\$tables by\-ref type of method App\\Base\\Database\\Services\\SchemaDrift\\DeclaredSchema\:\:apply\(\) expects array\<string, array\{name\: string, migration\: string, line\: int, incomplete\: bool, columns\: array\<string, array\{name\: string, migration\: string, line\: int\}\>, indexes\: array\<string, array\{index\: App\\Base\\Database\\Services\\SchemaDrift\\DeclaredIndex, migration\: string, line\: int\}\>\}\>, array\<string, mixed\> given\.$#'
+			identifier: parameterByRef.type
+			count: 1
+			path: app/Base/Database/Services/SchemaDrift/DeclaredSchema.php
+
+		-
+			message: '#^Method App\\Base\\Database\\Services\\SchemaDrift\\MigrationSourceParser\:\:resolvedNodes\(\) should return list\<PhpParser\\Node\\Stmt\> but returns array\<PhpParser\\Node\>\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Base/Database/Services/SchemaDrift/MigrationSourceParser.php
+
+		-
+			message: '#^Instanceof between PhpParser\\Node\\Expr\\MethodCall and PhpParser\\Node\\Expr\\MethodCall will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 2
+			path: app/Base/Database/Services/SchemaDrift/MutationDetector.php
+
+		-
+			message: '#^Instanceof between PhpParser\\Node\\Expr\\StaticCall and PhpParser\\Node\\Expr\\StaticCall will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: app/Base/Database/Services/SchemaDrift/MutationDetector.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between array\<PhpParser\\Node\\Stmt\> and null will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: app/Base/Database/Services/SchemaDrift/MutationDetector.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between array\<PhpParser\\Node\\Stmt\> and null will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: app/Base/Database/Services/SchemaDrift/MutationDetector.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between array\<PhpParser\\Node\\Stmt\> and null will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: app/Base/Database/Services/SchemaDrift/SchemaCallProcessor.php
+
+		-
+			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Base/Database/Services/SchemaDrift/SchemaDriftComparator.php
+
+		-
+			message: '#^Offset ''columns'' on array\{name\: string, columns\: list\<string\>, type\: string, unique\: bool, primary\: bool\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Database/Services/SchemaDrift/SchemaDriftComparator.php
+
+		-
+			message: '#^Offset ''name'' on array\{name\: string, columns\: list\<string\>, type\: string, unique\: bool, primary\: bool\} in isset\(\) always exists and is not nullable\.$#'
+			identifier: isset.offset
+			count: 1
+			path: app/Base/Database/Services/SchemaDrift/SchemaDriftComparator.php
+
+		-
+			message: '#^Offset ''primary'' on array\{name\: string, columns\: list\<string\>, type\: string, unique\: bool, primary\: bool\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Database/Services/SchemaDrift/SchemaDriftComparator.php
+
+		-
+			message: '#^Offset ''unique'' on \*NEVER\* on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Database/Services/SchemaDrift/SchemaDriftComparator.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between PhpParser\\Node\\ArrayItem and null will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: app/Base/Database/Services/SchemaDrift/StaticExpressionEvaluator.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<\(int\|string\),Illuminate\\Database\\Eloquent\\Collection\<int, App\\Base\\Database\\Models\\TableRegistry\>\>\:\:map\(\) contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 1
+			path: app/Base/Database/Services/TableInspector.php
+
+		-
+			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$company_id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/DateTime/Services/DateTimeDisplayService.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\FeatureFlags\\Models\\FeatureFlagOverride\:\:\$enabled\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/FeatureFlags/Services/FeatureFlags.php
+
+		-
+			message: '#^Argument of an invalid type stdClass supplied for foreach, only iterables are supported\.$#'
+			identifier: foreach.nonIterable
+			count: 1
+			path: app/Base/Foundation/Database/Migrations/2026_08_05_000000_normalize_four_root_application_topology.php
+
+		-
+			message: '#^Right side of && is always true\.$#'
+			identifier: booleanAnd.rightAlwaysTrue
+			count: 1
+			path: app/Base/Foundation/Database/Migrations/2026_08_05_000000_normalize_four_root_application_topology.php
+
+		-
+			message: '#^Trait App\\Base\\Foundation\\Livewire\\Concerns\\DecodesJsonFields is used zero times and is not analysed\.$#'
+			identifier: trait.unused
+			count: 1
+			path: app/Base/Foundation/Livewire/Concerns/DecodesJsonFields.php
+
+		-
+			message: '#^Call to function method_exists\(\) with \$this\(App\\Base\\Schedule\\Livewire\\Index\) and ''resetPage'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Base/Foundation/Livewire/Concerns/FiltersByPeriod.php
+
+		-
+			message: '#^Offset 0 on non\-empty\-list\<string\> on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Foundation/Livewire/Domains.php
+
+		-
+			message: '#^Call to function method_exists\(\) with \$this\(App\\Base\\Foundation\\Livewire\\SearchablePaginatedList\) and ''resetPage'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Base/Foundation/Livewire/SearchablePaginatedList.php
+
+		-
+			message: '#^Call to function is_array\(\) with array\<mixed\> will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Base/Foundation/ModuleManifest/BelimbingAppCatalogService.php
+
+		-
+			message: '#^Offset 0 on non\-empty\-list\<string\> on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 4
+			path: app/Base/Foundation/ModuleManifest/ModuleManifestReader.php
+
+		-
+			message: '#^Offset 0 on non\-empty\-list\<int\> on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 3
+			path: app/Base/Foundation/ModuleManifest/ModuleVersionConstraint.php
+
+		-
+			message: '#^Offset 0 on non\-empty\-list\<string\> on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Foundation/ModuleManifest/SoftwareSourceCatalogEntry.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Base/Foundation/Services/CompositionReport.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>version" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Base/Foundation/Services/CompositionReport.php
+
+		-
+			message: '#^Offset ''requiring_module'' on array\{issue\: ''incompatible''\|''missing'', requiring\: string, requiring_module\: string, required\: string, constraint\: string, installed_version\?\: string\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Foundation/Services/SourceRepositoryInstaller.php
+
+		-
+			message: '#^Parameter \#2 \$callback of function array_filter expects \(callable\(string\)\: bool\)\|null, ''strlen'' given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Base/Foundation/Services/SourceRepositoryInstaller.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Integration\\Models\\OutboundExchange\:\:\$metadata\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Integration/Livewire/OutboundExchanges/Show.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Integration\\Models\\OutboundExchange\:\:\$request_body\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Integration/Livewire/OutboundExchanges/Show.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Integration\\Models\\OutboundExchange\:\:\$request_body_truncated\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Integration/Livewire/OutboundExchanges/Show.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Integration\\Models\\OutboundExchange\:\:\$request_headers\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Integration/Livewire/OutboundExchanges/Show.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Integration\\Models\\OutboundExchange\:\:\$response_body\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Integration/Livewire/OutboundExchanges/Show.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Integration\\Models\\OutboundExchange\:\:\$response_body_truncated\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Integration/Livewire/OutboundExchanges/Show.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Integration\\Models\\OutboundExchange\:\:\$response_headers\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Integration/Livewire/OutboundExchanges/Show.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between string and null will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 2
+			path: app/Base/Integration/Models/OutboundExchange.php
+
+		-
+			message: '#^PHPDoc tag @param references unknown parameter\: \$payload$#'
+			identifier: parameter.notFound
+			count: 1
+			path: app/Base/Integration/Services/IntegrationGateway.php
+
+		-
+			message: '#^PHPDoc tag @return with type array\<string, mixed\> is incompatible with native type string\.$#'
+			identifier: return.phpDocType
+			count: 1
+			path: app/Base/Integration/Services/IntegrationGateway.php
+
+		-
+			message: '#^Call to an undefined method App\\Base\\Integration\\Services\\IntegrationResponse\:\:body\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Base/Integration/Services/OAuth2Client.php
+
+		-
+			message: '#^Call to an undefined method App\\Base\\Integration\\Services\\IntegrationResponse\:\:status\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Base/Integration/Services/OAuth2Client.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between string and null will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: app/Base/Integration/Services/OAuth2Client.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Integration\\Models\\OutboundExchange\:\:\$updated_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Integration/Services/OutboundExchangePruner.php
+
+		-
+			message: '#^Instanceof between App\\Base\\Integration\\Models\\OutboundExchange and App\\Base\\Integration\\Models\\OutboundExchange will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: app/Base/Integration/Services/OutboundExchangePruner.php
+
+		-
+			message: '#^Instanceof between Illuminate\\Support\\Carbon and Illuminate\\Support\\Carbon will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: app/Base/Integration/Services/OutboundExchangePruner.php
+
+		-
+			message: '#^Expression on left side of \?\? is not nullable\.$#'
+			identifier: nullCoalesce.expr
+			count: 1
+			path: app/Base/Locale/Services/LocaleCatalog.php
+
+		-
+			message: '#^Offset 0 on non\-empty\-list\<string\> on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 2
+			path: app/Base/Locale/Services/LocaleCatalog.php
+
+		-
+			message: '#^Variable \$locales in PHPDoc tag @var does not exist\.$#'
+			identifier: varTag.variableNotFound
+			count: 1
+			path: app/Base/Locale/Services/LocaleCatalog.php
+
+		-
+			message: '#^Offset 0 on non\-empty\-list\<string\> on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Menu/Services/MenuDiscoveryService.php
+
+		-
+			message: '#^Offset ''icon'' on array\{label\: string, pinLabel\: string, icon\: string, href\: string, route\: string\|null\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Menu/Services/PinMetadataNormalizer.php
+
+		-
+			message: '#^Right side of && is always true\.$#'
+			identifier: booleanAnd.rightAlwaysTrue
+			count: 2
+			path: app/Base/Menu/Services/PinMetadataNormalizer.php
+
+		-
+			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
+			identifier: larastan.noEnvCallsOutsideOfConfig
+			count: 4
+			path: app/Base/Pdf/Config/pdf.php
+
+		-
+			message: '#^Offset ''ok'' on array\{ok\: bool, action\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 2
+			path: app/Base/Pdf/Services/PdfRenderer.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between string and null will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 2
+			path: app/Base/Perf/Services/BackgroundWorkRecorder.php
+
+		-
+			message: '#^Instanceof between Illuminate\\Http\\Request and Illuminate\\Http\\Request will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: app/Base/Perf/Services/PerfRuntimeSettings.php
+
+		-
+			message: '#^Parameter \#2 \$load of method App\\Base\\Routing\\RouteDiscoveryService\:\:registerFile\(\) expects callable\(\)\: void, Closure\(\)\: Illuminate\\Routing\\RouteRegistrar given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Base/Routing/RouteDiscoveryService.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleOverride\:\:\$expression\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Schedule/Livewire/Index.php
+
+		-
+			message: '#^Anonymous function never returns null so it can be removed from the return type\.$#'
+			identifier: return.unusedType
+			count: 1
+			path: app/Base/Schedule/Livewire/Index.php
+
+		-
+			message: '#^Call to an undefined method App\\Base\\Schedule\\Contracts\\ScheduleCadenceContributor\:\:tasks\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Base/Schedule/Livewire/Index.php
+
+		-
+			message: '#^Call to function method_exists\(\) with \$this\(App\\Base\\Schedule\\Livewire\\Index\) and ''resetPage'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 2
+			path: app/Base/Schedule/Livewire/Index.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleOverride\:\:\$key\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Schedule/Models/ScheduleOverride.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleOverride\:\:\$source\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Schedule/Models/ScheduleOverride.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleSuppression\:\:\$key\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Schedule/Models/ScheduleSuppression.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleSuppression\:\:\$source\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Schedule/Models/ScheduleSuppression.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleOverride\:\:\$expression\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Schedule/Services/ScheduleBoard.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$exit_code\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Schedule/Services/ScheduleBoard.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$finished_at\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Schedule/Services/ScheduleBoard.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Schedule/Services/ScheduleBoard.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$output_excerpt\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Schedule/Services/ScheduleBoard.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$source\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Schedule/Services/ScheduleBoard.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$started_at\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Schedule/Services/ScheduleBoard.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Base/Schedule/Services/ScheduleBoard.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$triggered_by_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Schedule/Services/ScheduleBoard.php
+
+		-
+			message: '#^Left side of \|\| is always false\.$#'
+			identifier: booleanOr.leftAlwaysFalse
+			count: 1
+			path: app/Base/Schedule/Services/ScheduleBoard.php
+
+		-
+			message: '#^Method App\\Base\\Schedule\\Services\\ScheduleBoard\:\:suppressedSchedulerKeys\(\) should return Illuminate\\Support\\Collection\<string, true\> but returns Illuminate\\Support\\Collection\<mixed, \(int\|string\)\>\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Base/Schedule/Services/ScheduleBoard.php
+
+		-
+			message: '#^Property Illuminate\\Console\\Scheduling\\Event\:\:\$timezone \(DateTimeZone\|string\) on left side of \?\? is not nullable\.$#'
+			identifier: nullCoalesce.property
+			count: 1
+			path: app/Base/Schedule/Services/ScheduleBoard.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>expression" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Base/Schedule/Services/ScheduleBoard.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>timestamp" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Base/Schedule/Services/ScheduleBoard.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$started_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Schedule/Services/ScheduleHealthService.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Schedule/Services/ScheduleHealthService.php
+
+		-
+			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 2
+			path: app/Base/Schedule/Services/ScheduleRunOutput.php
+
+		-
+			message: '#^Property Illuminate\\Console\\Scheduling\\Event\:\:\$output \(string\) on left side of \?\? is not nullable\.$#'
+			identifier: nullCoalesce.property
+			count: 2
+			path: app/Base/Schedule/Services/ScheduleRunOutput.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$finished_at\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Base/Schedule/Services/ScheduleRunRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$output_excerpt\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Schedule/Services/ScheduleRunRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$started_at\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Schedule/Services/ScheduleRunRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Base/Schedule/Services/ScheduleRunRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$trigger\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Schedule/Services/ScheduleRunRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$triggered_by_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Schedule/Services/ScheduleRunRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$triggered_by_user_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Schedule/Services/ScheduleRunRecorder.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Console\\Scheduling\\Event\:\:\$blbScheduleRunId\.$#'
+			identifier: property.notFound
+			count: 4
+			path: app/Base/Schedule/Services/ScheduleRunRecorder.php
+
+		-
+			message: '#^Call to function is_numeric\(\) with null will always evaluate to false\.$#'
+			identifier: function.impossibleType
+			count: 1
+			path: app/Base/Schedule/Services/ScheduleRunRecorder.php
+
+		-
+			message: '#^Property Illuminate\\Console\\Scheduling\\Event\:\:\$expression \(string\) on left side of \?\? is not nullable\.$#'
+			identifier: nullCoalesce.property
+			count: 1
+			path: app/Base/Schedule/Services/ScheduleRunRecorder.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>trigger" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Base/Schedule/Services/ScheduleRunRecorder.php
+
+		-
+			message: '#^Match expression does not handle remaining value\: string$#'
+			identifier: match.unhandled
+			count: 1
+			path: app/Base/Settings/DTO/SettingDefinition.php
+
+		-
+			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$company_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Settings/Livewire/SettingsForm.php
+
+		-
+			message: '#^PHPDoc type array\<string\> of property App\\Base\\Settings\\Models\\Setting\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
+			identifier: property.phpDocType
+			count: 1
+			path: app/Base/Settings/Models/Setting.php
+
+		-
+			message: '#^Offset 0 on non\-empty\-list\<string\> on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Settings/ServiceProvider.php
+
+		-
+			message: '#^Match expression does not handle remaining value\: App\\Base\\Settings\\DTO\\ScopeType\:\:TENANT$#'
+			identifier: match.unhandled
+			count: 1
+			path: app/Base/Settings/Services/CredentialSettingsDevelopmentSanitizer.php
+
+		-
+			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Base/Settings/Services/SettingManifestCompiler.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Contracts\\Cache\\Lock\:\:isOwnedByCurrentProcess\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Base/Software/Console/Commands/SoftwareUpdateCommand.php
+
+		-
+			message: '#^Offset ''ahead'' on array\{dirty\: int, ahead\: int, behind\: int\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Software/Livewire/Deployment/Index.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\<string\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 2
+			path: app/Base/Software/Services/DeploymentRunHistory.php
+
+		-
+			message: '#^If condition is always false\.$#'
+			identifier: if.alwaysFalse
+			count: 1
+			path: app/Base/Software/Services/DeploymentService.php
+
+		-
+			message: '#^Instanceof between App\\Base\\Software\\Inventory\\ContributionSummary and App\\Base\\Software\\Inventory\\ContributionSummary will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: app/Base/Software/Services/InventoryContributionRegistry.php
+
+		-
+			message: '#^Offset 0 on non\-empty\-list\<string\> on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Software/Services/SoftwareInventoryService.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\<App\\Base\\Software\\Inventory\\InstalledModule\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: app/Base/Software/Services/SoftwareInventoryService.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\<string\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 2
+			path: app/Base/Software/Services/SoftwareInventoryService.php
+
+		-
+			message: '#^Method App\\Base\\Software\\Services\\SoftwareInventoryStatusDiagnosticProvider\:\:driftedAddInSources\(\) should return list\<array\{label\: string, kind\: string, dirty\: bool, unpushed\: int, dependency_issues\: int\}\> but returns list\<array\{kind\: string, dirty\: bool, unpushed\: int\}\>\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Base/Software/Services/SoftwareInventoryStatusDiagnosticProvider.php
+
+		-
+			message: '#^Offset string on Illuminate\\Process\\ProcessPoolResults on left side of \?\? does not exist\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Software/Services/SoftwareSourceLatestCommitFetcher.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between null and null will always evaluate to false\.$#'
+			identifier: notIdentical.alwaysFalse
+			count: 1
+			path: app/Base/Software/Services/SoftwareSourceLatestCommitFetcher.php
+
+		-
+			message: '#^Parameter &\$entry by\-ref type of method App\\Base\\Software\\Services\\SoftwareSourceRepository\:\:applyLatestCommit\(\) expects array\{key\: string, label\: string, path\: string, owner\: string\|null, repo\: string\|null, branch\: string\|null, working_tree\: array\{dirty\: int, ahead\: int, behind\: int\}, current\: array\<string, mixed\>\|null, \.\.\.\}, array\{key\: string, label\: string, path\: string, owner\: string\|null, repo\: string\|null, branch\: string\|null, working_tree\: array\{dirty\: int, ahead\: int, behind\: int\}, current\: array\<string, mixed\>\|null, \.\.\.\} given\.$#'
+			identifier: parameterByRef.type
+			count: 2
+			path: app/Base/Software/Services/SoftwareSourceRepository.php
+
+		-
+			message: '#^Method App\\Base\\Software\\Services\\SoftwareUpdateLauncher\:\:maintenanceActionLock\(\) should return Illuminate\\Cache\\Lock but returns Illuminate\\Contracts\\Cache\\Lock\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Base/Software/Services/SoftwareUpdateLauncher.php
+
+		-
+			message: '#^Offset ''ahead'' on array\{dirty\: int, ahead\: int, behind\: int\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Base/Software/Services/SoftwareUpdateLauncher.php
+
+		-
+			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Base/Software/Services/UpstreamSyncGate.php
+
+		-
+			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Base/Support/ExecutableLocator.php
+
+		-
+			message: '#^Parameter \#1 \$user of static method Illuminate\\Support\\Facades\\Auth\:\:login\(\) expects Illuminate\\Contracts\\Auth\\Authenticatable, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Base/System/Console/Commands/PageWeightAuditCommand.php
+
+		-
+			message: '#^Class App\\Base\\System\\Console\\Commands\\TestCommand extends @final class NunoMaduro\\Collision\\Adapters\\Laravel\\Commands\\TestCommand\.$#'
+			identifier: class.extendsFinalByPhpDoc
+			count: 1
+			path: app/Base/System/Console/Commands/TestCommand.php
+
+		-
+			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$company_id\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Base/System/Livewire/Localization/Index.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>value" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Base/System/Livewire/UiReference/Index.php
+
+		-
+			message: '#^Instanceof between App\\Base\\System\\DTO\\StatusBarDiagnostic and App\\Base\\System\\DTO\\StatusBarDiagnostic will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 2
+			path: app/Base/System/Services/StatusBarDiagnostics.php
+
+		-
+			message: '#^Call to function method_exists\(\) with App\\Core\\User\\Models\\User and ''getAttribute'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Base/Tenancy/Middleware/ResolveTenantContext.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Tenancy\\Models\\Tenant\:\:\$is_platform_operator\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Tenancy/Models/Tenant.php
+
+		-
+			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Tenancy\\Models\\Tenant\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
+			identifier: property.phpDocType
+			count: 1
+			path: app/Base/Tenancy/Models/Tenant.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between Illuminate\\Contracts\\Auth\\Authenticatable and null will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: app/Base/Tenancy/ServiceProvider.php
+
+		-
+			message: '#^Trait App\\Base\\Workflow\\Concerns\\HasWorkflowStatus is used zero times and is not analysed\.$#'
+			identifier: trait.unused
+			count: 1
+			path: app/Base/Workflow/Concerns/HasWorkflowStatus.php
+
+		-
+			message: '#^Call to function method_exists\(\) with App\\Core\\User\\Models\\User and ''notify'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Base/Workflow/Listeners/SendTransitionNotification.php
+
+		-
+			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Workflow\\Models\\KanbanColumn\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
+			identifier: property.phpDocType
+			count: 1
+			path: app/Base/Workflow/Models/KanbanColumn.php
+
+		-
+			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Workflow\\Models\\StatusConfig\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
+			identifier: property.phpDocType
+			count: 1
+			path: app/Base/Workflow/Models/StatusConfig.php
+
+		-
+			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Workflow\\Models\\StatusHistory\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
+			identifier: property.phpDocType
+			count: 1
+			path: app/Base/Workflow/Models/StatusHistory.php
+
+		-
+			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Workflow\\Models\\StatusTransition\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
+			identifier: property.phpDocType
+			count: 1
+			path: app/Base/Workflow/Models/StatusTransition.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>label" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Base/Workflow/Models/StatusTransition.php
+
+		-
+			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Workflow\\Models\\Workflow\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
+			identifier: property.phpDocType
+			count: 1
+			path: app/Base/Workflow/Models/Workflow.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between int and null will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: app/Base/Workflow/Models/Workflow.php
+
+		-
+			message: '#^Instanceof between App\\Base\\Workflow\\Process\\Definitions\\ProcessStep and App\\Base\\Workflow\\Process\\Definitions\\ProcessStep will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: app/Base/Workflow/Process/Definitions/ProcessDefinition.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between non\-empty\-list\<App\\Base\\Workflow\\Process\\Definitions\\ProcessStep\> and array\{\} will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: app/Base/Workflow/Process/Definitions/ProcessDefinition.php
+
+		-
+			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Base/Workflow/Process/Definitions/ProcessDependency.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between non\-empty\-list\<string\> and array\{\} will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: app/Base/Workflow/Process/Definitions/ProcessDependency.php
+
+		-
+			message: '#^Instanceof between App\\Base\\Workflow\\Process\\Definitions\\ProcessDependency and App\\Base\\Workflow\\Process\\Definitions\\ProcessDependency will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: app/Base/Workflow/Process/Definitions/ProcessStep.php
+
+		-
+			message: '#^Call to function is_int\(\) with int will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Base/Workflow/Process/ProcessCoordinator.php
+
+		-
+			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Base/Workflow/Process/ProcessCoordinator.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between Illuminate\\Support\\Carbon and null will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: app/Base/Workflow/Process/ProcessCoordinator.php
+
+		-
+			message: '#^Method App\\Base\\Workflow\\Services\\TransitionOutboxDispatcher\:\:rehydrateHistory\(\) should return App\\Base\\Workflow\\Models\\StatusHistory but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Base/Workflow/Services/TransitionOutboxDispatcher.php
+
+		-
+			message: '#^Method App\\Base\\Workflow\\Services\\TransitionOutboxDispatcher\:\:rehydrateTransition\(\) should return App\\Base\\Workflow\\Models\\StatusTransition but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Base/Workflow/Services/TransitionOutboxDispatcher.php
+
+		-
+			message: '#^Template type TModel of method App\\Base\\Workflow\\Services\\TransitionOutboxDispatcher\:\:fromSnapshot\(\) is not referenced in a parameter\.$#'
+			identifier: method.templateTypeNotInParameter
+			count: 1
+			path: app/Base/Workflow/Services/TransitionOutboxDispatcher.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between mixed and null will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: app/Base/Workflow/Services/WorkflowEngine.php
