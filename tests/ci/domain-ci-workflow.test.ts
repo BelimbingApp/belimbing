@@ -37,3 +37,18 @@ test("domain CI proves sources exist and strips foreign clover paths before Sona
     expect(names.indexOf("Prove domain sources are present for Sonar"))
         .toBeLessThan(names.indexOf("SonarCloud Scan"));
 });
+
+test("domain CI scans composed Domains Livewire for raw subject-id request reads", () => {
+    const scan = step("Scan Domain Livewire for raw subject-id request reads");
+    expect(scan.run).toContain("./vendor/bin/pest");
+    expect(scan.run).toContain(
+        "keeps the production Domain Livewire tree free of unallowlisted subject-id request reads",
+    );
+    const names = sqliteSteps().map((entry: any) => entry.name);
+    expect(names.indexOf("Run Tests")).toBeLessThan(
+        names.indexOf("Scan Domain Livewire for raw subject-id request reads"),
+    );
+    // Lexical only — keep it off the postgres-mirror lane.
+    const pgNames = (workflow.jobs["postgres-mirror"].steps as any[]).map((entry: any) => entry.name);
+    expect(pgNames).not.toContain("Scan Domain Livewire for raw subject-id request reads");
+});

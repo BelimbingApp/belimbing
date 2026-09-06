@@ -240,6 +240,11 @@ jobs:
           fi
           php artisan blb:livewire-actions --domain="$domain_name" --check-baseline="$baseline"
 
+      # Platform tests.yml only sees an empty Domains tree; the real hit surface
+      # is composed here. Fixture cases stay in SubjectIdRequestScanTest.
+      - name: Scan Domain Livewire for raw subject-id request reads
+        run: ./vendor/bin/pest --filter='keeps the production Domain Livewire tree free of unallowlisted subject-id request reads'
+
       # Domains are nested checkouts ignored by the platform .gitignore
       # (/app/Domains/*). Sonar's SCM exclusion would otherwise index zero
       # files and silently drop coverage — including Skills/Training after
