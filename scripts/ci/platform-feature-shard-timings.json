@@ -1,0 +1,91 @@
+{
+  "source": "local-directory-pest-walls-no-coverage",
+  "measured_at": "2026-09-06T07:53:37Z",
+  "note": "Relative wall times for first-level tests/Feature directories; used to regenerate platform-feature-shards.json (#626). Hosted suite timing (#614) remains per-shard; this file is the checked-in directory timing summary until CI emits per-directory rows.",
+  "directories": {
+    "AI": {
+      "wall_seconds": 20.514,
+      "test_files": 16
+    },
+    "Address": {
+      "wall_seconds": 16.518,
+      "test_files": 1
+    },
+    "Audit": {
+      "wall_seconds": 6.491,
+      "test_files": 5
+    },
+    "Auth": {
+      "wall_seconds": 8.377,
+      "test_files": 6
+    },
+    "Authz": {
+      "wall_seconds": 6.679,
+      "test_files": 5
+    },
+    "Base": {
+      "wall_seconds": 43.738,
+      "test_files": 45
+    },
+    "Company": {
+      "wall_seconds": 5.502,
+      "test_files": 6
+    },
+    "Core": {
+      "wall_seconds": 41.463,
+      "test_files": 40
+    },
+    "Dashboard": {
+      "wall_seconds": 2.735,
+      "test_files": 2
+    },
+    "Database": {
+      "wall_seconds": 33.157,
+      "test_files": 23
+    },
+    "Foundation": {
+      "wall_seconds": 9.305,
+      "test_files": 14
+    },
+    "Media": {
+      "wall_seconds": 0.993,
+      "test_files": 1
+    },
+    "Menu": {
+      "wall_seconds": 2.876,
+      "test_files": 6
+    },
+    "Queue": {
+      "wall_seconds": 1.727,
+      "test_files": 2
+    },
+    "Routing": {
+      "wall_seconds": 0.966,
+      "test_files": 2
+    },
+    "Schedule": {
+      "wall_seconds": 13.274,
+      "test_files": 3
+    },
+    "Settings": {
+      "wall_seconds": 2.797,
+      "test_files": 6
+    },
+    "Software": {
+      "wall_seconds": 1.182,
+      "test_files": 2
+    },
+    "System": {
+      "wall_seconds": 19.683,
+      "test_files": 16
+    },
+    "User": {
+      "wall_seconds": 4.34,
+      "test_files": 3
+    },
+    "Workflow": {
+      "wall_seconds": 4.339,
+      "test_files": 3
+    }
+  }
+}
