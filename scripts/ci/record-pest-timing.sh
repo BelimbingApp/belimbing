@@ -42,7 +42,9 @@ from pathlib import Path
 
 json_path, job, suite, start_ns, end_ns, log_path = sys.argv[1:7]
 wall = (int(end_ns) - int(start_ns)) / 1_000_000_000
-text = Path(log_path).read_text(encoding="utf-8", errors="replace")
+raw = Path(log_path).read_text(encoding="utf-8", errors="replace")
+# Hosted Pest colours the footer; strip CSI sequences before parsing counts.
+text = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", raw)
 
 tests = 0
 assertions = 0
