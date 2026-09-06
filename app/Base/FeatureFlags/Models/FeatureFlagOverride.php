@@ -30,4 +30,15 @@ class FeatureFlagOverride extends Model
             'enabled' => 'boolean',
         ];
     }
+
+    /**
+     * Stable audit identity so operator history is queried as
+     * `feature-flag / <flag>` regardless of row id churn.
+     *
+     * @return array{name: string, id: string}
+     */
+    public function getAuditSubject(): array
+    {
+        return ['name' => 'feature-flag', 'id' => (string) $this->flag];
+    }
 }
