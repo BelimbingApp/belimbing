@@ -197,6 +197,19 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  # Preserve the historical Unit context while the matrix runs Unit-a/Unit-b.
+  # The matrix result requires every shard, including both Unit shards, to pass.
+  unit-compatibility:
+    name: suites (Unit)
+    needs: [suites]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require successful shard matrix
+        env:
+          SUITES_RESULT: ${{ needs.suites.result }}
+        run: test "$SUITES_RESULT" = success
+
   # Keep the existing required check name. A failed/skipped/cancelled lane
   # must produce a failed ci check, never a successful skipped analysis.
   ci:
