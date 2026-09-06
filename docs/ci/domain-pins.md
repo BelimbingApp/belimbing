@@ -197,6 +197,9 @@ forks, drafts, and holds. Repository merge settings, active rulesets, and classi
 protection determine the merge method; GitHub still enforces approval and other
 merge rules. The final merge is bound to the checked SHA and uses
 `COVERAGE_BASELINE_RAISE_TOKEN`. If policy cannot be read, the workflow refuses.
+Applying `bot-maintenance` also authorizes a Domain descriptor/surface pin advance
+to land on green required checks without an independent reviewer; it is not limited
+to numeric baseline refreshes. The label is the authorization, not the PR author's identity.
 Rerun the trusted independent-review check to reconsider an already-green bot PR
 whose last CI run predates this workflow; this does not bypass any checks.
 

@@ -16,6 +16,7 @@ class BotLandingTest(unittest.TestCase):
         required = [{'context': 'ci', 'integration_id': 7}]
         check = {'name': 'ci', 'status': 'completed', 'conclusion': 'success', 'id': 1, 'app': {'id': 7}}
         self.assertTrue(self.module.checks_green(required, [check], []))
+        self.assertFalse(self.module.checks_green([], [check], []))
         for conclusion in ['failure', 'cancelled', 'skipped', 'neutral', None]:
             self.assertFalse(self.module.checks_green(required, [{**check, 'conclusion': conclusion}], []))
         self.assertFalse(self.module.checks_green(required, [], []))
@@ -34,6 +35,7 @@ class BotLandingTest(unittest.TestCase):
               'base': {'ref': 'main'}, 'head': {'repo': {'full_name': 'BelimbingApp/belimbing'}}}
         self.assertTrue(self.module.eligible(pr, 'BelimbingApp/belimbing'))
         for change in [{'labels': []}, {'draft': True}, {'state': 'closed'},
+                       {'base': {'ref': 'release'}},
                        {'labels': [{'name': 'bot-maintenance'}, {'name': 'agent:desktop-astra'}]},
                        {'head': {'repo': {'full_name': 'other/fork'}}}]:
             self.assertFalse(self.module.eligible({**pr, **change}, 'BelimbingApp/belimbing'))
