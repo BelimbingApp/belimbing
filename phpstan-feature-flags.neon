@@ -15,3 +15,9 @@ services:
             allowlist: []
         tags:
             - phpstan.rules.rule
+    -
+        class: App\Base\Foundation\PHPStan\DomainEloquentModelBoundaryRule
+        arguments:
+            projectRoot: %currentWorkingDirectory%
+        tags:
+            - phpstan.rules.rule

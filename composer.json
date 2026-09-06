@@ -57,7 +57,10 @@
     "autoload-dev": {
         "psr-4": {
             "Tests\\": "tests/"
-        }
+        },
+        "classmap": [
+            "tests/Fixtures/domain-eloquent-boundary/app"
+        ]
     },
     "scripts": {
         "post-autoload-dump": [
