@@ -64,6 +64,9 @@ jobs:
       - name: Run Larastan on app/Base
         run: vendor/bin/phpstan analyse --memory-limit=2G
 
+      - name: Check module feature flag ownership
+        run: vendor/bin/phpstan analyse -c phpstan-feature-flags.neon --memory-limit=2G
+
       - name: Refuse PHPStan baseline growth
         run: bash scripts/ci/phpstan-baseline-gate.sh
 
