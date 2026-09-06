@@ -14,6 +14,8 @@ class ServiceProvider extends BaseServiceProvider
 {
     public function register(): void
     {
+        $this->mergeConfigFrom(__DIR__.'/Config/integration.php', 'integration');
+
         $this->app->singleton(IntegrationGateway::class);
         $this->app->singleton(OAuth2Client::class);
         $this->app->singleton(OAuthTokenStore::class);

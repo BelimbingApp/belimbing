@@ -3,7 +3,58 @@ set -euo pipefail
 
 root=$(git rev-parse --show-toplevel)
 cd "$root"
-bash -n scripts/ci/changed-authorable-php.sh scripts/ci/extension-conformance.sh scripts/ci/mount-guard.sh
+bash -n scripts/ci/changed-authorable-php.sh scripts/ci/extension-conformance.sh scripts/ci/mount-guard.sh scripts/ci/phpstan-baseline-gate.sh scripts/ci/record-pest-timing.sh
+python3 -m py_compile scripts/ci/aggregate-pest-timing.py
+
+# Timing aggregator (#614): one table from per-suite JSON, fail-closed on empty.
+timing_fixture=$(mktemp -d)
+trap 'rm -rf "$timing_fixture"' EXIT
+mkdir -p "$timing_fixture"
+printf '%s\n' '{"job":"Feature","suite":"Feature","wall_seconds":12.5,"tests":3,"assertions":9}' > "$timing_fixture/b.json"
+printf '%s\n' '{"job":"Unit","suite":"Unit","wall_seconds":1.25,"tests":2,"assertions":4}' > "$timing_fixture/a.json"
+aggregate_out=$(python3 scripts/ci/aggregate-pest-timing.py "$timing_fixture")
+grep -q '| Unit | Unit | 1.250 | 2 | 4 |' <<< "$aggregate_out"
+grep -q '| Feature | Feature | 12.500 | 3 | 9 |' <<< "$aggregate_out"
+grep -q '| \*\*Σ\*\* |  | \*\*13.750\*\* | \*\*5\*\* | \*\*13\*\* |' <<< "$aggregate_out"
+if python3 scripts/ci/aggregate-pest-timing.py "$timing_fixture/empty" >/dev/null 2>&1; then
+    echo 'aggregate-pest-timing accepted a missing directory' >&2
+    exit 1
+fi
+mkdir -p "$timing_fixture/empty"
+if python3 scripts/ci/aggregate-pest-timing.py "$timing_fixture/empty" >/dev/null 2>&1; then
+    echo 'aggregate-pest-timing accepted an empty timing directory' >&2
+    exit 1
+fi
+rm -rf "$timing_fixture"
+trap - EXIT
+
+# record-pest-timing.sh must parse colourised Pest footers (#614).
+ansi_fixture=$(mktemp -d)
+trap 'rm -rf "$ansi_fixture"' EXIT
+mkdir -p "$ansi_fixture/vendor/bin" "$ansi_fixture/scripts/ci"
+cp scripts/ci/record-pest-timing.sh "$ansi_fixture/scripts/ci/"
+cat > "$ansi_fixture/vendor/bin/pest" <<'PEST'
+#!/usr/bin/env bash
+printf '  \033[90mTests:\033[39m    \033[32;1m1525 passed\033[39;22m\033[90m (10675 assertions)\033[39m\n'
+printf '  \033[90mDuration:\033[39m \033[39m147.86s\033[39m\n'
+exit 0
+PEST
+chmod +x "$ansi_fixture/vendor/bin/pest"
+(
+  cd "$ansi_fixture"
+  MATRIX_SUITE=Unit TIMING_DIR=timing bash scripts/ci/record-pest-timing.sh Unit -- --testsuite=Unit >/dev/null
+  python3 - <<'CHECK'
+import json
+from pathlib import Path
+payload = json.loads(Path("timing/Unit__Unit.json").read_text(encoding="utf-8"))
+assert payload["tests"] == 1525, payload
+assert payload["assertions"] == 10675, payload
+assert abs(float(payload["pest_duration_seconds"]) - 147.86) < 0.001, payload
+CHECK
+)
+rm -rf "$ansi_fixture"
+trap - EXIT
+
 python3 -m py_compile scripts/ci/dependency-audit.py
 python3 -m json.tool docs/ci/dependency-audit-policy.json >/dev/null
 python3 -m json.tool scripts/ci/domain-repos.json >/dev/null
@@ -27,6 +78,29 @@ fi
 python3 "$dependency_audit" \
     --policy tests/ci/fixtures/dependency-audit/policy-ok.json \
     --composer-report "$empty_composer" \
+    --bun-report "$empty_bun" \
+    --today 2026-09-06 \
+    --skip-live >/dev/null
+# A reported advisory at or above min_severity fails; an unexpired allowlist
+# entry for its CVE clears it; a finding below the threshold is ignored.
+if python3 "$dependency_audit" \
+    --policy tests/ci/fixtures/dependency-audit/policy-ok.json \
+    --composer-report tests/ci/fixtures/dependency-audit/composer-high.json \
+    --bun-report "$empty_bun" \
+    --today 2026-09-06 \
+    --skip-live >/dev/null 2>&1; then
+    echo 'dependency-audit passed with a high advisory and no allowlist' >&2
+    exit 1
+fi
+python3 "$dependency_audit" \
+    --policy tests/ci/fixtures/dependency-audit/policy-allow-high.json \
+    --composer-report tests/ci/fixtures/dependency-audit/composer-high.json \
+    --bun-report "$empty_bun" \
+    --today 2026-09-06 \
+    --skip-live >/dev/null
+python3 "$dependency_audit" \
+    --policy tests/ci/fixtures/dependency-audit/policy-high-threshold.json \
+    --composer-report tests/ci/fixtures/dependency-audit/composer-low.json \
     --bun-report "$empty_bun" \
     --today 2026-09-06 \
     --skip-live >/dev/null
@@ -278,7 +352,7 @@ if command -v php >/dev/null; then
         echo 'domain-ci accepted an invalid repository slug' >&2
         exit 1
     fi
-    php scripts/ci/validate-php-syntax.php scripts/ci/domain-ci.php scripts/ci/compose-domain.php scripts/ci/validate-extension-manifest.php
+    php scripts/ci/validate-php-syntax.php scripts/ci/domain-ci.php scripts/ci/compose-domain.php scripts/ci/filter-domain-coverage-clover.php scripts/ci/validate-extension-manifest.php
     php scripts/ci/validate-extension-manifest.php tests/Fixtures/ci/extensions/conventional/Example/composer.json
     if php scripts/ci/validate-extension-manifest.php tests/Fixtures/ci/extensions/invalid/Example/composer.json >/dev/null 2>&1; then
         echo 'invalid Extension manifest was accepted' >&2; exit 1

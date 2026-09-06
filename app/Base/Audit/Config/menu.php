@@ -1,4 +1,5 @@
 <?php
+
 return [
     'items' => [
         [
@@ -6,6 +7,14 @@ return [
             'label' => 'Audit Log',
             'icon' => 'heroicon-o-document-magnifying-glass',
             'parent' => 'admin',
+        ],
+        [
+            'id' => 'admin.audit.activity',
+            'label' => 'Activity',
+            'icon' => 'heroicon-o-clipboard-document-list',
+            'route' => 'admin.audit.activity',
+            'permission' => 'admin.audit.log.list',
+            'parent' => 'admin.audit',
         ],
         [
             'id' => 'admin.audit.mutation',

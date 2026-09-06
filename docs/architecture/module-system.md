@@ -184,13 +184,66 @@ The optional `extra.blb` manifest may declare:
 - `version`: Module contract version;
 - `requires-modules`: hard Module dependencies and version constraints;
 - `optional-modules`: integrations that may be absent;
-- `publishes-events` and `consumes-events`: cross-Module event surfaces.
+- `publishes-events` and `consumes-events`: cross-Module event surfaces;
+- `feature-flags`: map of stable flag identities to `{ default, description }` for per-tenant resolution through `App\Base\FeatureFlags\Services\FeatureFlags` (undeclared names refuse; `blb:feature-flags` lists the set).
 
-Manifests support inventory, dependency health, and migration preflight. They do not replace Composer's PHP dependency resolution, provider independence, or runtime authorization.
+Manifests support inventory, dependency health, migration preflight, and feature-flag discovery. They do not replace Composer's PHP dependency resolution, provider independence, or runtime authorization.
 
 `requires-modules` is checked during provider resolution and again before Module-aware migration commands run. A required optional Domain must be installed and enabled. Non-wildcard constraints require the depended-on Module to publish a compatible version. Migration filename ordering must also keep requiring Modules after the migrations they depend on; see `docs/architecture/database.md`.
 
 Per-migration schema maturity remains declared beside the migration through `IncubatingSchema`. Do not duplicate individual migration maturity in a package or source manifest.
+
+### Module feature flags
+
+The declaration, tenant resolution, override storage, and listing command shipped
+together in [PR #660](https://github.com/BelimbingApp/belimbing/pull/660).
+Declare flags in the owning Module's `composer.json` under
+`extra.blb.feature-flags`. Each stable flag identity maps to an object with a
+boolean `default` and a human-readable `description`, for example:
+
+```json
+"feature-flags": {
+  "demo.preview": { "default": false, "description": "Enable the demo preview" }
+}
+```
+
+This fragment belongs inside `extra.blb`; it is not a top-level Composer key.
+Use explicit booleans. The [manifest reader](../../app/Base/Foundation/ModuleManifest/ModuleManifestReader.php)
+normalizes an omitted default to `false` and an omitted description to an empty
+string. The [registry](../../app/Base/FeatureFlags/Services/FeatureFlagRegistry.php)
+collects declarations through the application topology and manifest reader,
+excludes disabled optional Domains, and sorts by flag identity. Identities must
+be unique across Modules: duplicates throw `DuplicateFeatureFlagException`.
+
+Inject [FeatureFlags](../../app/Base/FeatureFlags/Services/FeatureFlags.php)
+(`App\Base\FeatureFlags\Services\FeatureFlags`) into consumers and call
+`enabled('demo.preview')`. Resolution requires the current tenant through
+`TenantContext`; there is no implicit tenant or caller-supplied tenant argument.
+For that tenant, a persisted override takes precedence over the descriptor
+default, including an explicit `false` override of a `true` default.
+`override('demo.preview', true)` stores an override and
+`clearOverride('demo.preview')` restores the declared default. Storage is
+[`base_feature_flag_overrides`](../../app/Base/FeatureFlags/Database/Migrations/0100_01_27_000000_create_base_feature_flag_overrides_table.php),
+with one row per `(tenant_id, flag)`. Reads fall back to defaults when the service
+cannot establish that the override table exists; writes require the migration.
+These service methods do not authorize an operator: the calling application
+surface must enforce its own authorization before changing overrides. Flags do
+not replace access-control checks.
+
+Reading, overriding, or clearing an undeclared name throws
+`UndeclaredFeatureFlagException` with `Feature flag [<name>] is not declared in
+any module descriptor.` Declare the flag in an enabled owning Module and correct
+the consumer's name; an undeclared flag is not treated as disabled.
+
+For operators, `php artisan blb:feature-flags` lists Flag, Module, Default,
+Enabled, Overridden, and Description for the current tenant;
+`php artisan blb:feature-flags --json` emits the same resolved inventory as
+`flag`, `module`, `default`, `enabled`, `overridden`, and `description` fields.
+The [command](../../app/Base/FeatureFlags/Console/Commands/ListFeatureFlagsCommand.php)
+has no tenant-selection or mutation option: the invoking runtime must already
+establish tenant context. Without it, the command exits with failure and
+`No tenant is in context. Set a tenant before listing feature flags.` An empty
+declared set succeeds (an explanatory table-mode message or `[]` in JSON).
 
 ## Discovery Contract
 
@@ -216,7 +269,9 @@ Every new cross-root scanner must:
 
 ### Composed-application refusals
 
-Composition rejects conflicting ownership and impossible dependency graphs. The route and table checks landed in [#570](https://github.com/BelimbingApp/belimbing/pull/570); [#588](https://github.com/BelimbingApp/belimbing/pull/588) also enforces table ownership at boot. Provider dependency ordering landed in [#599](https://github.com/BelimbingApp/belimbing/pull/599). These checks apply to enabled Domains and discovered Extensions as well as Base and Core.
+Composition rejects conflicting ownership and impossible dependency graphs. The route and table checks landed in [#570](https://github.com/BelimbingApp/belimbing/pull/570); [#588](https://github.com/BelimbingApp/belimbing/pull/588) also enforces table ownership at boot. Provider dependency ordering landed in [#599](https://github.com/BelimbingApp/belimbing/pull/599). Route-name collision refusal landed in [#618](https://github.com/BelimbingApp/belimbing/pull/618). These checks apply to enabled Domains and discovered Extensions as well as Base and Core.
+
+Descriptor validation that would refuse a mounted module whose `requires-modules` names an unmounted ID ([#608](https://github.com/BelimbingApp/belimbing/issues/608) / closed PR [#613](https://github.com/BelimbingApp/belimbing/pull/613)) did not land; missing dependencies still surface through provider-order resolution (`missing` / later-root / cycle) above. The composed-application smoke test ([#604](https://github.com/BelimbingApp/belimbing/issues/604) / PR [#604](https://github.com/BelimbingApp/belimbing/pull/604)) is not on `main` yet.
 
 The following are literal diagnostic templates from the owning code. PHP replaces `%s` and interpolated variables with the detected identities and paths; a cycle message appends the closed chain of module IDs and a final period.
 
@@ -226,7 +281,15 @@ The following are literal diagnostic templates from the owning code. PHP replace
 Route %s is registered by more than one module route file: %s and %s. Laravel would keep only the last one; give each module its own URI.
 ```
 
-The substitutions are the method/domain/URI key, first file, and later file. For a route without a domain constraint, a key is `GET /people/skills`. Give the competing module a distinct URI, or remove the obsolete route from a relocated module. Changing its route name alone does not resolve a key collision. Different HTTP methods remain distinct; route-name duplication and declarations within the same file are outside this guard. This check runs when module route files are loaded; rebuild route caches after changing the composition.
+The substitutions are the method/domain/URI key, first file, and later file. For a route without a domain constraint, a key is `GET /people/skills`. Give the competing module a distinct URI, or remove the obsolete route from a relocated module. Changing its route name alone does not resolve a key collision. Different HTTP methods remain distinct; declarations within the same file are outside this guard. This check runs when module route files are loaded; rebuild route caches after changing the composition.
+
+**Route name ownership — `RouteCollisionException`.** The same [RouteDiscoveryService](../../app/Base/Routing/RouteDiscoveryService.php) also refuses a later module route file that registers a non-empty route name another file already owns ([#618](https://github.com/BelimbingApp/belimbing/pull/618)):
+
+```text
+Route name %s is registered by more than one module route file: %s and %s. Laravel would keep only the last one; give each module its own route name.
+```
+
+The substitutions are the colliding name, first file, and later file. Give the competing module a distinct name, or remove the obsolete registration. Reusing a name inside one file remains that module's own concern, matching the URI guard. Unnamed routes are ignored by this check. Distinct URIs do not excuse a shared name: Laravel's name map would still keep only the last registration.
 
 **Table ownership — `ModuleManifestException`.** [ModuleMigrationDependencyChecker](../../app/Base/Database/Services/ModuleMigrationDependencyChecker.php) uses the same source-only check during Database provider boot and migration preflight. Its multiline exception starts with:
 
@@ -260,7 +323,7 @@ Providerless modules participate in dependency resolution. Rebuild cached config
 | Migrations | `Database/Migrations/` under Base components, Core Modules, Domain Modules, and Extension Modules; plus Laravel `database/migrations/` | Base Database migration commands |
 | Production/dev seeders | `Database/Seeders/` and `Database/Seeders/Dev/` under all four roots | Base Database seeder discovery |
 | Menus | `Config/menu.php` under Base/Core Modules, Domain/Extension source anchors, and Domain/Extension Modules | `App\Base\Menu\Services\MenuDiscoveryService` |
-| Routes | `Routes/web.php` and `Routes/api.php` under Base components, Core Modules, Domain Modules, and Extension Modules; a file that registers an HTTP method and URI an earlier file already registered refuses boot with `RouteCollisionException`, because Laravel would otherwise keep only the last route | `App\Base\Routing\RouteDiscoveryService` |
+| Routes | `Routes/web.php` and `Routes/api.php` under Base components, Core Modules, Domain Modules, and Extension Modules; a file that registers an HTTP method and URI, or a non-empty route name, an earlier file already registered refuses boot with `RouteCollisionException`, because Laravel would otherwise keep only the last route | `App\Base\Routing\RouteDiscoveryService` |
 | Settings | Module-level `Config/settings.php` under all four roots | `App\Base\Settings\ServiceProvider` |
 | Authorization | `Config/authz.php` under all four roots, including an explicit Extension source anchor where needed | `App\Base\Authz\ServiceProvider` |
 | Audit, dashboard, and other contributions | The documented `Config/{surface}.php` under supported Module roots | Owning Base discovery service |

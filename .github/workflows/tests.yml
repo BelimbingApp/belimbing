@@ -11,6 +11,12 @@ on:
 permissions:
   contents: read
 
+# Covers both the SQLite suites and the postgres-mirror job in this workflow.
+concurrency:
+  # A unique main group also prevents pending-run eviction.
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.run_id || 'pr' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   suites:
     strategy:
@@ -127,10 +133,16 @@ jobs:
       # gathers their Clover reports for one analysis.
       - name: Run Tests (Unit)
         if: matrix.suite == 'Unit'
-        run: ./vendor/bin/pest --testsuite=Unit --coverage-clover=coverage-unit.xml
+        env:
+          MATRIX_SUITE: ${{ matrix.suite }}
+          TIMING_DIR: timing
+        run: scripts/ci/record-pest-timing.sh Unit -- --testsuite=Unit --coverage-clover=coverage-unit.xml
       - name: Run Tests (Feature)
         if: matrix.suite == 'Feature'
-        run: ./vendor/bin/pest --testsuite=Feature --coverage-clover=coverage-feature.xml
+        env:
+          MATRIX_SUITE: ${{ matrix.suite }}
+          TIMING_DIR: timing
+        run: scripts/ci/record-pest-timing.sh Feature -- --testsuite=Feature --coverage-clover=coverage-feature.xml
       # These suites are empty in this repository today (domains are composed
       # and tested by domain-ci.yml), so an empty result is not a failure
       # here — but the step stays, so a Core test added later runs under
@@ -144,11 +156,14 @@ jobs:
       # checked against phpunit.xml first, and a missing one fails the step.
       - name: Run Tests (Core, Domains, Extensions)
         if: matrix.suite == 'Unit'
+        env:
+          MATRIX_SUITE: ${{ matrix.suite }}
+          TIMING_DIR: timing
         run: |
           for suite in Core Domains Extensions; do
             grep -q "testsuite name=\"$suite\"" phpunit.xml || { echo "::error::test suite '$suite' is not defined in phpunit.xml"; exit 1; }
           done
-          ./vendor/bin/pest --do-not-fail-on-empty-test-suite --testsuite=Core,Domains,Extensions --coverage-clover=coverage-modules.xml
+          scripts/ci/record-pest-timing.sh Core,Domains,Extensions -- --do-not-fail-on-empty-test-suite --testsuite=Core,Domains,Extensions --coverage-clover=coverage-modules.xml
 
       # The Unit lane also owns the optional module suites. Each artifact
       # carries only reports produced by its successful isolated checkout.
@@ -157,6 +172,15 @@ jobs:
         with:
           name: platform-coverage-${{ matrix.suite }}
           path: coverage-*.xml
+          if-no-files-found: error
+          retention-days: 1
+
+      # Per-job suite wall times for the aggregate table in `ci` (#614).
+      - name: Upload suite timing
+        uses: actions/upload-artifact@v7
+        with:
+          name: platform-timing-${{ matrix.suite }}
+          path: timing/*.json
           if-no-files-found: error
           retention-days: 1
 
@@ -177,6 +201,16 @@ jobs:
         uses: actions/checkout@v7 # NOSONAR — official GitHub action
         with:
           fetch-depth: 0
+
+      - name: Download suite timing
+        uses: actions/download-artifact@v8
+        with:
+          pattern: platform-timing-*
+          merge-multiple: true
+          path: timing
+
+      - name: Publish per-run timing summary
+        run: python3 scripts/ci/aggregate-pest-timing.py timing >> "$GITHUB_STEP_SUMMARY"
 
       - name: Download Unit coverage
         uses: actions/download-artifact@v8
