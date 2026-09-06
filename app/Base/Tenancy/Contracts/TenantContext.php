@@ -2,6 +2,7 @@
 
 namespace App\Base\Tenancy\Contracts;
 
+use App\Base\Tenancy\DTO\TenantResolution;
 use App\Base\Tenancy\Exceptions\TenantContextMissingException;
 
 /**
@@ -24,6 +25,11 @@ interface TenantContext
     public function hasTenant(): bool;
 
     /**
+     * The request resolver that established the current tenant, when known.
+     */
+    public function resolution(): ?TenantResolution;
+
+    /**
      * The current tenant ID; throws when no tenant context is resolved.
      *
      * @throws TenantContextMissingException
@@ -34,6 +40,11 @@ interface TenantContext
      * Set the current tenant context (null clears it).
      */
     public function set(?int $tenantId): void;
+
+    /**
+     * Set tenant context from a named request resolver.
+     */
+    public function setResolution(TenantResolution $resolution): void;
 
     /**
      * Clear the current tenant context.

@@ -3,6 +3,7 @@
 namespace App\Base\Tenancy\Services;
 
 use App\Base\Tenancy\Contracts\TenantContext;
+use App\Base\Tenancy\DTO\TenantResolution;
 use App\Base\Tenancy\Exceptions\TenantContextMissingException;
 
 /**
@@ -16,6 +17,8 @@ final class ApplicationTenantContext implements TenantContext
 {
     private ?int $tenantId = null;
 
+    private ?TenantResolution $resolution = null;
+
     public function currentTenantId(): ?int
     {
         return $this->tenantId;
@@ -24,6 +27,11 @@ final class ApplicationTenantContext implements TenantContext
     public function hasTenant(): bool
     {
         return $this->tenantId !== null;
+    }
+
+    public function resolution(): ?TenantResolution
+    {
+        return $this->resolution;
     }
 
     public function requireTenantId(): int
@@ -38,22 +46,32 @@ final class ApplicationTenantContext implements TenantContext
     public function set(?int $tenantId): void
     {
         $this->tenantId = $tenantId;
+        $this->resolution = null;
+    }
+
+    public function setResolution(TenantResolution $resolution): void
+    {
+        $this->tenantId = $resolution->tenantId;
+        $this->resolution = $resolution;
     }
 
     public function clear(): void
     {
         $this->tenantId = null;
+        $this->resolution = null;
     }
 
     public function runForTenant(?int $tenantId, callable $callback): mixed
     {
-        $previous = $this->tenantId;
-        $this->tenantId = $tenantId;
+        $previousTenantId = $this->tenantId;
+        $previousResolution = $this->resolution;
+        $this->set($tenantId);
 
         try {
             return $callback();
         } finally {
-            $this->tenantId = $previous;
+            $this->tenantId = $previousTenantId;
+            $this->resolution = $previousResolution;
         }
     }
 }

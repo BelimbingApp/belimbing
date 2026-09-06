@@ -5,6 +5,7 @@ namespace App\Base\Perf\Http\Middleware;
 use App\Base\Perf\Services\PerfLog;
 use App\Base\Perf\Services\PerformanceCollector;
 use App\Base\Perf\Services\PerfRuntimeSettings;
+use App\Base\Tenancy\Contracts\TenantContext;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -21,6 +22,7 @@ final class RecordRequestPerformance
         private readonly PerformanceCollector $collector,
         private readonly PerfLog $log,
         private readonly PerfRuntimeSettings $runtimeSettings,
+        private readonly TenantContext $tenantContext,
     ) {}
 
     public function handle(Request $request, Closure $next): Response
@@ -82,6 +84,7 @@ final class RecordRequestPerformance
             'method' => $request->method(),
             'path' => '/'.ltrim($request->path(), '/'),
             'route' => $this->routeLabel($request),
+            'tenant_resolver' => $this->tenantContext->resolution()?->resolver,
             'status' => $status,
             'ms' => round($totalMs, 1),
             'db_ms' => round($metrics['db_ms'], 1),
