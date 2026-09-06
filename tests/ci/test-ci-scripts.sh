@@ -565,6 +565,9 @@ assert 'Raise platform coverage baseline on main' in workflow
 assert 'ci/raise-coverage-baseline' in workflow
 assert 'gh pr create' in workflow
 assert 'gh pr merge' in workflow
+assert 'COVERAGE_BASELINE_RAISE_TOKEN' in workflow
+assert 'AI-Team-Lane-Issue: none' in workflow
+assert 'task:ready' in workflow
 assert 'git push origin HEAD:main' not in workflow
 assert 'coverage-feature-a.xml' in workflow and 'coverage-feature-b.xml' in workflow
 assert 'paths-ignore' in workflow and 'platform-coverage-baseline.json' in workflow
