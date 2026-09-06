@@ -185,3 +185,8 @@ branch-protection required check leaves unrelated PRs waiting for a status that 
 Keep the job always reporting; require the `composed-smoke` context in Protect Main when the
 owner wants it blocking. Recover refusals with the
 [composed-app runbook](composed-app-runbook.md).
+
+A nightly schedule ([#663](https://github.com/BelimbingApp/belimbing/issues/663)) re-runs the same
+assertion against the pins on `main` and opens or updates one issue titled **Composed boot failed**
+on refusal; `workflow_dispatch` accepts a dry-run input that exercises the issue body path without
+calling the Issues API.

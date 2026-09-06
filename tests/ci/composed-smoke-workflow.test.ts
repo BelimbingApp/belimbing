@@ -24,5 +24,7 @@ test("composed-smoke materializes People and PeopleConnector from the descriptor
     const hold = workflow.jobs["composed-smoke"].steps.find(
         (step: any) => step.name === "Boot the composed application and hold it to the surface",
     );
-    expect(hold.run).toBe("php scripts/ci/composed-smoke.php");
+    expect(hold.run).toContain("php scripts/ci/composed-smoke.php");
+    expect(hold.run).toContain("GITHUB_OUTPUT");
+    expect(hold.id).toBe("boot");
 });
