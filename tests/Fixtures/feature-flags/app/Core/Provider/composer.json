@@ -1,0 +1,1 @@
+{"name":"demo/provider","extra":{"blb":{"module":"demo/provider","feature-flags":{"dependency.flag":{"default":true}},"requires-modules":{"demo/foreign":"*"}}}}

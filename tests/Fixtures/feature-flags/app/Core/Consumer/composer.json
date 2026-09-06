@@ -1,0 +1,1 @@
+{"name":"demo/consumer","extra":{"blb":{"module":"demo/consumer","feature-flags":{"own.flag":{"default":false}},"requires-modules":{"demo/provider":"*"}}}}

@@ -1,0 +1,17 @@
+parameters:
+    customRulesetUsed: true
+    paths:
+        - app/Base
+        - app/Core
+        - app/Domains
+        - app/Extensions
+
+services:
+    -
+        class: App\Base\FeatureFlags\FeatureFlagReadRule
+        arguments:
+            projectRoot: %currentWorkingDirectory%
+            # Module ID => flag => reviewed justification. No blanket exemptions.
+            allowlist: []
+        tags:
+            - phpstan.rules.rule
