@@ -230,6 +230,12 @@ jobs:
       - name: Scan Domain Livewire for raw subject-id request reads
         run: ./vendor/bin/pest --filter='keeps the production Domain Livewire tree free of unallowlisted subject-id request reads'
 
+      # phpunit.xml pins memory_limit at 512M and PHPUnit applies its <ini>
+      # after php.ini and -d, so only editing the file raises it. The platform
+      # workflow does the same (#537); People's coverage run outgrew 512M (#784).
+      - name: Raise the memory limit for coverage
+        run: sed -i 's/name="memory_limit" value="512M"/name="memory_limit" value="2G"/' phpunit.xml && grep -c 'memory_limit" value="2G"' phpunit.xml
+
       - name: Run Tests
         run: ./vendor/bin/pest "$DOMAIN_PATH" --coverage-clover=coverage.xml
 
@@ -476,6 +482,12 @@ jobs:
 
       - name: Build Assets
         run: bun run build
+
+      # phpunit.xml pins memory_limit at 512M and PHPUnit applies its <ini>
+      # after php.ini and -d, so only editing the file raises it. The platform
+      # workflow does the same (#537); People's coverage run outgrew 512M (#784).
+      - name: Raise the memory limit for coverage
+        run: sed -i 's/name="memory_limit" value="512M"/name="memory_limit" value="2G"/' phpunit.xml && grep -c 'memory_limit" value="2G"' phpunit.xml
 
       - name: Run Tests on PostgreSQL
         env:
