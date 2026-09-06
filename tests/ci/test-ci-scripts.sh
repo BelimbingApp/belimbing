@@ -74,6 +74,45 @@ assert 'continue-on-error:' not in job_block(future_job, 'notify-people-connecto
 )
 PY
 
+# Blocked-By sweep must use a fine-grained cross-repo token so qualified
+# BelimbingApp/blb-people and blb-people-connector blockers can resolve (#606).
+# Default github.token cannot read other repositories; keep the job's
+# permissions block for checkout and document intent, but wire GITHUB_TOKEN
+# for the sweep step to AI_TEAM_BLOCKED_BY_SWEEP_TOKEN.
+python3 - <<'PY'
+from pathlib import Path
+import re
+
+
+def job_block(source: str, job: str) -> str:
+    pattern = rf'(?ms)^  {re.escape(job)}:\n.*?(?=^  [a-zA-Z0-9_-]+:\n|\Z)'
+    matches = re.findall(pattern, source)
+    assert len(matches) == 1, f'ai-team-blocked-by-sweep.yml must define exactly one {job} job'
+
+    return matches[0]
+
+
+workflow = Path('.github/workflows/ai-team-blocked-by-sweep.yml').read_text(encoding='utf-8')
+sweep = job_block(workflow, 'sweep')
+
+required = (
+    'permissions:\n  contents: read',
+    'permissions:\n      contents: read\n      issues: write',
+    'AI_TEAM_BLOCKED_BY_SWEEP_TOKEN: ${{ secrets.AI_TEAM_BLOCKED_BY_SWEEP_TOKEN }}',
+    'GITHUB_TOKEN: ${{ secrets.AI_TEAM_BLOCKED_BY_SWEEP_TOKEN }}',
+    'GITHUB_REPOSITORY: ${{ github.repository }}',
+    'run: python3 docs/ai-team/scripts/blocked_by_sweep.py',
+    'if [[ -z "$AI_TEAM_BLOCKED_BY_SWEEP_TOKEN" ]]; then',
+)
+for contract in required:
+    assert contract in workflow, f'missing blocked-by sweep contract: {contract!r}'
+
+assert 'GITHUB_TOKEN: ${{ github.token }}' not in sweep, (
+    'sweep step must not use default github.token; cross-repo blockers need AI_TEAM_BLOCKED_BY_SWEEP_TOKEN'
+)
+assert 'pull_request:' not in workflow, 'blocked-by sweep must stay schedule/dispatch only'
+PY
+
 # mount-guard.sh: a direct edit under docs/ai-team/ must be refused; the
 # subtree-pull commit shape (and its merge) must pass; unrelated changes must
 # never even inspect the mount. Built in an isolated fixture repo so this
