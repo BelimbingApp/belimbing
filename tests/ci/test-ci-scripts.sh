@@ -107,6 +107,16 @@ printf '{"shards":{"a":["Beta"],"b":["Gamma"]}}' > "$shard_file"
 if python3 scripts/ci/platform-feature-shards.py --root "$shard_root" --shards-file "$shard_file" --validate-only >/dev/null 2>&1; then
     echo 'Feature shard validator accepted omitted Alpha files' >&2; exit 1
 fi
+
+# --write-balanced must place directories by longest-processing-time so the
+# heaviest directory sits alone against the two lighter ones (#626).
+printf '{"directories":{"Alpha":{"wall_seconds":10},"Beta":{"wall_seconds":6},"Gamma":{"wall_seconds":5}}}' > "$shard_root/timings.json"
+printf '{"shards":{"a":["Alpha","Beta"],"b":["Gamma"]}}' > "$shard_file"
+python3 scripts/ci/platform-feature-shards.py --root "$shard_root" --shards-file "$shard_file" --timings-file "$shard_root/timings.json" --write-balanced >/dev/null
+balanced=$(python3 -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1]))["shards"], sort_keys=True))' "$shard_file")
+if [ "$balanced" != '{"a": ["Alpha"], "b": ["Beta", "Gamma"]}' ]; then
+    echo "Feature shard balancer did not apply longest-processing-time: $balanced" >&2; exit 1
+fi
 rm -rf "$shard_root"
 
 # Dependency audit policy (#617): expired allowlist entries fail closed; a
