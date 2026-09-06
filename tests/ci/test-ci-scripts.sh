@@ -919,4 +919,30 @@ with tempfile.TemporaryDirectory() as tmp:
     assert failed.returncode == 1, failed.stdout + failed.stderr
 PY
 
+# Livewire action debt can decrease automatically, never increase (#775).
+python3 - <<'PY'
+import json
+import subprocess
+import tempfile
+from pathlib import Path
+script = Path('scripts/ci/refresh-livewire-action-baselines.py').resolve()
+with tempfile.TemporaryDirectory() as tmp:
+    root = Path(tmp)
+    baseline = root / 'baseline.json'
+    measured = root / 'measured.json'
+    original = {'domain': 'People', 'module_owned_unreferenced': 2, 'actions': ['A', 'B']}
+    def run(count, actions):
+        baseline.write_text(json.dumps(original))
+        measured.write_text(json.dumps({'domain': 'People', 'module_owned_unreferenced': count, 'actions': actions}))
+        return subprocess.run(['python3', str(script), str(baseline), str(measured)], capture_output=True, text=True)
+    result = run(1, ['A'])
+    assert result.returncode == 0, result.stderr
+    assert json.loads(baseline.read_text())['module_owned_unreferenced'] == 1
+    result = run(3, ['A', 'B', 'C'])
+    assert result.returncode == 0 and 'unchanged' in result.stdout, result.stdout + result.stderr
+    assert baseline.read_text() == json.dumps(original), 'higher measured debt was written'
+    result = run(2, ['A', 'C'])
+    assert result.returncode == 0 and baseline.read_text() == json.dumps(original), 'equal-count name churn must not refresh'
+PY
+
 echo 'CI script checks passed'
