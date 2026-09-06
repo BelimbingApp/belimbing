@@ -35,6 +35,7 @@ package-lock.json
 
 # IDE & Editor configs
 /.claude
+/.codex
 /.fleet
 /.idea
 /.nova
