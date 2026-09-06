@@ -30,7 +30,7 @@ declare(strict_types=1);
  * cannot pass for the pin.
  *
  *   php scripts/ci/composed-smoke.php [--registry=<json>] [--surface=<json>]
- *       [--domains=people,people-connector] [--root=<platform checkout>]
+ *       [--domains=<optional comma-separated subset>] [--root=<platform checkout>]
  *       [--scan-only] [--print-surface]
  *       [--routes=<route:list json>|--routes-json=<route:list json>]
  *
@@ -47,7 +47,7 @@ declare(strict_types=1);
  * Production runs never pass it.
  */
 /** Route names the pinned Domains own; everything else is platform surface. */
-const DOMAIN_ROUTE_NAME = '/^(people\.|admin\.people-connector\.|admin\.integration\.)/';
+const DOMAIN_ROUTE_NAME = '/^(people\.|admin\.people-connector\.|admin\.integration\.|commerce\.|it\.|quality\.)/';
 
 function fail(string $message): never
 {
@@ -61,7 +61,7 @@ function options(array $argv): array
     $options = [
         'registry' => null,
         'surface' => null,
-        'domains' => 'people,people-connector',
+        'domains' => null,
         'root' => dirname(__DIR__, 2),
         'routes' => null,
         'scan-only' => false,
@@ -194,6 +194,15 @@ $options = options($argv);
 $root = $options['root'];
 $failures = [];
 
+if (! $options['scan-only']) {
+    $registry = readJson($options['registry']);
+    $surface = readJson($options['surface']);
+    $domainIds = $options['domains'] === null
+        ? array_keys($registry['domains'])
+        : array_values(array_filter(array_map('trim', explode(',', $options['domains']))));
+    $mounts = materialize($registry, $domainIds, $root);
+}
+
 $duplicates = duplicateMigrations($root);
 foreach ($duplicates as $name => $files) {
     $failures[] = "migration [{$name}] is defined more than once: ".implode(', ', $files);
@@ -210,11 +219,6 @@ if ($options['scan-only']) {
     }
     exit(0);
 }
-
-$registry = readJson($options['registry']);
-$surface = readJson($options['surface']);
-$domainIds = array_values(array_filter(array_map('trim', explode(',', $options['domains']))));
-$mounts = materialize($registry, $domainIds, $root);
 
 foreach ($domainIds as $id) {
     $expectedPin = (string) ($surface['pins'][$id] ?? '');
