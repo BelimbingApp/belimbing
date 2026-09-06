@@ -3,7 +3,7 @@
 **Document Type:** Architecture Specification
 **Scope:** Application-code ownership, Domain and Module boundaries, lifecycle, discovery, variation, and delivery provenance
 **Based On:** `docs/architecture/decisions/0001-four-root-application-topology.md`, `docs/brief.md`, and Ousterhout's *A Philosophy of Software Design*
-**Last Updated:** 2026-08-31
+**Last Updated:** 2026-09-06
 **Related:** `docs/architecture/database.md`, `docs/architecture/people-connector.md`, `docs/architecture/settings.md`, `docs/modules/`, `docs/guides/extensions/private-extension-repositories.md`, `docs/guides/extensions/database-migrations.md`
 
 ## Overview
@@ -213,6 +213,44 @@ Every new cross-root scanner must:
 4. scan only roots where that artifact is supported;
 5. sort deterministically and reject ambiguous duplicate identities;
 6. document any source-level anchor separately from Module-level contributions.
+
+### Composed-application refusals
+
+Composition rejects conflicting ownership and impossible dependency graphs. The route and table checks landed in [#570](https://github.com/BelimbingApp/belimbing/pull/570); [#588](https://github.com/BelimbingApp/belimbing/pull/588) also enforces table ownership at boot. Provider dependency ordering landed in [#599](https://github.com/BelimbingApp/belimbing/pull/599). These checks apply to enabled Domains and discovered Extensions as well as Base and Core.
+
+The following are literal diagnostic templates from the owning code. PHP replaces `%s` and interpolated variables with the detected identities and paths; a cycle message appends the closed chain of module IDs and a final period.
+
+**Route ownership — `RouteCollisionException`.** [RouteDiscoveryService](../../app/Base/Routing/RouteDiscoveryService.php) refuses a later module route file that registers a key already owned by another file:
+
+```text
+Route %s is registered by more than one module route file: %s and %s. Laravel would keep only the last one; give each module its own URI.
+```
+
+The substitutions are the method/domain/URI key, first file, and later file. For a route without a domain constraint, a key is `GET /people/skills`. Give the competing module a distinct URI, or remove the obsolete route from a relocated module. Changing its route name alone does not resolve a key collision. Different HTTP methods remain distinct; route-name duplication and declarations within the same file are outside this guard. This check runs when module route files are loaded; rebuild route caches after changing the composition.
+
+**Table ownership — `ModuleManifestException`.** [ModuleMigrationDependencyChecker](../../app/Base/Database/Services/ModuleMigrationDependencyChecker.php) uses the same source-only check during Database provider boot and migration preflight. Its multiline exception starts with:
+
+```text
+Module migration dependency preflight failed.
+```
+
+Each conflicting table contributes this line:
+
+```text
+- Table %s is created by more than one module: %s. One module owns a table; remove or rename the table in every module but its owner.
+```
+
+The substitutions are the table name and the owners joined by ` and `, each formatted as `module-id (migration-file)`. Complete the relocation by removing the obsolete module's declaration, or give genuinely separate data a distinct table name. Renaming only the migration file cannot resolve shared table ownership. Repeated declarations within one module remain allowed. The check shares [TableRegistry](../../app/Base/Database/Models/TableRegistry.php)'s literal `Schema::create` / `->create*Table` scan; computed names and arbitrary runtime DDL are outside that scan. It neither queries nor repairs an existing database; deployed data changes still require the migration policy in [database architecture](database.md).
+
+**Provider dependency order — `ModuleManifestException`.** [ModuleProviderOrder](../../app/Base/Foundation/Providers/ModuleProviderOrder.php) refuses these conditions during provider-list resolution, before registering the discovered providers:
+
+| Literal diagnostic template | Cause | Required correction |
+|---|---|---|
+| `Cannot resolve provider order: %s requires %s (%s; constraint %s).` | Requiring module, required ID, issue kind (`missing` or `incompatible`), and declared version constraint. Disabled required Domains count as missing. | Install/enable the declared dependency or supply a compatible version; correct a mistaken manifest ID or constraint against the actual supported contract. |
+| `$module cannot require later-root module $required.` | The required module belongs to a later root in Base → Core → Domains → Extensions. | Move the dependency to the appropriate ownership layer or replace the upward dependency with an explicit contribution contract; do not invert root order. |
+| `Module dependency cycle: ` | Required edges form a cycle; the appended chain repeats its starting ID, for example `order/a -> order/z -> order/a.` | Remove the circular requirement by correcting ownership or extracting the shared contract. Alphabetical renaming does not break a dependency cycle. |
+
+Providerless modules participate in dependency resolution. Rebuild cached configuration after manifest or provider changes: the cached provider list does not rerun the sorter. Migration preflight separately reports its own dependency and filename-order errors; those are distinct from these provider-resolution messages.
 
 ### Current surfaces
 
