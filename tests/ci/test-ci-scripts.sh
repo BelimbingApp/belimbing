@@ -3,7 +3,7 @@ set -euo pipefail
 
 root=$(git rev-parse --show-toplevel)
 cd "$root"
-bash -n scripts/ci/changed-authorable-php.sh scripts/ci/extension-conformance.sh scripts/ci/mount-guard.sh
+bash -n scripts/ci/changed-authorable-php.sh scripts/ci/extension-conformance.sh scripts/ci/mount-guard.sh scripts/ci/phpstan-baseline-gate.sh
 python3 -m json.tool scripts/ci/domain-repos.json >/dev/null
 
 # Database feature tests prove the behaviour most exposed to dialect, schema,
