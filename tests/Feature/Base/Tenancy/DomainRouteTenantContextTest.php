@@ -8,7 +8,7 @@ use App\Core\User\Models\User;
 use Illuminate\Support\Facades\File;
 
 const TENANT_REQUIRED_DOMAIN_FIXTURE = 'app/Domains/ZzTenantRequired/Fixture';
-const TENANT_REQUIRED_ROUTE_NAME = 'zz-tenant-required.probe';
+const TENANT_REQUIRED_ROUTE_NAME = 'people-connector.webhook';
 const TENANT_REQUIRED_ROUTE_PROBE = 'zz_tenant_required_route_reached';
 
 function registerTenantRequiredDomainFixture(): void
@@ -24,7 +24,7 @@ Route::get('zz-tenant-required/probe', function () {
     $GLOBALS['zz_tenant_required_route_reached'] = true;
 
     return response()->json(['reached' => true]);
-})->name('zz-tenant-required.probe');
+})->name('people-connector.webhook');
 PHP);
 
     config()->set('domain_routes.tenant_context.required_domains', ['ZzTenantRequired']);
@@ -37,6 +37,7 @@ afterEach(function (): void {
 });
 
 it('refuses a tenant-required domain route before its handler runs when context is unresolved', function (): void {
+    config()->set('domain_routes.tenant_context.exclusions', []);
     registerTenantRequiredDomainFixture();
     $GLOBALS[TENANT_REQUIRED_ROUTE_PROBE] = false;
 
@@ -48,6 +49,7 @@ it('refuses a tenant-required domain route before its handler runs when context 
 });
 
 it('allows a tenant-required domain route after web middleware resolves the tenant', function (): void {
+    config()->set('domain_routes.tenant_context.exclusions', []);
     registerTenantRequiredDomainFixture();
     $user = User::factory()->create(['company_id' => Company::factory()->create()->id]);
 
@@ -77,9 +79,11 @@ it('allows only named exclusions carrying a non-empty reason', function (): void
     expect($GLOBALS[TENANT_REQUIRED_ROUTE_PROBE])->toBeFalse();
 });
 
-it('declares the guarded domains, an empty exclusion list, and visible middleware provenance', function (): void {
+it('declares guarded domains, the signed webhook exclusion, and visible middleware provenance', function (): void {
     expect(config('domain_routes.tenant_context.required_domains'))->toBe(['People', 'PeopleConnector'])
-        ->and(config('domain_routes.tenant_context.exclusions'))->toBe([]);
+        ->and(config('domain_routes.tenant_context.exclusions'))->toBe([
+            TENANT_REQUIRED_ROUTE_NAME => 'Signed provider callback resolves its tenant from the verified connection before dispatch.',
+        ]);
 
     registerTenantRequiredDomainFixture();
     $row = collect(app(DomainRouteInventory::class)->all())
@@ -87,4 +91,8 @@ it('declares the guarded domains, an empty exclusion list, and visible middlewar
 
     expect($row)->not->toBeNull()
         ->and($row['middleware'])->toContain('web', RequireTenantContext::class);
+
+    $this->getJson('/zz-tenant-required/probe')
+        ->assertOk()
+        ->assertExactJson(['reached' => true]);
 });
