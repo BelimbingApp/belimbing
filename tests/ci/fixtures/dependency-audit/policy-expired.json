@@ -1,0 +1,11 @@
+{
+  "min_severity": "low",
+  "allowlist": [
+    {
+      "id": "CVE-0000-EXPIRED",
+      "ecosystem": "bun",
+      "reason": "Fixture-only expired entry to prove the gate fails closed.",
+      "expires": "2020-01-01"
+    }
+  ]
+}

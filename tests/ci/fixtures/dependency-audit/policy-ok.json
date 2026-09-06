@@ -1,0 +1,11 @@
+{
+  "min_severity": "low",
+  "allowlist": [
+    {
+      "id": "CVE-0000-FUTURE",
+      "ecosystem": "composer",
+      "reason": "Fixture-only future entry; no matching advisory in empty reports.",
+      "expires": "2099-01-01"
+    }
+  ]
+}
