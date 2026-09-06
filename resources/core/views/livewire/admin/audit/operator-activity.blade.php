@@ -1,5 +1,8 @@
 <?php
-/** @var \App\Base\Audit\Livewire\AuditLog\OperatorActivity $this */
+
+use App\Base\Audit\Livewire\AuditLog\OperatorActivity;
+
+/** @var OperatorActivity $this */
 ?>
 
 <div>
