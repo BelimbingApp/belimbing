@@ -29,13 +29,17 @@ declare(strict_types=1);
  *
  *   php scripts/ci/composed-smoke.php [--registry=<json>] [--surface=<json>]
  *       [--domains=people,people-connector] [--root=<platform checkout>]
- *       [--scan-only] [--print-surface]
+ *       [--scan-only] [--print-surface] [--routes=<route:list json>]
  *
  * --scan-only skips materialization and the boot and runs the migration scan
  * alone, so a fixture tree can prove the duplicate rule without a network.
  * --print-surface boots and writes the observed surface as JSON to stdout
  * instead of judging it: the way to regenerate composed-surface.json after a
  * pin advances.
+ * --routes judges a saved `route:list --json` table instead of booting, so
+ * tests/ci/test-ci-scripts.sh can drive every surface guard (pin agreement,
+ * mount at the pinned ref, route count, expected route names) against
+ * fixtures without a network or a boot. Production runs never pass it.
  */
 function fail(string $message): never
 {
@@ -51,6 +55,7 @@ function options(array $argv): array
         'surface' => null,
         'domains' => 'people,people-connector',
         'root' => dirname(__DIR__, 2),
+        'routes' => null,
         'scan-only' => false,
         'print-surface' => false,
     ];
@@ -206,14 +211,18 @@ foreach ($domainIds as $id) {
     }
 }
 
-[$code, $stdout, $stderr] = run(['php', 'artisan', 'route:list', '--json'], $root);
-if ($code !== 0) {
-    $message = trim($stderr) !== '' ? trim($stderr) : trim($stdout);
-    fail("the composed application failed to boot:\n".$message);
-}
-$routes = json_decode($stdout, true);
-if (! is_array($routes)) {
-    fail('route:list did not return JSON');
+if ($options['routes'] !== null) {
+    $routes = readJson($options['routes']);
+} else {
+    [$code, $stdout, $stderr] = run(['php', 'artisan', 'route:list', '--json'], $root);
+    if ($code !== 0) {
+        $message = trim($stderr) !== '' ? trim($stderr) : trim($stdout);
+        fail("the composed application failed to boot:\n".$message);
+    }
+    $routes = json_decode($stdout, true);
+    if (! is_array($routes)) {
+        fail('route:list did not return JSON');
+    }
 }
 $names = array_values(array_filter(array_map(fn (array $route): ?string => $route['name'] ?? null, $routes)));
 sort($names);
