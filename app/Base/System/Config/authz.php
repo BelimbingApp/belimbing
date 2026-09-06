@@ -10,5 +10,6 @@ return [
         'admin.system.settings.manage',
         'admin.system.test-transport.view',
         'admin.system.ui-reference.view',
+        'admin.system.audit.view',
     ],
 ];

@@ -12,5 +12,6 @@ return [
         $item('admin.system.email', 'Email', 'heroicon-o-paper-airplane', parent: 'admin.system.integrations', route: 'admin.system.email.index', permission: 'admin.system.email.manage'),
         $item('admin.system.test-transport', 'Test Transport', 'heroicon-o-play', parent: 'admin.system.integrations', route: 'admin.system.test-transport.index', permission: 'admin.system.test-transport.view'),
         $item('admin.system.menu-inspector', 'Menu Inspector', 'heroicon-o-magnifying-glass', parent: 'admin.system.diagnostics', route: 'admin.system.menu-inspector.index', permission: 'admin.system.menu-inspector.view'),
+        $item('admin.system.tenant-audit', 'Tenant Audit', 'heroicon-o-shield-exclamation', parent: 'admin.system.diagnostics', route: 'admin.system.tenant-audit.index', permission: 'admin.system.audit.view'),
     ],
 ];
