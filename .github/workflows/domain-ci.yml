@@ -220,6 +220,9 @@ jobs:
       - name: Check composed feature flag ownership
         run: vendor/bin/phpstan analyse -c phpstan-feature-flags.neon --memory-limit=2G
 
+      - name: Audit composed Domain route middleware
+        run: php artisan blb:domain-routes --audit
+
       # Platform tests.yml only sees an empty Domains tree; the real hit surface
       # is composed here. Fixture cases stay in SubjectIdRequestScanTest.
       # Run before the Domain Pest suite so ambient suite failures cannot skip
@@ -267,6 +270,12 @@ jobs:
             jq -r '.domains | to_entries[] | [.key, .value.repo, .value.path, .value.ref] | @tsv' \
               scripts/ci/domain-repos.json
           )
+
+      # The smoke loop checks each Module's declared dependency closure. With
+      # every immutable pin now materialized, check unrelated Domain Modules
+      # against each other for table and route ownership collisions as well.
+      - name: Check composed Domain ownership
+        run: php artisan blb:module-ownership
 
       - name: Ratchet Livewire action debt
         run: |
