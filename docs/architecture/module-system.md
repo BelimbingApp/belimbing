@@ -245,6 +245,15 @@ establish tenant context. Without it, the command exits with failure and
 `No tenant is in context. Set a tenant before listing feature flags.` An empty
 declared set succeeds (an explanatory table-mode message or `[]` in JSON).
 
+Operators also have an Administration surface at
+`admin/system/feature-flags` ([Livewire Index](../../app/Base/FeatureFlags/Livewire/Index.php)):
+list declared flags with module, default, effective value, and override state for
+the current tenant; toggle or clear writes through `FeatureFlags` (so undeclared
+names still refuse) and records mutation audit rows on
+`FeatureFlagOverride` keyed as `feature-flag / <name>`. Route capability
+`admin.system.feature-flags.view`; mutations need
+`admin.system.feature-flags.manage`.
+
 ## Discovery Contract
 
 Discovery is convention-based, centralized, deterministic, and ownership-aware. Adding a conforming Module integrates its supported surfaces without editing a central registration list.
