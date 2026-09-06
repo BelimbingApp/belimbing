@@ -3,6 +3,7 @@
 use App\Base\Integration\Enums\SubjectCommandExecutionState;
 use App\Base\Integration\Services\SubjectCommandRateLimiter;
 use App\Base\Tenancy\Contracts\TenantContext;
+use App\Base\Tenancy\Exceptions\TenantContextMissingException;
 
 it('refuses a configured tenant and subject burst before dispatch', function (): void {
     config()->set('integration.subject_command_limits', [
@@ -63,4 +64,37 @@ it('isolates limits by tenant subject and operation while undeclared reads stay 
         expect($limiter->execute('employee.read', 'employee-a', fn (): string => 'read')->value)
             ->toBe('read');
     }
+});
+
+it('consumes admission before dispatch when the command outcome becomes unknown', function (): void {
+    config()->set('integration.subject_command_limits', [
+        'employee.update' => ['max_attempts' => 1, 'decay_seconds' => 60],
+    ]);
+    app(TenantContext::class)->set(61);
+    $limiter = app(SubjectCommandRateLimiter::class);
+
+    expect(fn () => $limiter->execute(
+        'employee.update',
+        'employee-timeout',
+        fn () => throw new RuntimeException('answer lost'),
+    ))->toThrow(RuntimeException::class, 'answer lost');
+
+    $afterTimeout = $limiter->execute(
+        'employee.update',
+        'employee-timeout',
+        fn (): string => 'must not dispatch',
+    );
+
+    expect($afterTimeout->state)->toBe(SubjectCommandExecutionState::RefusedBeforeDispatch)
+        ->and($afterTimeout->wasDispatched())->toBeFalse();
+});
+
+it('fails closed without tenant context', function (): void {
+    app(TenantContext::class)->clear();
+
+    expect(fn () => app(SubjectCommandRateLimiter::class)->execute(
+        'employee.update',
+        'employee-1',
+        fn (): string => 'must not dispatch',
+    ))->toThrow(TenantContextMissingException::class);
 });
