@@ -1,0 +1,77 @@
+name: refresh-pest-timing-baseline
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: refresh-pest-timing-baseline
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v7 # NOSONAR — GitHub-maintained action
+        with:
+          ref: main
+
+      - name: Select latest successful main run
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run_id=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow tests.yml \
+            --branch main --event push --status success --limit 1 \
+            --json databaseId --jq '.[0].databaseId')
+          if [ -z "$run_id" ] || [ "$run_id" = null ]; then
+            echo "No successful tests.yml push run on main." >&2
+            exit 1
+          fi
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "url=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Download all platform suite timings
+        uses: actions/download-artifact@v8 # NOSONAR — GitHub-maintained action
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.source.outputs.run_id }}
+          pattern: platform-timing-*
+          merge-multiple: true
+          path: timing
+
+      - name: Refresh baseline
+        env:
+          SOURCE_URL: ${{ steps.source.outputs.url }}
+        run: |
+          set -euo pipefail
+          python3 scripts/ci/pest-timing-ratchet.py timing \
+            --baseline tests/ci/pest-timing-baseline.json \
+            --write-baseline --source "$SOURCE_URL"
+
+      - name: Open baseline PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_URL: ${{ steps.source.outputs.url }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- tests/ci/pest-timing-baseline.json; then
+            echo "Timing baseline unchanged."
+            exit 0
+          fi
+          branch="ci/refresh-pest-timing-baseline-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          git switch -c "$branch"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/ci/pest-timing-baseline.json
+          git commit -m "ci: refresh Pest timing baseline"
+          git push origin "HEAD:refs/heads/$branch"
+          printf 'Refresh every platform suite timing from %s. Tolerances remain 25%% and 20 seconds.\n\nAI-Team-Lane-Issue: none\n' "$SOURCE_URL" > "$RUNNER_TEMP/timing-pr.md"
+          gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
+            --title "ci: refresh Pest timing baseline" --body-file "$RUNNER_TEMP/timing-pr.md" \
+            --label bot-maintenance
