@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\Foundation\Exceptions\BlbConfigurationException;
 use App\Base\Integration\Enums\SubjectCommandExecutionState;
 use App\Base\Integration\Services\SubjectCommandRateLimiter;
 use App\Base\Tenancy\Contracts\TenantContext;
@@ -97,4 +98,17 @@ it('fails closed without tenant context', function (): void {
         'employee-1',
         fn (): string => 'must not dispatch',
     ))->toThrow(TenantContextMissingException::class);
+});
+
+it('fails closed on a malformed declared limit', function (): void {
+    config()->set('integration.subject_command_limits', [
+        'employee.update' => ['max_attempts' => 0, 'decay_seconds' => 60],
+    ]);
+    app(TenantContext::class)->set(71);
+
+    expect(fn () => app(SubjectCommandRateLimiter::class)->execute(
+        'employee.update',
+        'employee-1',
+        fn (): string => 'must not dispatch',
+    ))->toThrow(BlbConfigurationException::class, 'requires positive integer');
 });
