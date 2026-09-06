@@ -201,7 +201,8 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     environment: Testing
-    # contents + pull-requests: open an auto-merge PR to raise the baseline (#629).
+    # contents + pull-requests: open an auto-merge PR to raise the baseline (#629)
+    # and upsert the timing/coverage summary comment on PRs (#670).
     # Protect Main refuses direct pushes; a PR is the only legal raise path.
     # Workflow-level contents:read still covers every other job.
     permissions:
@@ -259,6 +260,17 @@ jobs:
           python3 scripts/ci/platform-coverage-ratchet.py check \
             coverage-unit.xml coverage-feature-a.xml coverage-feature-b.xml coverage-modules.xml \
             --baseline tests/ci/platform-coverage-baseline.json
+
+      - name: Upsert PR timing and coverage comment
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          python3 scripts/ci/upsert-pr-ci-summary-comment.py \
+            --timing-dir timing \
+            --baseline tests/ci/platform-coverage-baseline.json \
+            coverage-unit.xml coverage-feature-a.xml coverage-feature-b.xml coverage-modules.xml
 
       - name: Raise platform coverage baseline on main
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
