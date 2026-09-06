@@ -6,6 +6,9 @@ const root = resolve(import.meta.dir, "../..");
 const workflow = Bun.YAML.parse(
     readFileSync(join(root, ".github/workflows/domain-ci.yml"), "utf8"),
 ) as any;
+const domainRegistry = JSON.parse(
+    readFileSync(join(root, "scripts/ci/domain-repos.json"), "utf8"),
+) as { domains: Record<string, unknown> };
 
 const sqliteSteps = () => workflow.jobs.sqlite.steps;
 const step = (name: string) => {
@@ -13,6 +16,18 @@ const step = (name: string) => {
     expect(found).toBeDefined();
     return found;
 };
+
+test("composed feature flag ownership runs after Pint and before Domain Pest", () => {
+    const name = "Check composed feature flag ownership";
+    const scan = step(name);
+    expect(scan.run).toBe("vendor/bin/phpstan analyse -c phpstan-feature-flags.neon --memory-limit=2G");
+    expect(scan.if).toBeUndefined();
+    expect(scan["continue-on-error"]).toBeUndefined();
+    const names = sqliteSteps().map((entry: any) => entry.name);
+    expect(names.indexOf("Run Pint")).toBeLessThan(names.indexOf(name));
+    expect(names.indexOf(name)).toBeLessThan(names.indexOf("Run Tests"));
+    expect(workflow.jobs["postgres-mirror"].steps.map((entry: any) => entry.name)).not.toContain(name);
+});
 
 test("domain Sonar scans the DOMAIN_PATH under its own project key", () => {
     const scan = step("SonarCloud Scan");
@@ -54,4 +69,18 @@ test("domain CI scans composed Domains Livewire for raw subject-id request reads
     // Lexical only — keep it off the postgres-mirror lane.
     const pgNames = (workflow.jobs["postgres-mirror"].steps as any[]).map((entry: any) => entry.name);
     expect(pgNames).not.toContain("Scan Domain Livewire for raw subject-id request reads");
+});
+
+test("module smoke checks every pinned Domain after its suite", () => {
+    const smoke = step("Module smoke composition");
+
+    expect(Object.keys(domainRegistry.domains).length).toBeGreaterThan(0);
+    expect(smoke.run).toContain(".domains | to_entries[]");
+    expect(smoke.run).toContain("domain_id repo domain_path ref");
+    expect(smoke.run).toContain('git clone --quiet --filter=blob:none --no-checkout');
+    expect(smoke.run).toContain('git -C "$domain_path" checkout --quiet --detach "$ref"');
+    expect(smoke.run).toContain('php artisan blb:module-check "$module_id"');
+
+    const names = sqliteSteps().map((entry: any) => entry.name);
+    expect(names.indexOf("Run Tests")).toBeLessThan(names.indexOf("Module smoke composition"));
 });

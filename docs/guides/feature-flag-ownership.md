@@ -5,6 +5,11 @@ from the platform root. The quality workflow runs this rule across all four
 application roots present in the checkout, including installed disabled Domains.
 Unmounted Domain repositories are not analysed by a platform-only checkout.
 
+The reusable Domain CI workflow runs the same pass in its SQLite lane after
+Pint and before Domain Pest, against the materialized platform and pinned
+Domains. A caller must advance its immutable workflow reference to adopt this
+step; an older workflow pin does not inherit the new check automatically.
+
 The rule checks calls to `enabled()` on values known by PHPStan to be
 `App\Base\FeatureFlags\Services\FeatureFlags`. A caller's owning Module must
 declare the flag in `extra.blb.feature-flags` or directly name its declaring
