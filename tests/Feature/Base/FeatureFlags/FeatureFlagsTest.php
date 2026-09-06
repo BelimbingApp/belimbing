@@ -135,7 +135,6 @@ it('lists declared flags for the current tenant through the artisan command', fu
     ]);
 });
 
-
 it('refuses duplicate feature-flag identities when replacing the registry', function (): void {
     $registry = app(FeatureFlagRegistry::class);
 
