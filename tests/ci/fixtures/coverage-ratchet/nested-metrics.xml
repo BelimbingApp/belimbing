@@ -1,11 +1,11 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version='1.0' encoding='utf-8'?>
 <coverage generated="1" clover="3.2.0">
   <project timestamp="1" name="nested">
     <package name="App">
       <file name="A.php">
-        <metrics statements="10" coveredstatements="8"/>
-      </file>
+        <metrics statements="10" coveredstatements="8" />
+      <line num="1" type="stmt" count="1" /><line num="2" type="stmt" count="1" /><line num="3" type="stmt" count="1" /><line num="4" type="stmt" count="1" /><line num="5" type="stmt" count="1" /><line num="6" type="stmt" count="1" /><line num="7" type="stmt" count="1" /><line num="8" type="stmt" count="1" /><line num="9" type="stmt" count="0" /><line num="10" type="stmt" count="0" /></file>
     </package>
-    <metrics statements="10" coveredstatements="8" conditionals="0" coveredconditionals="0" methods="1" coveredmethods="1" elements="11" coveredelements="9" complexity="0" packages="1" files="1" classes="1"/>
+    <metrics statements="10" coveredstatements="8" conditionals="0" coveredconditionals="0" methods="1" coveredmethods="1" elements="11" coveredelements="9" complexity="0" packages="1" files="1" classes="1" />
   </project>
 </coverage>

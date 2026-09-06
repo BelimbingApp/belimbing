@@ -181,6 +181,11 @@ the aggregate check; a failed, skipped, or cancelled matrix lane does not become
 a successful aggregate. Preserve the complete report set when changing shards.
 The PostgreSQL mirror remains a separate job with its own driver-sensitive set.
 
+The platform coverage ratchet unions Clover statement identities by source-file
+name and line number, with coverage from any shard counting as covered. It does
+not sum project totals: isolated shards repeat the full source inventory. Reports
+must contain statement lines; aggregate-only metrics cannot prove overlap.
+
 ## Composed smoke on pin advances
 
 [PR #712](https://github.com/BelimbingApp/belimbing/pull/712) (issue [#600](https://github.com/BelimbingApp/belimbing/issues/600)) landed
