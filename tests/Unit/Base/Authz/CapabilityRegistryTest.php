@@ -37,7 +37,8 @@ it('retains mounted team-scoped read capabilities in the registry', function ():
     $catalog = CapabilityCatalog::fromConfig($authzConfig);
     $registry = CapabilityRegistry::fromCatalog($catalog);
 
-    expect($catalog->rejected())->not->toHaveKey('people.training.passport.view-team')
+    expect($catalog->verbs())->toContain('view-team')
+        ->and($catalog->rejected())->not->toHaveKey('people.training.passport.view-team')
         ->and($registry->has('people.training.passport.view-team'))->toBeTrue()
         ->and($registry->forDomain('people'))->toContain('people.training.passport.view-team');
 });

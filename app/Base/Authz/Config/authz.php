@@ -7,6 +7,7 @@ return [
 
     'verbs' => [
         'view',
+        'view-team',
         'list',
         'create',
         'update',

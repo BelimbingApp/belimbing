@@ -312,7 +312,13 @@ The base `Config/authz.php` holds only:
 - `admin` — Administrative operations
 
 **Verbs** (configurable in `authz.php`):
-`view`, `list`, `create`, `update`, `delete`, `submit`, `approve`, `reject`, `execute`
+`view`, `view-team`, `list`, `create`, `update`, `delete`, `submit`, `approve`, `reject`, `execute`, `impersonate`, `manage`, `grant`, `revoke`, `send`, `react`, `edit`, `media`, `poll`, `search`, `assign`, `review`, `triage`, `respond`, `verify`, `close`, `issue`, `accept`, `rework`, `cancel`, `unlock`, `upload`, `follow-up`, `hod-approve`
+
+`view` is the ordinary read verb, including reading a subject's own record when
+the owning module applies subject scope. `view-team` is the intentional global
+verb for a manager reading the bounded team subject set defined by the owning
+module. It does not imply tenant-wide visibility, role assignment, or a generic
+custom action vocabulary.
 
 ---
 
