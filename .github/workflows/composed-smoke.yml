@@ -7,7 +7,8 @@ name: composed-smoke
 # scripts/ci/domain-repos.json compose into one application: no route
 # collision (#570), no duplicate migration name (#117), the expected route
 # table. A pin advance that breaks composition fails here, on the PR that
-# advances it.
+# advances it (#627). Do not add pull_request paths: filters: a required check
+# that only runs on descriptor edits leaves every other PR missing that status.
 
 on:
   push:

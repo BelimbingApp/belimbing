@@ -160,9 +160,18 @@ the aggregate check; a failed, skipped, or cancelled matrix lane does not become
 a successful aggregate. Preserve the complete report set when changing shards.
 The PostgreSQL mirror remains a separate job with its own driver-sensitive set.
 
-## Pending CI composition work (not yet on main)
+## Composed smoke on pin advances
 
-These follow-ups belong next to the pin and composition docs once they land; do not treat open PRs as
-established procedure:
+[PR #712](https://github.com/BelimbingApp/belimbing/pull/712) (issue [#600](https://github.com/BelimbingApp/belimbing/issues/600)) landed
+[`.github/workflows/composed-smoke.yml`](../../.github/workflows/composed-smoke.yml). It boots the
+platform with People and PeopleConnector at the refs in
+[`scripts/ci/domain-repos.json`](../../scripts/ci/domain-repos.json) and holds the result to
+[`scripts/ci/composed-surface.json`](../../scripts/ci/composed-surface.json).
 
-- Composed-application smoke test at the pinned People and PeopleConnector refs: [issue #600](https://github.com/BelimbingApp/belimbing/issues/600) / [PR #675](https://github.com/BelimbingApp/belimbing/pull/675), replacing closed, unmerged [PR #604](https://github.com/BelimbingApp/belimbing/pull/604).
+Every pull request to `main` runs that check, including a pin-advance PR that edits the
+descriptor ([issue #627](https://github.com/BelimbingApp/belimbing/issues/627)). The workflow does
+**not** use a `paths:` filter on `pull_request`. A path-filtered workflow that is also a
+branch-protection required check leaves unrelated PRs waiting for a status that never reports.
+Keep the job always reporting; require the `composed-smoke` context in Protect Main when the
+owner wants it blocking. Recover refusals with the
+[composed-app runbook](composed-app-runbook.md).
