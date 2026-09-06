@@ -17,13 +17,14 @@ use ReflectionClass;
  * refuses a composition whose mounts are not at their pins; this report lets an
  * operator see the same facts on a running installation (#623).
  */
-final class CompositionReport
+class CompositionReport
 {
     public function __construct(private readonly ?string $descriptorPath = null) {}
 
     /**
      * @return array{
      *     descriptor: string|null,
+     *     descriptor_issues: list<string>,
      *     boot_order: list<string>,
      *     modules: list<array{module: string, name: string, version: string, layer: string, path: string, boot_position: int|null, provider: string|null, domain: string|null, pinned_ref: string|null, mounted_ref: string|null, matches_pin: bool|null}>
      * }
@@ -50,7 +51,7 @@ final class CompositionReport
             }
         }
 
-        $pins = $this->descriptorPins();
+        [$pins, $issues] = $this->descriptorPins();
         $mountedRefs = [];
         $modules = [];
 
@@ -83,7 +84,11 @@ final class CompositionReport
         usort($modules, fn (array $a, array $b): int => ($a['boot_position'] ?? PHP_INT_MAX) <=> ($b['boot_position'] ?? PHP_INT_MAX) ?: strcmp($a['module'], $b['module']));
 
         return [
-            'descriptor' => $pins === [] ? null : $this->relative($this->descriptor()),
+            // The file that was read, whenever one exists: a descriptor whose
+            // entries are unusable is a broken descriptor, not a missing one,
+            // and the operator must be able to tell the two apart.
+            'descriptor' => is_file($this->descriptor()) ? $this->relative($this->descriptor()) : null,
+            'descriptor_issues' => $issues,
             'boot_order' => array_values(array_map(
                 fn (array $module): string => $module['module'],
                 array_filter($modules, fn (array $module): bool => $module['boot_position'] !== null),
@@ -93,24 +98,47 @@ final class CompositionReport
     }
 
     /**
-     * @return array<string, array{path: string, ref: string}> domain id => pin
+     * Pins keyed on the mount path, which is what ties a module to a domain.
+     * An entry with a path but no usable ref still claims its mount (the pin
+     * is unreadable, not absent) and is reported as an issue; an entry with no
+     * path cannot claim anything and is reported too.
+     *
+     * @return array{0: array<string, array{path: string, ref: string|null}>, 1: list<string>} [domain id => pin, issues]
      */
     private function descriptorPins(): array
     {
         $path = $this->descriptor();
         if (! is_file($path)) {
-            return [];
+            return [[], []];
         }
 
         $data = json_decode((string) file_get_contents($path), true);
-        $pins = [];
-        foreach ((array) ($data['domains'] ?? []) as $id => $domain) {
-            if (is_string($id) && is_array($domain) && isset($domain['path'], $domain['ref'])) {
-                $pins[$id] = ['path' => trim((string) $domain['path'], '/'), 'ref' => (string) $domain['ref']];
-            }
+        if (! is_array($data) || ! is_array($data['domains'] ?? null)) {
+            return [[], [$this->relative($path).' is not a descriptor: no domains object']];
         }
 
-        return $pins;
+        $pins = [];
+        $issues = [];
+        foreach ($data['domains'] as $id => $domain) {
+            $id = (string) $id;
+            $mount = is_array($domain) && is_string($domain['path'] ?? null) ? trim($domain['path'], '/') : '';
+            if ($mount === '') {
+                $issues[] = "domain [{$id}] has no mount path";
+
+                continue;
+            }
+
+            $ref = is_array($domain) && is_string($domain['ref'] ?? null) && preg_match('/^[0-9a-f]{40}$/', $domain['ref']) === 1
+                ? $domain['ref']
+                : null;
+            if ($ref === null) {
+                $issues[] = "domain [{$id}] at {$mount} has no immutable 40-character ref";
+            }
+
+            $pins[$id] = ['path' => $mount, 'ref' => $ref];
+        }
+
+        return [$pins, $issues];
     }
 
     private function descriptor(): string
@@ -119,7 +147,7 @@ final class CompositionReport
     }
 
     /**
-     * @param  array<string, array{path: string, ref: string}>  $pins
+     * @param  array<string, array{path: string, ref: string|null}>  $pins
      */
     private function domainFor(string $root, array $pins): ?string
     {
@@ -133,22 +161,42 @@ final class CompositionReport
         return null;
     }
 
-    /** The commit a mounted checkout is at, read from git; null when it is not a checkout. */
+    /**
+     * The commit a mounted checkout is at; null when it is not a checkout or
+     * git does not answer with a commit sha. Only a sha is published: a mount
+     * in a broken state (shallow, corrupt, a .git file pointing nowhere) is
+     * exactly when an operator reads this page, and exactly when git prints
+     * something that is not one.
+     */
     private function mountedRef(string $mount): ?string
     {
         if (! is_dir($mount) || ! file_exists($mount.'/.git')) {
             return null;
         }
 
+        [$exit, $output] = $this->gitHead($mount);
+
+        return $exit === 0 && preg_match('/^[0-9a-f]{40}$/', $output) === 1 ? $output : null;
+    }
+
+    /**
+     * Raw git answer for a mount's HEAD. Overridable so a test can hand the
+     * shape check whatever git might print. Argv form, never a shell: the
+     * mount path comes from the descriptor.
+     *
+     * @return array{0: int, 1: string} [exit code, trimmed stdout]
+     */
+    protected function gitHead(string $mount): array
+    {
         $process = proc_open(['git', '-C', $mount, 'rev-parse', 'HEAD'], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
         if (! is_resource($process)) {
-            return null;
+            return [1, ''];
         }
         $output = trim((string) stream_get_contents($pipes[1]));
         fclose($pipes[1]);
         fclose($pipes[2]);
 
-        return proc_close($process) === 0 && preg_match('/^[0-9a-f]{40}$/', $output) === 1 ? $output : null;
+        return [proc_close($process), $output];
     }
 
     private function layer(string $root): string

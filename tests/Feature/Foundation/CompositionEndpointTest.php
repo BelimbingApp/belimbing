@@ -115,6 +115,98 @@ test('a mounted domain reports the descriptor pin beside the ref it is checked o
     }
 });
 
+test('a descriptor whose entries are unusable is reported as broken, not as no descriptor at all', function (): void {
+    $root = createFakeDomainCheckout('CompositionBroken', 'composition_broken_rows', 'composition.broken', ['withProvider' => true, 'withGit' => true]);
+    $descriptor = storage_path('framework/testing/composition-broken-'.bin2hex(random_bytes(4)).'.json');
+    File::ensureDirectoryExists(dirname($descriptor));
+
+    try {
+        Process::path($root)->run(['git', '-c', 'user.name=probe', '-c', 'user.email=probe@example.test', 'commit', '-q', '--allow-empty', '-m', 'probe']);
+        $mountedRef = trim(Process::path($root)->run(['git', 'rev-parse', 'HEAD'])->output());
+
+        // The descriptor exists and names this mount, but the entry has no
+        // ref, and a second entry has no path: unreadable pins, not absent ones.
+        file_put_contents($descriptor, json_encode(['domains' => [
+            'composition-broken' => ['repo' => 'BelimbingApp/blb-composition-broken', 'path' => 'app/Domains/CompositionBroken', 'ref' => 'main'],
+            'pathless' => ['repo' => 'BelimbingApp/blb-pathless', 'ref' => str_repeat('a', 40)],
+        ]]));
+        app()->instance(CompositionReport::class, new CompositionReport($descriptor));
+
+        $report = $this->actingAs(compositionOperator())
+            ->getJson(route('admin.system.software.composition'))->assertOk()->json();
+
+        $module = collect($report['modules'])->first(fn (array $module): bool => str_contains($module['path'], 'CompositionBroken'));
+
+        expect($report['descriptor'])->not->toBeNull()
+            ->and($report['descriptor_issues'])->toBe([
+                'domain [composition-broken] at app/Domains/CompositionBroken has no immutable 40-character ref',
+                'domain [pathless] has no mount path',
+            ])
+            ->and($module['domain'])->toBe('composition-broken')
+            ->and($module['pinned_ref'])->toBeNull()
+            ->and($module['mounted_ref'])->toBe($mountedRef)
+            ->and($module['matches_pin'])->toBeNull();
+
+        // A descriptor that yields no usable pin at all is still a descriptor
+        // that was read, and says why nothing could be pinned.
+        foreach ([
+            ['domains' => ['pathless' => ['repo' => 'BelimbingApp/blb-pathless', 'ref' => str_repeat('a', 40)]]],
+            ['schema_version' => 1],
+        ] as $unusable) {
+            file_put_contents($descriptor, json_encode($unusable));
+            app()->instance(CompositionReport::class, new CompositionReport($descriptor));
+            $report = $this->actingAs(compositionOperator())
+                ->getJson(route('admin.system.software.composition'))->assertOk()->json();
+
+            expect($report['descriptor'])->not->toBeNull()
+                ->and($report['descriptor_issues'])->toHaveCount(1)
+                ->and(collect($report['modules'])->pluck('domain')->filter()->all())->toBe([]);
+        }
+    } finally {
+        File::deleteDirectory($root);
+        File::delete($descriptor);
+    }
+});
+
+test('a mount whose git answer is not a commit sha publishes no mounted ref', function (string $answer, int $exit): void {
+    $root = createFakeDomainCheckout('CompositionOdd', 'composition_odd_rows', 'composition.odd', ['withProvider' => true, 'withGit' => true]);
+    $descriptor = storage_path('framework/testing/composition-odd-'.bin2hex(random_bytes(4)).'.json');
+    File::ensureDirectoryExists(dirname($descriptor));
+
+    try {
+        file_put_contents($descriptor, json_encode(['domains' => [
+            'composition-odd' => ['repo' => 'BelimbingApp/blb-composition-odd', 'path' => 'app/Domains/CompositionOdd', 'ref' => str_repeat('b', 40)],
+        ]]));
+        app()->instance(CompositionReport::class, new class($descriptor, $answer, $exit) extends CompositionReport
+        {
+            public function __construct(string $descriptor, private string $answer, private int $exit)
+            {
+                parent::__construct($descriptor);
+            }
+
+            protected function gitHead(string $mount): array
+            {
+                return [$this->exit, $this->answer];
+            }
+        });
+
+        $module = collect($this->actingAs(compositionOperator())
+            ->getJson(route('admin.system.software.composition'))->assertOk()->json('modules'))
+            ->first(fn (array $module): bool => str_contains($module['path'], 'CompositionOdd'));
+
+        expect($module['domain'])->toBe('composition-odd')
+            ->and($module['mounted_ref'])->toBeNull()
+            ->and($module['matches_pin'])->toBeNull();
+    } finally {
+        File::deleteDirectory($root);
+        File::delete($descriptor);
+    }
+})->with([
+    'git exited non-zero with an error line' => ['fatal: not a git repository', 128],
+    'git exited zero with a symbolic name' => ['HEAD', 0],
+    'git exited zero with a short sha' => ['0dc53bba', 0],
+]);
+
 test('a customer-tenant admin is refused even with every capability', function (): void {
     $this->actingAs(compositionCustomerAdmin())
         ->getJson(route('admin.system.software.composition'))
