@@ -28,6 +28,21 @@ it('builds registry from configured catalog', function (): void {
     expect($registry->forDomain('admin'))->toContain('admin.company.view');
 });
 
+it('retains mounted team-scoped read capabilities in the registry', function (): void {
+    /** @var array<string, mixed> $authzConfig */
+    $authzConfig = config('authz');
+    $authzConfig['domains']['people'] = 'People domain';
+    $authzConfig['capabilities'][] = 'people.training.passport.view-team';
+
+    $catalog = CapabilityCatalog::fromConfig($authzConfig);
+    $registry = CapabilityRegistry::fromCatalog($catalog);
+
+    expect($catalog->verbs())->toContain('view-team')
+        ->and($catalog->rejected())->not->toHaveKey('people.training.passport.view-team')
+        ->and($registry->has('people.training.passport.view-team'))->toBeTrue()
+        ->and($registry->forDomain('people'))->toContain('people.training.passport.view-team');
+});
+
 it('throws for unknown capability', function (): void {
     /** @var array<string, mixed> $authzConfig */
     $authzConfig = config('authz');
