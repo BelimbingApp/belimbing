@@ -23,13 +23,9 @@ final class UsesNullableUnionAndReturn
         return 'ok';
     }
 
-    public function nullable(?ForeignModel $model): void
-    {
-    }
+    public function nullable(?ForeignModel $model): void {}
 
-    public function union(ForeignModel|string $model): void
-    {
-    }
+    public function union(ForeignModel|string $model): void {}
 
     public function returns(): ForeignModel
     {
