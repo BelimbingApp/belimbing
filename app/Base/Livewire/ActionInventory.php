@@ -107,10 +107,10 @@ final class ActionInventory
     }
 
     /**
-     * @param  array{domain?: string|null, module_owned_unreferenced?: mixed, actions?: mixed}  $baseline
+     * @param  array{domain?: string|null, module_owned_unreferenced?: mixed, actions?: mixed, strict?: bool}  $baseline
      * @return array{ok: bool, current: int, baseline: int, message: string, new_actions?: list<string>|null}
      */
-    public function compareToBaseline(array $baseline, ?string $domain = null): array
+    public function compareToBaseline(array $baseline, ?string $domain = null, bool $strictNames = false): array
     {
         if (! array_key_exists('module_owned_unreferenced', $baseline)
             || ! is_int($baseline['module_owned_unreferenced'])
@@ -128,27 +128,35 @@ final class ActionInventory
         $actions = $this->moduleOwnedUnreferencedActions($domain);
         $current = count($actions);
         $limit = $baseline['module_owned_unreferenced'];
-        if ($current > $limit) {
-            $newActions = null;
-            if (array_key_exists('actions', $baseline)) {
-                if (! is_array($baseline['actions']) || ! array_is_list($baseline['actions'])
-                    || count(array_filter($baseline['actions'], is_string(...))) !== count($baseline['actions'])) {
-                    throw new ActionInventoryException('Baseline actions must be a list of component::method strings.');
-                }
-                $newActions = array_values(array_diff($actions, $baseline['actions']));
+        $strictNames = $strictNames || ($baseline['strict'] ?? false) === true;
+        if ($strictNames && ! array_key_exists('actions', $baseline)) {
+            throw new ActionInventoryException('Strict names require an action list; run --write-baseline first.');
+        }
+        $newActions = null;
+        $namesChanged = false;
+        if (array_key_exists('actions', $baseline)) {
+            if (! is_array($baseline['actions']) || ! array_is_list($baseline['actions'])
+                || count(array_filter($baseline['actions'], is_string(...))) !== count($baseline['actions'])) {
+                throw new ActionInventoryException('Baseline actions must be a list of component::method strings.');
             }
+            $newActions = array_values(array_diff($actions, $baseline['actions']));
+            $namesChanged = $newActions !== [] || array_diff($baseline['actions'], $actions) !== [];
+        }
 
+        if ($current > $limit || ($strictNames && $namesChanged)) {
             return [
                 'ok' => false,
                 'current' => $current,
                 'baseline' => $limit,
                 'new_actions' => $newActions,
-                'message' => sprintf(
-                    'Livewire action debt rose for %s: %d module-owned unreferenced actions (baseline %d). Cover new actions or raise only with justification.',
-                    $domain ?? 'all components',
-                    $current,
-                    $limit,
-                ),
+                'message' => $strictNames && $namesChanged
+                    ? 'Livewire action names changed for '.($domain ?? 'all components').'; review the snapshot and update it with --write-baseline.'
+                    : sprintf(
+                        'Livewire action debt rose for %s: %d module-owned unreferenced actions (baseline %d). Cover new actions or raise only with justification.',
+                        $domain ?? 'all components',
+                        $current,
+                        $limit,
+                    ),
             ];
         }
 

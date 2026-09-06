@@ -7,6 +7,43 @@ use Tests\TestCase;
 
 uses(TestCase::class);
 
+test('strict action names refuse equal-count substitutions and require an identity snapshot', function (): void {
+    $suffix = bin2hex(random_bytes(6));
+    $domain = 'ZzStrict'.$suffix;
+    $directory = app_path('Domains/'.$domain.'/Example');
+    $baseline = storage_path('framework/testing/strict-'.$suffix.'.json');
+    File::ensureDirectoryExists($directory.'/Livewire');
+    File::ensureDirectoryExists($directory.'/Tests');
+    File::ensureDirectoryExists(dirname($baseline));
+    try {
+        file_put_contents($directory.'/Livewire/Old.php', '<?php namespace App\\Domains\\'.$domain.'\\Example\\Livewire; class Old extends \\Livewire\\Component { public function old'.$suffix.'() {} public function render() {} }');
+        Artisan::call('blb:livewire-actions', ['--domain' => $domain, '--write-baseline' => $baseline]);
+        $arguments = ['--domain' => $domain, '--check-baseline' => $baseline];
+        expect(Artisan::call('blb:livewire-actions', $arguments + ['--strict-names' => true]))->toBe(0);
+        file_put_contents($directory.'/Tests/ReferenceTest.php', '<?php // old'.$suffix);
+        expect(Artisan::call('blb:livewire-actions', $arguments + ['--strict-names' => true]))->toBe(1);
+        file_put_contents($directory.'/Livewire/Added.php', '<?php namespace App\\Domains\\'.$domain.'\\Example\\Livewire; class Added extends \\Livewire\\Component { public function added'.$suffix.'() {} public function render() {} }');
+        $new = 'App\\Domains\\'.$domain.'\\Example\\Livewire\\Added::added'.$suffix;
+        expect(Artisan::call('blb:livewire-actions', $arguments))->toBe(0);
+        expect(Artisan::call('blb:livewire-actions', $arguments + ['--strict-names' => true]))->toBe(1)
+            ->and(Artisan::output())->toContain($new, 'names changed');
+        $snapshot = json_decode(file_get_contents($baseline), true, flags: JSON_THROW_ON_ERROR);
+        $snapshot['strict'] = true;
+        file_put_contents($baseline, json_encode($snapshot));
+        expect(Artisan::call('blb:livewire-actions', $arguments))->toBe(1)->and(Artisan::output())->toContain($new);
+        unset($snapshot['actions']);
+        file_put_contents($baseline, json_encode($snapshot));
+        expect(Artisan::call('blb:livewire-actions', $arguments + ['--strict-names' => true]))->toBe(1)
+            ->and(Artisan::output())->toContain('--write-baseline');
+        expect(Artisan::call('blb:livewire-actions', ['--domain' => $domain, '--write-baseline' => $baseline, '--strict-names' => true]))->toBe(0);
+        expect(json_decode(file_get_contents($baseline), true)['strict'])->toBeTrue();
+        expect(Artisan::call('blb:livewire-actions', $arguments))->toBe(0);
+    } finally {
+        File::deleteDirectory(app_path('Domains/'.$domain));
+        File::delete($baseline);
+    }
+});
+
 test('baseline explanations name only newly unreferenced actions and preserve legacy counts', function (): void {
     $suffix = bin2hex(random_bytes(6));
     $domain = 'ZzExplain'.$suffix;
