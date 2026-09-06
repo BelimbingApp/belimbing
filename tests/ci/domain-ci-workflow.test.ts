@@ -110,3 +110,15 @@ test("composed Domain ownership runs immediately after module smoke", () => {
     expect(workflow.jobs["postgres-mirror"].steps.map((entry: any) => entry.name))
         .not.toContain("Check composed Domain ownership");
 });
+
+test("both Domain test lanes raise the coverage memory limit before Pest runs", () => {
+    for (const [job, runStep] of [["sqlite", "Run Tests"], ["postgres-mirror", "Run Tests on PostgreSQL"]] as const) {
+        const names = workflow.jobs[job].steps.map((entry: any) => entry.name);
+        const raise = names.indexOf("Raise the memory limit for coverage");
+        expect(raise).toBeGreaterThan(-1);
+        expect(raise).toBeLessThan(names.indexOf(runStep));
+        const run = workflow.jobs[job].steps[raise].run as string;
+        expect(run).toContain('value="2G"');
+        expect(run).toContain("phpunit.xml");
+    }
+});
