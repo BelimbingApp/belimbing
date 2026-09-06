@@ -3,6 +3,12 @@ name: AI Team blocked-by sweep
 # Copy this adopter-owned workflow to .github/workflows/. The mechanism suite
 # already runs on every pull request; keeping this workflow schedule-only
 # prevents an optional sweep check from becoming a path-dependent gate check.
+#
+# Cross-repo Blocked-By references (BelimbingApp/blb-people#N and
+# BelimbingApp/blb-people-connector#N) need a fine-grained PAT with Issues
+# Read on those repos plus Issues Read/Write on this adopter. Default
+# github.token cannot read other repositories, so the sweep step uses
+# AI_TEAM_BLOCKED_BY_SWEEP_TOKEN instead (#606).
 on:
   schedule:
     - cron: "17,47 * * * *"
@@ -27,8 +33,18 @@ jobs:
       - name: Check out the adopter
         uses: actions/checkout@v5
 
+      - name: Require cross-repo Blocked-By token
+        env:
+          AI_TEAM_BLOCKED_BY_SWEEP_TOKEN: ${{ secrets.AI_TEAM_BLOCKED_BY_SWEEP_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$AI_TEAM_BLOCKED_BY_SWEEP_TOKEN" ]]; then
+            echo '::error::AI_TEAM_BLOCKED_BY_SWEEP_TOKEN is not configured; cross-repo Blocked-By references cannot be resolved.'
+            exit 1
+          fi
+
       - name: Run the Blocked-By sweep
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.AI_TEAM_BLOCKED_BY_SWEEP_TOKEN }}
         run: python3 docs/ai-team/scripts/blocked_by_sweep.py

@@ -11,6 +11,11 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  # A unique main group also prevents pending-run eviction.
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.run_id || 'pr' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   quality:
     runs-on: ubuntu-latest

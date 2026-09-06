@@ -50,6 +50,28 @@ it('refuses two module route files that register the same method and URI', funct
     expect(false)->toBeTrue('Expected the route collision guard to refuse the second file.');
 });
 
+it('refuses two module route files that register the same route name under distinct URIs', function (): void {
+    $owner = 'zz-route-name-collision-'.bin2hex(random_bytes(4));
+    $name = $owner.'.shared';
+    $first = routeCollisionFixture($owner, 'first', 'get', 'zz-route-name/'.bin2hex(random_bytes(4)), $name);
+    $second = routeCollisionFixture($owner, 'second', 'get', 'zz-route-name/'.bin2hex(random_bytes(4)), $name);
+
+    try {
+        app(RouteDiscoveryService::class)->registerRoutes(['web' => [$first, $second]]);
+    } catch (RouteCollisionException $exception) {
+        expect($exception->getMessage())
+            ->toContain('Route name '.$name.' is registered by more than one module route file')
+            ->toContain($first)
+            ->toContain($second);
+
+        return;
+    } finally {
+        File::deleteDirectory(base_path(ROUTE_COLLISION_EXTENSION_ROOT.$owner));
+    }
+
+    expect(false)->toBeTrue('Expected the route name collision guard to refuse the second file.');
+});
+
 it('accepts distinct URIs across module route files and the same URI under a different method', function (): void {
     $owner = 'zz-route-distinct-'.bin2hex(random_bytes(4));
     $uri = 'zz-route-distinct/'.bin2hex(random_bytes(4));

@@ -15,6 +15,7 @@ final readonly class ModuleManifest
      * @param  array<string, string>  $optionalModules
      * @param  list<string>  $publishesEvents
      * @param  list<string>  $consumesEvents
+     * @param  array<string, array{default?: bool, description?: string}>  $featureFlags
      */
     public function __construct(
         public string $name,
@@ -26,5 +27,6 @@ final readonly class ModuleManifest
         public array $optionalModules = [],
         public array $publishesEvents = [],
         public array $consumesEvents = [],
+        public array $featureFlags = [],
     ) {}
 }

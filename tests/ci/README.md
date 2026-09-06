@@ -24,3 +24,14 @@ static required name. Extend the producer resolution alongside any intentional
 move of a required check into those mechanisms. This audit detects static
 name/producer drift; CI execution and the live merge gate remain the proof that
 a required check actually ran and passed.
+
+## Scheduled required-check audit
+
+`.github/workflows/required-check-audit.yml` runs the same producer contract daily
+and on `workflow_dispatch`. On failure it opens or updates one issue titled
+`Required check audit failed` with the missing contexts. Operators re-dispatch
+after refreshing the ruleset snapshot when Protect Main policy changes.
+
+Dry-run (fake missing name, no Issues API):
+
+    bun scripts/ci/required-check-audit.ts --dry-run

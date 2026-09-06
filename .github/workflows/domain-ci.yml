@@ -66,9 +66,11 @@ on:
         description: 'SonarCloud org analysis token. Prefer the BelimbingApp organization secret (scripts/ci/setup-sonar.php); caller workflows pass secrets.SONAR_TOKEN from the org or repo store.'
         required: true
 
+# Keep this prefix: github.workflow is the caller name in a reusable workflow.
 concurrency:
-  group: domain-ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # A unique main group also prevents pending-run eviction.
+  group: domain-ci-${{ github.workflow }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.run_id || 'pr' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   sqlite:

@@ -2,6 +2,7 @@
 
 namespace App\Base\Routing;
 
+use App\Base\Routing\Console\Commands\DomainRoutesCommand;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
@@ -13,6 +14,7 @@ class ServiceProvider extends BaseServiceProvider
     public function register(): void
     {
         $this->app->singleton(RouteDiscoveryService::class);
+        $this->commands([DomainRoutesCommand::class]);
     }
 
     /**
