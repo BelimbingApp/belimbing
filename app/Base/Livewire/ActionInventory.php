@@ -68,7 +68,6 @@ final class ActionInventory
         return $rows;
     }
 
-
     /**
      * Count module-owned actions with no lexical test reference for a Domain.
      *
