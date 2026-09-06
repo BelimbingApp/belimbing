@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "source": "Highest observed healthy suite wall across the five latest successful main runs sampled for #711",
+  "tolerances": {
+    "relative_percent": 25,
+    "absolute_seconds": 20
+  },
+  "suites": {
+    "Core,Domains,Extensions": {
+      "wall_seconds": 0.953,
+      "source_run": "https://github.com/BelimbingApp/belimbing/actions/runs/34028175949"
+    },
+    "Feature-a": {
+      "wall_seconds": 187.901,
+      "source_run": "https://github.com/BelimbingApp/belimbing/actions/runs/34027494655"
+    },
+    "Feature-b": {
+      "wall_seconds": 183.928,
+      "source_run": "https://github.com/BelimbingApp/belimbing/actions/runs/34028500325"
+    },
+    "Unit": {
+      "wall_seconds": 160.084,
+      "source_run": "https://github.com/BelimbingApp/belimbing/actions/runs/34028175949"
+    }
+  }
+}

@@ -127,6 +127,16 @@ the same composition, suite membership, and run attempt before claiming a gain.
 The aggregate is published after the suite-success check; a failed or cancelled
 run need not have a complete aggregate table.
 
+The `ci` job then compares each recorded suite against the checked-in
+[`pest-timing-baseline.json`](../../tests/ci/pest-timing-baseline.json). A suite
+fails only when it is both more than 25% and more than 20 seconds slower, so
+normal variance and large relative changes to short suites do not block a PR.
+Missing, extra, duplicate, or malformed suite records fail closed. Refresh the
+baseline from reviewed timing artifacts with
+`python3 scripts/ci/pest-timing-ratchet.py timing --write-baseline --source <run-url>`
+and submit the resulting baseline change through a PR; never push it directly
+to `main`.
+
 ## Feature shard membership and coverage
 
 [PR #674](https://github.com/BelimbingApp/belimbing/pull/674) replaced the closed,
