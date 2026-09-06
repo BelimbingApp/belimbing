@@ -68,7 +68,7 @@
                                     <x-ui.button
                                         variant="secondary"
                                         size="sm"
-                                        wire:click="toggle({{ Js::from($row['flag']) }})"
+                                        wire:click="toggle({{ Js::from($row['flag']) }}, {{ $row['enabled'] ? 'false' : 'true' }})"
                                     >
                                         {{ $row['enabled'] ? __('Turn off') : __('Turn on') }}
                                     </x-ui.button>

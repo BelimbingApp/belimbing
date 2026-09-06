@@ -77,7 +77,7 @@ it('keeps toggles from one tenant from leaking into another', function (): void 
 
     Livewire::actingAs($admin)
         ->test(Index::class)
-        ->call('toggle', 'demo.ui')
+        ->call('toggle', 'demo.ui', true)
         ->assertHasNoErrors();
 
     expect(FeatureFlagOverride::query()->where('tenant_id', $alpha->id)->where('flag', 'demo.ui')->exists())->toBeTrue();
@@ -98,7 +98,7 @@ it('lets a manager toggle a declared flag and writes an audit mutation', functio
     Livewire::test(Index::class)
         ->assertSee('demo.audit')
         ->assertSee('base/demo')
-        ->call('toggle', 'demo.audit')
+        ->call('toggle', 'demo.audit', true)
         ->assertHasNoErrors();
 
     expect(app(FeatureFlags::class)->enabled('demo.audit'))->toBeTrue()
@@ -124,7 +124,7 @@ it('refuses inventing an undeclared flag from the UI surface', function (): void
 
     Livewire::actingAs($admin)
         ->test(Index::class)
-        ->call('toggle', 'demo.missing')
+        ->call('toggle', 'demo.missing', true)
         ->assertHasNoErrors();
 
     expect(FeatureFlagOverride::query()->where('flag', 'demo.missing')->exists())->toBeFalse();
@@ -140,7 +140,7 @@ it('shows view-only state without mutating for a viewer', function (): void {
         ->test(Index::class)
         ->assertViewHas('canManage', false)
         ->assertSee('View only')
-        ->call('toggle', 'demo.readonly');
+        ->call('toggle', 'demo.readonly', true);
 
     expect(FeatureFlagOverride::query()->where('flag', 'demo.readonly')->exists())->toBeFalse();
 });

@@ -18,6 +18,10 @@ use Livewire\WithPagination;
  * Declared flags only: the registry refuses undeclared names, and this page
  * never invents flags. Toggle / clear write through FeatureFlags so audit
  * mutations land on FeatureFlagOverride rows.
+ *
+ * Does not call FeatureFlags::enabled() with a dynamic name — that would trip
+ * FeatureFlagReadRule (static ownership). The blade passes the target boolean
+ * from the already-resolved list row.
  */
 class Index extends Component
 {
@@ -27,16 +31,15 @@ class Index extends Component
 
     public string $search = '';
 
-    public function toggle(string $flag, FeatureFlags $flags): void
+    public function toggle(string $flag, bool $enable, FeatureFlags $flags): void
     {
-        $this->runIfCapable('admin.system.feature-flags.manage', function () use ($flag, $flags): void {
+        $this->runIfCapable('admin.system.feature-flags.manage', function () use ($flag, $enable, $flags): void {
             try {
-                $enabled = $flags->enabled($flag);
-                $flags->override($flag, ! $enabled);
+                $flags->override($flag, $enable);
                 $this->notifySuccess(
-                    $enabled
-                        ? __('Flag :flag overridden off for this tenant.', ['flag' => $flag])
-                        : __('Flag :flag overridden on for this tenant.', ['flag' => $flag]),
+                    $enable
+                        ? __('Flag :flag overridden on for this tenant.', ['flag' => $flag])
+                        : __('Flag :flag overridden off for this tenant.', ['flag' => $flag]),
                 );
             } catch (UndeclaredFeatureFlagException $e) {
                 $this->notifyError($e->getMessage());
