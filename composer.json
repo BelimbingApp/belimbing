@@ -35,6 +35,7 @@
     "require-dev": {
         "barryvdh/laravel-ide-helper": "^3.7.0",
         "fakerphp/faker": "^1.24.1",
+        "larastan/larastan": "^3.10",
         "laravel/pail": "^1.2.7",
         "laravel/pint": "^1.29.1",
         "mockery/mockery": "^1.6.12",
@@ -89,6 +90,12 @@
         ],
         "format": [
             "@lint"
+        ],
+        "phpstan": [
+            "vendor/bin/phpstan analyse --memory-limit=2G"
+        ],
+        "analyse": [
+            "@phpstan"
         ]
     },
     "extra": {

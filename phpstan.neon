@@ -1,0 +1,11 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+    - phpstan-baseline.neon
+
+parameters:
+    paths:
+        - app/Base
+    level: 5
+    # Unmatched ignores are allowed so fixing debt can shrink the baseline
+    # without a separate PR chore; growth is refused by the count gate.
+    reportUnmatchedIgnoredErrors: false

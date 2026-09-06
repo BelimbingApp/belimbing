@@ -243,6 +243,7 @@ Goal: Belimbing gains useful framework-aware code analysis without a suppression
 
 - [x] Temporarily install Larastan 3.10 and run a representative level-5 pilot across Base System, Base Database schema inspection, Base Livewire, and Core Company. {Amp/GPT-5}
 - [x] Reject and remove Larastan: the bounded pilot produced 180 findings dominated by Eloquent dynamic-property/relation inference and would require a broad baseline or pervasive model annotations before it could become a trustworthy gate. {Amp/GPT-5}
+- [x] Re-adopt Larastan for `app/Base` only at level 5 with a committed ignore baseline and a CI count gate that refuses growth (#651). {composer}
 - [ ] Reconsider only after model metadata becomes a first-class generated or source-owned contract, or after a narrower future Larastan release materially improves this signal-to-noise ratio.
 
 Validation: the dependency, configuration, and provisional Composer command are absent after the rejected pilot; Sonar remains the sole static quality service and no suppression baseline is introduced.
