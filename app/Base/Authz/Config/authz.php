@@ -60,6 +60,27 @@ return [
          */
         'read',
         'write',
+
+        /*
+         * Connector actions (#787).
+         *
+         * Each names something the installation does to a record it holds on a
+         * provider's behalf: an identity is audited, exported or imported;
+         * retention purges; support breaks glass. All five shipped as
+         * capability keys before the verbs existed, so the catalog dropped
+         * them and every check against them was denied — the features were
+         * unreachable for everybody, and nothing in this repository's CI could
+         * see it, because /app/Domains/* is not mounted here.
+         *
+         * `break-glass` is the deliberate, logged use of an emergency access
+         * path. It is a verb because breaking glass is a thing somebody does,
+         * not a thing somebody is.
+         */
+        'audit',
+        'export',
+        'import',
+        'purge',
+        'break-glass',
     ],
 
     // Capabilities owned by the base framework (no module to host them yet).
