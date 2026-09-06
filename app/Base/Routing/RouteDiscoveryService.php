@@ -29,6 +29,15 @@ class RouteDiscoveryService
     private array $fileByRouteName = [];
 
     /**
+     * Route file that registered each route object. This provenance survives
+     * registration so operator tooling can attribute closures as well as
+     * controller routes to their owning module.
+     *
+     * @var array<int, string>
+     */
+    private array $fileByRouteObjectId = [];
+
+    /**
      * Glob patterns for route directory discovery.
      *
      * Supports Base components and modules in Core, Domains, and Extensions.
@@ -89,6 +98,11 @@ class RouteDiscoveryService
         }
     }
 
+    public function sourceFileFor(RegisteredRoute $route): ?string
+    {
+        return $this->fileByRouteObjectId[spl_object_id($route)] ?? null;
+    }
+
     /**
      * @param  callable(): void  $load
      */
@@ -105,6 +119,8 @@ class RouteDiscoveryService
             if (isset($before[spl_object_id($route)])) {
                 continue;
             }
+
+            $this->fileByRouteObjectId[spl_object_id($route)] = $file;
 
             foreach ($this->routeKeys($route) as $key) {
                 $owner = $this->fileByRouteKey[$key] ?? null;
