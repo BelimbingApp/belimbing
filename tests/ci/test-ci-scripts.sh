@@ -889,6 +889,12 @@ with tempfile.TemporaryDirectory() as tmp:
     assert 'README.md' in failed.stderr, failed.stderr
 
     def timings_ok():
+        (repo / 'scripts/ci/platform-unit-shard-timings.json').write_text(
+            '{"directories":{}}\n', encoding='utf-8'
+        )
+        (repo / 'scripts/ci/platform-unit-shards.json').write_text(
+            '{"shards":{}}\n', encoding='utf-8'
+        )
         (repo / 'scripts/ci/platform-feature-shard-timings.json').write_text(
             '{"suites":{}}\n', encoding='utf-8'
         )

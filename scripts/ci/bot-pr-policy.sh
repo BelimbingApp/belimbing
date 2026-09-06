@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Accept a bot-maintenance PR whose diff is confined to one machine-generated
-# profile (#728): coverage baseline, Feature shard timings + membership, Pest
+# profile (#728): coverage baseline, Unit/Feature shard timings + membership, Pest
 # timing baseline, or a Domain descriptor + composed surface.
 # Anything else — an extra path, a mix of profiles, or an empty diff — fails and
 # names the unexpected path(s). The independent-review workflow uses this as the
@@ -33,6 +33,8 @@ coverage_profile=(
 timing_profile=(
   scripts/ci/platform-feature-shard-timings.json
   scripts/ci/platform-feature-shards.json
+  scripts/ci/platform-unit-shard-timings.json
+  scripts/ci/platform-unit-shards.json
 )
 pin_profile=(
   scripts/ci/domain-repos.json

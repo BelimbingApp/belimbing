@@ -1,6 +1,6 @@
 name: refresh-feature-shard-timings
 
-# Manual refresh of Feature directory timing summary and shard map from the
+# Manual refresh of Unit and Feature directory timing summaries and shard maps from the
 # latest successful platform timing artifacts on main (#695). Opens a PR; never
 # pushes to main (Protect Main).
 
@@ -20,13 +20,14 @@ jobs:
   refresh:
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: write
       pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@v7 # NOSONAR — well-known GitHub-maintained action; tag pinning is acceptable for internal projects
 
-      - name: Download Feature lane timing artifacts
+      - name: Download Unit and Feature lane timing artifacts
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_ID_INPUT: ${{ inputs.run_id }}
@@ -48,6 +49,8 @@ jobs:
           gh run download "${run_id}" --repo "$GITHUB_REPOSITORY" \
             -n platform-timing-Feature-a \
             -n platform-timing-Feature-b \
+            -n platform-timing-Unit-a \
+            -n platform-timing-Unit-b \
             -D timing
           find timing -type f -name "*.json" | while read -r path; do
             base=$(basename "$path")
@@ -66,6 +69,9 @@ jobs:
             --write
           python3 scripts/ci/platform-feature-shards.py --write-balanced
           python3 scripts/ci/platform-feature-shards.py --validate-only
+          python3 scripts/ci/platform-feature-shard-timings.py --suite=Unit --timing-dir timing --write
+          python3 scripts/ci/platform-feature-shards.py --suite=Unit --write-balanced
+          python3 scripts/ci/platform-feature-shards.py --suite=Unit --validate-only
 
       - name: Open PR with refreshed timings
         env:
@@ -74,8 +80,10 @@ jobs:
           set -euo pipefail
           if git diff --quiet -- \
             scripts/ci/platform-feature-shard-timings.json \
-            scripts/ci/platform-feature-shards.json; then
-            echo "Feature shard timings and membership unchanged."
+            scripts/ci/platform-feature-shards.json \
+            scripts/ci/platform-unit-shard-timings.json \
+            scripts/ci/platform-unit-shards.json; then
+            echo "Unit and Feature shard timings and membership unchanged."
             exit 0
           fi
           # Protect Main refuses direct pushes; open a PR and never push to main.
@@ -87,12 +95,18 @@ jobs:
             "${worktree}/scripts/ci/platform-feature-shard-timings.json"
           cp scripts/ci/platform-feature-shards.json \
             "${worktree}/scripts/ci/platform-feature-shards.json"
+          cp scripts/ci/platform-unit-shard-timings.json \
+            "${worktree}/scripts/ci/platform-unit-shard-timings.json"
+          cp scripts/ci/platform-unit-shards.json \
+            "${worktree}/scripts/ci/platform-unit-shards.json"
           git -C "${worktree}" config user.name "github-actions[bot]"
           git -C "${worktree}" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git -C "${worktree}" add \
             scripts/ci/platform-feature-shard-timings.json \
-            scripts/ci/platform-feature-shards.json
-          git -C "${worktree}" commit -m "ci: refresh Feature shard timings from measured lanes"
+            scripts/ci/platform-feature-shards.json \
+            scripts/ci/platform-unit-shard-timings.json \
+            scripts/ci/platform-unit-shards.json
+          git -C "${worktree}" commit -m "ci: refresh Unit and Feature shard timings from measured lanes"
           git -C "${worktree}" push --force-with-lease origin "HEAD:refs/heads/${branch}"
           git worktree remove "${worktree}"
           existing=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "${branch}" --base main \
@@ -100,11 +114,11 @@ jobs:
           body=$(printf '%s\n' \
             'AI-Team-Lane-Issue: none' \
             '' \
-            'Automated refresh of Feature shard timings from Feature lane suite measurements on main (#695).' \
-            'Touches only the timings summary and shards map; opened by workflow_dispatch and never pushes to main.')
+            'Automated refresh of Unit and Feature shard timings from Unit and Feature lane suite measurements on main (#767).' \
+            'Touches only both timing summaries and shard maps; opened by workflow_dispatch and never pushes to main.')
           if [ -z "${existing}" ] || [ "${existing}" = "null" ]; then
             existing=$(gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "${branch}" \
-              --title "ci: refresh Feature shard timings from measured lanes" \
+              --title "ci: refresh Unit and Feature shard timings from measured lanes" \
               --label task:ready \
               --label bot-maintenance \
               --body "$body")

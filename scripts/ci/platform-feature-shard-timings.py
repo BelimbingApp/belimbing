@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Refresh platform-feature-shard-timings.json from Feature lane suite timings (#695).
+"""Refresh Unit or Feature directory estimates from lane suite timings.
 
-Reads per-suite JSON produced by scripts/ci/record-pest-timing.sh for Feature-*
+Reads per-suite JSON produced by scripts/ci/record-pest-timing.sh for the selected suite
 lanes, maps each lane onto its shard directories, and rewrites per-directory
 wall_seconds. Ratios within a shard follow the previous summary when present;
-otherwise the measured wall is split evenly. Refuses when a Feature directory
-has no measurement or a measured directory is absent from tests/Feature.
+otherwise the measured wall is split evenly. Refuses when a selected suite directory
+has no measurement or a measured directory is absent from its test surface.
 """
 
 from __future__ import annotations
@@ -17,22 +17,21 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SUMMARY_PATH = Path(__file__).resolve().with_name('platform-feature-shard-timings.json')
-SHARDS_PATH = Path(__file__).resolve().with_name('platform-feature-shards.json')
+SCRIPT_DIR = Path(__file__).resolve().parent
 
 
 def load_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding='utf-8'))
 
 
-def feature_directories(surface: Path) -> set[str]:
+def suite_directories(surface: Path, suite: str) -> set[str]:
     if not surface.is_dir():
-        raise SystemExit(f'Feature surface missing: {surface}')
+        raise SystemExit(f'{suite} surface missing: {surface}')
     dirs = {path.name for path in surface.iterdir() if path.is_dir()}
     loose = sorted(path.name for path in surface.glob('*Test.php'))
     if loose:
         raise SystemExit(
-            'Feature tests must live under a first-level directory; found loose '
+            f'{suite} tests must live under a first-level directory; found loose '
             f'files: {", ".join(loose)}'
         )
     return dirs
@@ -56,15 +55,15 @@ def load_shards(path: Path) -> dict[str, list[str]]:
     return normalized
 
 
-def load_suite_timings(timing_dir: Path) -> dict[str, float]:
-    """Map suite label (Feature-a, Feature-b, ...) -> wall_seconds."""
+def load_suite_timings(timing_dir: Path, selected_suite: str) -> dict[str, float]:
+    """Map suite label (Unit-a, Feature-a, ...) -> wall_seconds."""
     if not timing_dir.is_dir():
         raise SystemExit(f'timing directory not found: {timing_dir}')
     by_suite: dict[str, float] = {}
     for path in sorted(timing_dir.glob('*.json')):
         payload = load_json(path)
         suite = payload.get('suite')
-        if not isinstance(suite, str) or not suite.startswith('Feature-'):
+        if not isinstance(suite, str) or not suite.startswith(f'{selected_suite}-'):
             continue
         if 'wall_seconds' not in payload:
             raise SystemExit(f'{path}: missing wall_seconds')
@@ -76,7 +75,7 @@ def load_suite_timings(timing_dir: Path) -> dict[str, float]:
             raise SystemExit(f'{path}: conflicting wall_seconds for suite {suite!r}')
         by_suite[suite] = wall
     if not by_suite:
-        raise SystemExit(f'no Feature-* suite timing JSON under {timing_dir}')
+        raise SystemExit(f'no {selected_suite}-* suite timing JSON under {timing_dir}')
     return by_suite
 
 
@@ -119,12 +118,13 @@ def refresh(
     timing_dir: Path,
     shards_path: Path,
     summary_path: Path,
-    feature_root: Path,
+    root: Path,
+    suite: str,
 ) -> dict:
-    surface = feature_root / 'tests' / 'Feature'
-    present = feature_directories(surface)
+    surface = root / 'tests' / suite
+    present = suite_directories(surface, suite)
     shards = load_shards(shards_path)
-    suite_walls = load_suite_timings(timing_dir)
+    suite_walls = load_suite_timings(timing_dir, suite)
 
     summary = load_json(summary_path) if summary_path.is_file() else {
         'source': '',
@@ -139,19 +139,19 @@ def refresh(
     claimed: set[str] = set()
 
     for shard_id, directories in shards.items():
-        suite = f'Feature-{shard_id}'
-        if suite not in suite_walls:
-            raise SystemExit(f'missing suite timing for {suite}')
+        lane = f'{suite}-{shard_id}'
+        if lane not in suite_walls:
+            raise SystemExit(f'missing suite timing for {lane}')
         for name in directories:
             if name in claimed:
                 raise SystemExit(f'directory {name!r} appears in more than one shard')
             claimed.add(name)
-        measured_dirs.update(distribute(suite_walls[suite], directories, priors))
+        measured_dirs.update(distribute(suite_walls[lane], directories, priors))
 
     missing = sorted(present - set(measured_dirs))
     if missing:
         raise SystemExit(
-            'Feature directory has no measurement: ' + ', '.join(missing)
+            f'{suite} directory has no measurement: ' + ', '.join(missing)
         )
 
     unknown = sorted(set(measured_dirs) - present)
@@ -171,12 +171,13 @@ def refresh(
                 row['test_files'] = int(prior_row['test_files'])
         directories_out[name] = row
 
-    summary['source'] = 'ci-feature-lane-timings'
+    summary['source'] = f'ci-{suite.lower()}-lane-timings'
     summary['measured_at'] = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
     summary['note'] = (
-        'Relative wall times for first-level tests/Feature directories; refreshed '
-        'from Feature-* suite timings (#695) and used to regenerate '
-        'platform-feature-shards.json.'
+        f'Estimated wall times for first-level tests/{suite} directories, allocated '
+        f'from {suite}-* lane timings in proportion to prior directory weights '
+        '(or equally without prior weights); not direct directory measurements. '
+        f'Used to regenerate platform-{suite.lower()}-shards.json.'
     )
     summary['directories'] = directories_out
     return summary
@@ -190,13 +191,14 @@ def main(argv: list[str]) -> int:
         required=True,
         help='directory of *.json records from record-pest-timing.sh',
     )
-    parser.add_argument('--shards-file', type=Path, default=SHARDS_PATH)
-    parser.add_argument('--summary-file', type=Path, default=SUMMARY_PATH)
+    parser.add_argument('--suite', choices=('Feature', 'Unit'), default='Feature')
+    parser.add_argument('--shards-file', type=Path)
+    parser.add_argument('--summary-file', type=Path)
     parser.add_argument(
         '--root',
         type=Path,
         default=ROOT,
-        help='repository root (Feature tests under tests/Feature)',
+        help='repository root containing tests/<suite>',
     )
     parser.add_argument(
         '--write',
@@ -204,12 +206,15 @@ def main(argv: list[str]) -> int:
         help='write --summary-file in place (default: print JSON to stdout)',
     )
     args = parser.parse_args(argv)
+    args.shards_file = args.shards_file or SCRIPT_DIR / f'platform-{args.suite.lower()}-shards.json'
+    args.summary_file = args.summary_file or SCRIPT_DIR / f'platform-{args.suite.lower()}-shard-timings.json'
 
     summary = refresh(
         timing_dir=args.timing_dir,
         shards_path=args.shards_file,
         summary_path=args.summary_file,
-        feature_root=args.root,
+        root=args.root,
+        suite=args.suite,
     )
     text = json.dumps(summary, indent=2) + '\n'
     if args.write:
