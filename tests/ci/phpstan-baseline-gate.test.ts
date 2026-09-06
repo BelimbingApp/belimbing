@@ -13,7 +13,7 @@ test("quality job runs Larastan then the baseline-count gate", () => {
     const analyse = steps.find((s) => s.name === "Run Larastan on app/Base");
     const countGate = steps.find((s) => s.name === "Refuse PHPStan baseline growth");
     expect(analyse?.run).toContain("vendor/bin/phpstan analyse");
-    expect(countGate?.run).toContain("scripts/ci/phpstan-baseline-gate.sh");
+    expect(countGate?.run).toContain("phpstan-baseline-gate.sh");
     expect(steps.indexOf(analyse!)).toBeLessThan(steps.indexOf(countGate!));
 });
 

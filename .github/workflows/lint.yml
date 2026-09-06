@@ -65,7 +65,7 @@ jobs:
         run: vendor/bin/phpstan analyse --memory-limit=2G
 
       - name: Refuse PHPStan baseline growth
-        run: scripts/ci/phpstan-baseline-gate.sh
+        run: bash scripts/ci/phpstan-baseline-gate.sh
 
       - name: Run Pint on changed authorable PHP
         env:
