@@ -190,6 +190,48 @@ printf '%s\n' "$missing_out" | grep -q 'Feature directory has no measurement: Ga
 }
 rm -rf "$timings_refresh_root"
 
+# Unit shard timing refresh from measured Unit-* suite walls (#767).
+timings_refresh_root=$(mktemp -d)
+mkdir -p "$timings_refresh_root/tests/Unit/Alpha" \
+    "$timings_refresh_root/tests/Unit/Beta" \
+    "$timings_refresh_root/timing"
+touch "$timings_refresh_root/tests/Unit/Alpha/ExampleTest.php" \
+    "$timings_refresh_root/tests/Unit/Beta/ExampleTest.php"
+printf '%s\n' '{"shards":{"a":["Alpha"],"b":["Beta"]}}' \
+    > "$timings_refresh_root/shards.json"
+printf '%s\n' '{"source":"fixture","measured_at":"2020-01-01T00:00:00Z","note":"","directories":{"Alpha":{"wall_seconds":1,"test_files":1},"Beta":{"wall_seconds":1,"test_files":1}}}' \
+    > "$timings_refresh_root/summary.json"
+printf '%s\n' '{"job":"Unit-a","suite":"Unit-a","wall_seconds":30,"tests":1,"assertions":1}' \
+    > "$timings_refresh_root/timing/Unit-a__Unit-a.json"
+printf '%s\n' '{"job":"Unit-b","suite":"Unit-b","wall_seconds":20,"tests":1,"assertions":1}' \
+    > "$timings_refresh_root/timing/Unit-b__Unit-b.json"
+python3 scripts/ci/platform-feature-shard-timings.py --suite=Unit \
+    --timing-dir "$timings_refresh_root/timing" \
+    --shards-file "$timings_refresh_root/shards.json" \
+    --summary-file "$timings_refresh_root/summary.json" \
+    --root "$timings_refresh_root" \
+    --write >/dev/null
+refreshed=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1]))["directories"]; print(d["Alpha"]["wall_seconds"], d["Beta"]["wall_seconds"])' "$timings_refresh_root/summary.json")
+if [ "$refreshed" != "30.0 20.0" ]; then
+    echo "Unit shard timing refresh did not rewrite directory walls: $refreshed" >&2
+    exit 1
+fi
+mkdir -p "$timings_refresh_root/tests/Unit/Gamma"
+touch "$timings_refresh_root/tests/Unit/Gamma/ExampleTest.php"
+missing_out=$(python3 scripts/ci/platform-feature-shard-timings.py --suite=Unit \
+    --timing-dir "$timings_refresh_root/timing" \
+    --shards-file "$timings_refresh_root/shards.json" \
+    --summary-file "$timings_refresh_root/summary.json" \
+    --root "$timings_refresh_root" 2>&1) && {
+    echo 'Unit shard timing refresh accepted a Unit directory with no measurement' >&2
+    exit 1
+}
+printf '%s\n' "$missing_out" | grep -q 'Unit directory has no measurement: Gamma' || {
+    echo "missing-directory refusal did not name Gamma: $missing_out" >&2
+    exit 1
+}
+rm -rf "$timings_refresh_root"
+
 # Dependency audit policy (#617): expired allowlist entries fail closed; a
 # non-expired policy with empty audit reports passes. Live composer/bun are
 # skipped — fixtures only.
@@ -847,6 +889,12 @@ with tempfile.TemporaryDirectory() as tmp:
     assert 'README.md' in failed.stderr, failed.stderr
 
     def timings_ok():
+        (repo / 'scripts/ci/platform-unit-shard-timings.json').write_text(
+            '{"directories":{}}\n', encoding='utf-8'
+        )
+        (repo / 'scripts/ci/platform-unit-shards.json').write_text(
+            '{"shards":{}}\n', encoding='utf-8'
+        )
         (repo / 'scripts/ci/platform-feature-shard-timings.json').write_text(
             '{"suites":{}}\n', encoding='utf-8'
         )

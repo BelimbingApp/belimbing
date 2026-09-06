@@ -42,3 +42,26 @@ test("refresh-feature-shard-timings is dispatch-only and never pushes to main", 
     expect(openPr.run).toContain("HEAD:refs/heads/");
     expect(openPr.run).toContain("Protect Main refuses direct pushes");
 });
+
+test("refresh updates both suites in one bot PR", () => {
+    const download = steps().find((entry) => entry.run?.includes("gh run download"));
+    for (const suite of ["Feature", "Unit"]) {
+        for (const shard of ["a", "b"]) {
+            expect(download.run).toContain(`-n platform-timing-${suite}-${shard}`);
+        }
+    }
+    const refresh = step("Refresh timing summary and rebalance shards").run;
+    expect(refresh).toContain("platform-feature-shard-timings.py --suite=Unit");
+    expect(refresh).toContain("platform-feature-shards.py --suite=Unit --write-balanced");
+    expect(refresh).toContain("platform-feature-shards.py --suite=Unit --validate-only");
+    const publish = step("Open PR with refreshed timings").run;
+    for (const suite of ["feature", "unit"]) {
+        for (const suffix of ["shard-timings", "shards"]) {
+            const file = `scripts/ci/platform-${suite}-${suffix}.json`;
+            expect(publish.slice(0, publish.indexOf("then"))).toContain(file);
+            expect(publish).toContain(`cp ${file}`);
+            expect(publish.slice(publish.indexOf('config user.email'))).toContain(file);
+        }
+    }
+    expect(publish.match(/gh pr create/g)).toHaveLength(1);
+});

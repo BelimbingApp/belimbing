@@ -171,8 +171,12 @@ missing or unknown directories, overlap, empty test directories, loose top-level
 shard. Use the per-shard timing rows to refresh the summary instead of assuming
 equal directory counts mean equal execution time. Operators can dispatch
 [refresh-feature-shard-timings](../../.github/workflows/refresh-feature-shard-timings.yml)
-to rewrite the summary from Feature-* suite timing artifacts and open a PR
-with the rebalanced shard map ([#695](https://github.com/BelimbingApp/belimbing/issues/695)).
+to refresh both Unit and Feature summaries from their lane timing artifacts and
+open one PR containing both summaries and rebalanced maps. Directory walls are
+estimates allocated in proportion to prior weights (equally when no weights exist),
+not direct directory measurements. The updater defaults to Feature; use
+`--suite=Unit` to refresh Unit independently. A directory absent from the measured
+shard map is refused by name ([#767](https://github.com/BelimbingApp/belimbing/issues/767)).
 
 Each matrix lane uploads `platform-coverage-<suite>`. The aggregate `ci` job
 requires `coverage-unit-a.xml`, `coverage-unit-b.xml`, `coverage-feature-a.xml`,
