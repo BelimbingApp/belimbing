@@ -168,3 +168,53 @@ it('parses Pest summary lines for counts', function (): void {
             'assertions' => 7,
         ]);
 });
+
+it('removes a line by number and refuses out-of-range numbers', function (): void {
+    $mutator = new GuardMutator(fn (): array => [
+        'exit_code' => 0,
+        'passed' => 1,
+        'failed' => 0,
+        'assertions' => 1,
+        'output' => '',
+    ]);
+
+    $result = $mutator->run($this->guardMutatorSource, '12', $this->guardMutatorTest);
+    expect($result['removed_line_number'])->toBe(12)
+        ->and(file_get_contents($this->guardMutatorSource))->toBe($this->guardMutatorOriginal);
+
+    expect(fn () => $mutator->run($this->guardMutatorSource, '999', $this->guardMutatorTest))
+        ->toThrow(GuardMutationException::class, 'out of range');
+});
+
+it('accepts a repo-relative source path', function (): void {
+    $relative = 'tests/Unit/Base/System/Fixtures/guard-mutator-sample.php';
+    $absolute = base_path($relative);
+    $original = file_get_contents($absolute);
+    $calls = 0;
+    $mutator = new GuardMutator(function () use (&$calls): array {
+        $calls++;
+
+        return [
+            'exit_code' => $calls === 1 ? 0 : 1,
+            'passed' => $calls === 1 ? 1 : 0,
+            'failed' => $calls === 1 ? 0 : 1,
+            'assertions' => 1,
+            'output' => '',
+        ];
+    });
+
+    try {
+        $result = $mutator->run($relative, 'GUARD_LINE_UNIQUE', $this->guardMutatorTest);
+        expect($result['restored'])->toBeTrue()
+            ->and($result['markdown'])->toContain('tests/Unit/Base/System/Fixtures/guard-mutator-sample.php');
+    } finally {
+        file_put_contents($absolute, $original);
+    }
+});
+
+it('refuses a missing source file', function (): void {
+    $mutator = new GuardMutator(fn (): array => ['exit_code' => 0, 'output' => '']);
+
+    expect(fn () => $mutator->run($this->guardMutatorRoot.'/missing.php', 'x', $this->guardMutatorTest))
+        ->toThrow(GuardMutationException::class, 'does not exist');
+});
