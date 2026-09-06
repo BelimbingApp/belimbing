@@ -251,7 +251,7 @@ if command -v php >/dev/null; then
         echo 'domain-ci accepted an invalid repository slug' >&2
         exit 1
     fi
-    php scripts/ci/validate-php-syntax.php scripts/ci/domain-ci.php scripts/ci/compose-domain.php scripts/ci/validate-extension-manifest.php
+    php scripts/ci/validate-php-syntax.php scripts/ci/domain-ci.php scripts/ci/compose-domain.php scripts/ci/filter-domain-coverage-clover.php scripts/ci/validate-extension-manifest.php
     php scripts/ci/validate-extension-manifest.php tests/Fixtures/ci/extensions/conventional/Example/composer.json
     if php scripts/ci/validate-extension-manifest.php tests/Fixtures/ci/extensions/invalid/Example/composer.json >/dev/null 2>&1; then
         echo 'invalid Extension manifest was accepted' >&2; exit 1
