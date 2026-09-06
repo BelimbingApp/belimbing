@@ -1,0 +1,111 @@
+name: advance-domain-pin
+
+on:
+  workflow_dispatch:
+    inputs:
+      domain-id:
+        description: Domain covered by the composed smoke surface
+        required: true
+        type: choice
+        options: [people, people-connector]
+      ref:
+        description: Full lowercase 40-character upstream commit SHA
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  compose:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      PLATFORM_OPERATOR_COMPANY_NAME: Belimbing CI
+      PLATFORM_OPERATOR_COMPANY_CODE: belimbing_ci
+    steps:
+      - uses: actions/checkout@v7 # NOSONAR — GitHub-maintained action
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Validate and advance pin
+        env:
+          DOMAIN_ID: ${{ inputs.domain-id }}
+          DOMAIN_REF: ${{ inputs.ref }}
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci/advance-domain-pin.py "$DOMAIN_ID" "$DOMAIN_REF"
+      - uses: shivammathur/setup-php@v2 # NOSONAR — established project action
+        with:
+          php-version: '8.5'
+          extensions: pdo_sqlite, sqlite3
+          tools: composer:v2
+          coverage: none
+      - name: Prepare application
+        run: |
+          composer install --no-interaction --prefer-dist --optimize-autoloader
+          cp .env.example .env
+          sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=sqlite/' .env
+          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=:memory:/' .env
+          php artisan key:generate --force
+      - name: Regenerate composed surface
+        run: |
+          set -euo pipefail
+          for id in people people-connector; do
+            repo=$(jq -r --arg id "$id" '.domains[$id].repo' scripts/ci/domain-repos.json)
+            ref=$(jq -r --arg id "$id" '.domains[$id].ref' scripts/ci/domain-repos.json)
+            path=$(jq -r --arg id "$id" '.domains[$id].path' scripts/ci/domain-repos.json)
+            git clone --filter=blob:none --no-checkout "https://github.com/${repo}.git" "$path"
+            git -C "$path" checkout --detach "$ref"
+          done
+          composer dump-autoload --optimize
+          php scripts/ci/composed-smoke.php --print-surface > "$RUNNER_TEMP/composed-surface.json"
+          cp "$RUNNER_TEMP/composed-surface.json" scripts/ci/composed-surface.json
+          php scripts/ci/composed-smoke.php
+      - uses: actions/upload-artifact@v7 # NOSONAR — GitHub-maintained action
+        with:
+          name: advanced-domain-pin
+          path: |
+            scripts/ci/domain-repos.json
+            scripts/ci/composed-surface.json
+          if-no-files-found: error
+
+  publish:
+    needs: compose
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v7 # NOSONAR — GitHub-maintained action
+        with:
+          ref: main
+      - uses: actions/download-artifact@v8 # NOSONAR — GitHub-maintained action
+        with:
+          name: advanced-domain-pin
+          path: generated
+      - name: Open pin PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DOMAIN_ID: ${{ inputs.domain-id }}
+          DOMAIN_REF: ${{ inputs.ref }}
+        run: |
+          set -euo pipefail
+          cp generated/domain-repos.json scripts/ci/domain-repos.json
+          cp generated/composed-surface.json scripts/ci/composed-surface.json
+          if git diff --quiet -- scripts/ci/domain-repos.json scripts/ci/composed-surface.json; then
+            echo "Pin and surface unchanged."
+            exit 0
+          fi
+          branch="ci/advance-domain-pin-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          git switch -c "$branch"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/ci/domain-repos.json scripts/ci/composed-surface.json
+          git commit -m "ci: advance composed Domain pin"
+          git push origin "HEAD:refs/heads/$branch"
+          printf 'Advance %s to %s after upstream validation and composed boot.\n\nAI-Team-Lane-Issue: none\n' "$DOMAIN_ID" "$DOMAIN_REF" > "$RUNNER_TEMP/pin-pr.md"
+          gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
+            --title "ci: advance composed Domain pin" --body-file "$RUNNER_TEMP/pin-pr.md" \
+            --label bot-maintenance

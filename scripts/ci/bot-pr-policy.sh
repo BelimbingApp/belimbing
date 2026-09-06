@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
 # Accept a bot-maintenance PR whose diff is confined to one machine-generated
-# profile (#728): coverage baseline alone, or Feature shard timings + membership.
+# profile (#728): coverage baseline, Feature shard timings + membership, Pest
+# timing baseline, or a Domain descriptor + composed surface.
 # Anything else — an extra path, a mix of profiles, or an empty diff — fails and
 # names the unexpected path(s). The independent-review workflow uses this as the
 # review substitute for labelled PRs; it must stay fail-closed.
@@ -33,6 +34,13 @@ timing_profile=(
   scripts/ci/platform-feature-shard-timings.json
   scripts/ci/platform-feature-shards.json
 )
+pin_profile=(
+  scripts/ci/domain-repos.json
+  scripts/ci/composed-surface.json
+)
+pest_timing_profile=(
+  tests/ci/pest-timing-baseline.json
+)
 
 is_subset_of() {
   local -n allow=$1
@@ -52,12 +60,12 @@ is_subset_of() {
   return 0
 }
 
-if is_subset_of coverage_profile || is_subset_of timing_profile; then
+if is_subset_of coverage_profile || is_subset_of timing_profile || is_subset_of pin_profile || is_subset_of pest_timing_profile; then
   printf 'bot-pr-policy: accepted (%s)\n' "$(IFS=','; echo "${changed[*]}")"
   exit 0
 fi
 
-union=("${coverage_profile[@]}" "${timing_profile[@]}")
+union=("${coverage_profile[@]}" "${timing_profile[@]}" "${pin_profile[@]}" "${pest_timing_profile[@]}")
 extras=()
 for path in "${changed[@]}"; do
   in_union=0
