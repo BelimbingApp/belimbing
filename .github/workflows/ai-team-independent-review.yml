@@ -77,10 +77,52 @@ jobs:
             chmod 700 "$script"
           done
 
-      # Trusted checkout for the subtree-pull shape check (#61): the BASE
-      # repository at the base SHA — never the pull request's code. PR-side
-      # commits are then fetched as git OBJECTS only and read with plumbing;
-      # nothing from the pull request executes in this privileged workflow.
+      - name: Materialize bot-maintenance policy
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REVIEW_GATE_REPOSITORY: ${{ github.repository }}
+          REVIEW_GATE_WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$REVIEW_GATE_REPOSITORY" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$ ]]
+          [[ "$REVIEW_GATE_WORKFLOW_SHA" =~ ^[0-9a-f]{40}$ ]]
+          # Platform-owned policy script (#728); fetched from the same trusted
+          # workflow commit as the review grammar, never from the PR head.
+          path="scripts/ci/bot-pr-policy.sh"
+          name="${path##*/}"
+          response="$RUNNER_TEMP/$name.json"
+          script="$RUNNER_TEMP/$name"
+          gh api --method GET \
+            -H "Accept: application/vnd.github+json" \
+            "repos/$REVIEW_GATE_REPOSITORY/contents/$path" \
+            -f "ref=$REVIEW_GATE_WORKFLOW_SHA" >"$response"
+
+          jq -e --arg path "$path" '
+            type == "object"
+            and .type == "file"
+            and .path == $path
+            and .encoding == "base64"
+            and ((.content | type) == "string")
+            and ((.content | length) > 0)
+            and ((.size | type) == "number")
+            and (.size > 0 and .size <= 1048576)
+            and ((.sha | type) == "string")
+            and (.sha | test("^[0-9a-f]{40}$"))
+          ' "$response" >/dev/null
+
+          expected_size=$(jq -r '.size' "$response")
+          expected_sha=$(jq -r '.sha' "$response")
+          jq -r '.content' "$response" \
+            | tr -d '\r\n' \
+            | base64 --decode >"$script"
+
+          actual_size=$(wc -c <"$script" | tr -d '[:space:]')
+          [[ "$actual_size" == "$expected_size" ]]
+          [[ "$(git hash-object --no-filters "$script")" == "$expected_sha" ]]
+          [[ "$(head -n 1 "$script")" == '#!/usr/bin/env bash' ]]
+          bash -n "$script"
+          chmod 700 "$script"
+
       - name: Check out trusted base for shape verification
         uses: actions/checkout@v5
         with:
@@ -150,8 +192,34 @@ jobs:
             echo "trusted=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # Bot-maintenance PRs (#728): labelled machine-generated baseline / timing
+      # refreshes are accepted by scripts/ci/bot-pr-policy.sh instead of a
+      # human Verdict. Unlabelled PRs fall through; labelled but dirty diffs
+      # fail closed here (do not grant the exemption).
+      - name: Recognize a bot-maintenance PR
+        id: bot_policy
+        env:
+          HAS_BOT_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'bot-maintenance') }}
+          PULL_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PULL_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          echo "accepted=false" >> "$GITHUB_OUTPUT"
+          if [[ "$HAS_BOT_LABEL" != "true" ]]; then
+            echo "no bot-maintenance label — ordinary review required" >&2
+            exit 0
+          fi
+          [[ "$PULL_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$PULL_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$(git rev-parse 'refs/review-gate/head^{commit}')" == "$PULL_HEAD_SHA" ]] || {
+            echo "fetched PR head does not match the event head; not judging" >&2
+            exit 0
+          }
+          "$RUNNER_TEMP/bot-pr-policy.sh" "$PULL_BASE_SHA" "$PULL_HEAD_SHA"
+          echo "accepted=true" >> "$GITHUB_OUTPUT"
+
       - name: Verify independent review of this exact head
-        if: steps.pull_shape.outputs.trusted != 'true'
+        if: steps.pull_shape.outputs.trusted != 'true' && steps.bot_policy.outputs.accepted != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           REVIEW_GATE_REPOSITORY: ${{ github.repository }}
@@ -164,3 +232,8 @@ jobs:
         if: steps.pull_shape.outputs.trusted == 'true'
         run: |
           echo "Trusted subtree pull — content was reviewed upstream behind the package gate; no adopter-side review required (#61)." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Record the bot-maintenance exemption
+        if: steps.bot_policy.outputs.accepted == 'true'
+        run: |
+          echo "Bot-maintenance PR — single-profile machine-generated change accepted by bot-pr-policy.sh; no agent review required (#728)." >> "$GITHUB_STEP_SUMMARY"

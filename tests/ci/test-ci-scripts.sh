@@ -598,6 +598,7 @@ assert 'gh pr merge' in workflow
 assert 'COVERAGE_BASELINE_RAISE_TOKEN: ${{ secrets.COVERAGE_BASELINE_RAISE_TOKEN }}' in workflow, 'raise token must be wired from secrets, not only mentioned'
 assert 'AI-Team-Lane-Issue: none' in workflow
 assert 'task:ready' in workflow
+assert 'bot-maintenance' in workflow
 assert 'git push origin HEAD:main' not in workflow
 assert 'coverage-feature-a.xml' in workflow and 'coverage-feature-b.xml' in workflow
 assert 'paths-ignore' in workflow and 'platform-coverage-baseline.json' in workflow
@@ -768,6 +769,106 @@ with tempfile.TemporaryDirectory() as tmp:
     assert payload['source'] == 'fixture-run'
     assert payload['suites']['Feature-a']['wall_seconds'] == 14.0
     assert payload['suites']['Unit']['wall_seconds'] == 1.0
+PY
+
+
+# bot-pr-policy.sh (#728): hermetic profile check + workflow contracts.
+python3 - <<'PY'
+from pathlib import Path
+import subprocess
+import tempfile
+
+root = Path('.').resolve()
+policy = root / 'scripts/ci/bot-pr-policy.sh'
+assert policy.is_file(), 'missing scripts/ci/bot-pr-policy.sh'
+assert policy.stat().st_mode & 0o111, 'bot-pr-policy.sh must be executable'
+
+tests_yml = (root / '.github/workflows/tests.yml').read_text(encoding='utf-8')
+timings_yml = (root / '.github/workflows/refresh-feature-shard-timings.yml').read_text(encoding='utf-8')
+review_yml = (root / '.github/workflows/ai-team-independent-review.yml').read_text(encoding='utf-8')
+assert '--label bot-maintenance' in tests_yml, 'coverage raise must apply bot-maintenance'
+assert '--add-label bot-maintenance' in tests_yml
+assert '--label bot-maintenance' in timings_yml, 'timings refresh must apply bot-maintenance'
+assert 'AI-Team-Lane-Issue: none' in timings_yml
+assert 'Recognize a bot-maintenance PR' in review_yml
+assert 'Materialize bot-maintenance policy' in review_yml
+assert 'scripts/ci/bot-pr-policy.sh' in review_yml
+assert "steps.bot_policy.outputs.accepted != 'true'" in review_yml
+assert "contains(github.event.pull_request.labels.*.name, 'bot-maintenance')" in review_yml
+
+with tempfile.TemporaryDirectory() as tmp:
+    repo = Path(tmp)
+    subprocess.check_call(['git', 'init', '-q'], cwd=repo)
+    subprocess.check_call(['git', 'config', 'user.name', 'test'], cwd=repo)
+    subprocess.check_call(['git', 'config', 'user.email', 'test@example.invalid'], cwd=repo)
+    (repo / 'tests/ci').mkdir(parents=True)
+    (repo / 'scripts/ci').mkdir(parents=True)
+    (repo / 'tests/ci/platform-coverage-baseline.json').write_text('{}\n', encoding='utf-8')
+    (repo / 'scripts/ci/platform-feature-shard-timings.json').write_text('{}\n', encoding='utf-8')
+    (repo / 'scripts/ci/platform-feature-shards.json').write_text('{}\n', encoding='utf-8')
+    (repo / 'README.md').write_text('other\n', encoding='utf-8')
+    subprocess.check_call(['git', 'add', '-A'], cwd=repo)
+    subprocess.check_call(['git', 'commit', '-qm', 'base'], cwd=repo)
+    base = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=repo, text=True).strip()
+
+    def commit_on(branch: str, mutator) -> str:
+        subprocess.check_call(['git', 'checkout', '-q', '-B', branch, base], cwd=repo)
+        mutator()
+        subprocess.check_call(['git', 'add', '-A'], cwd=repo)
+        subprocess.check_call(['git', 'commit', '-qm', branch], cwd=repo)
+        return subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=repo, text=True).strip()
+
+    def run_policy(head: str):
+        return subprocess.run(
+            ['bash', str(policy), base, head],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+        )
+
+    head = commit_on(
+        'baseline-only',
+        lambda: (repo / 'tests/ci/platform-coverage-baseline.json').write_text(
+            '{"line_rate":1}\n', encoding='utf-8'
+        ),
+    )
+    passed = run_policy(head)
+    assert passed.returncode == 0, passed.stdout + passed.stderr
+
+    def baseline_plus_extra():
+        (repo / 'tests/ci/platform-coverage-baseline.json').write_text(
+            '{"line_rate":1}\n', encoding='utf-8'
+        )
+        (repo / 'README.md').write_text('smuggle\n', encoding='utf-8')
+
+    head = commit_on('baseline-plus-extra', baseline_plus_extra)
+    failed = run_policy(head)
+    assert failed.returncode == 1, failed.stdout + failed.stderr
+    assert 'README.md' in failed.stderr, failed.stderr
+
+    def timings_ok():
+        (repo / 'scripts/ci/platform-feature-shard-timings.json').write_text(
+            '{"suites":{}}\n', encoding='utf-8'
+        )
+        (repo / 'scripts/ci/platform-feature-shards.json').write_text(
+            '{"shards":[]}\n', encoding='utf-8'
+        )
+
+    head = commit_on('timings-ok', timings_ok)
+    passed = run_policy(head)
+    assert passed.returncode == 0, passed.stdout + passed.stderr
+
+    def mixed():
+        (repo / 'tests/ci/platform-coverage-baseline.json').write_text(
+            '{"line_rate":1}\n', encoding='utf-8'
+        )
+        (repo / 'scripts/ci/platform-feature-shard-timings.json').write_text(
+            '{"suites":{}}\n', encoding='utf-8'
+        )
+
+    head = commit_on('mixed', mixed)
+    failed = run_policy(head)
+    assert failed.returncode == 1, failed.stdout + failed.stderr
 PY
 
 echo 'CI script checks passed'
