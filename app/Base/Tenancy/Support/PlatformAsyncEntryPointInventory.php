@@ -5,6 +5,7 @@ namespace App\Base\Tenancy\Support;
 use App\Base\Foundation\ApplicationTopology;
 use App\Base\Pdf\Jobs\RenderPdfJob;
 use App\Base\Schedule\Jobs\RunScheduledTaskJob;
+use App\Base\Tenancy\Exceptions\PlatformAsyncEntryPointInventoryException;
 use App\Core\AI\Jobs\CompactAgentMemoryJob;
 use App\Core\AI\Jobs\DispatchDueSchedulesJob;
 use App\Core\AI\Jobs\IndexAgentMemoryJob;
@@ -19,7 +20,6 @@ use App\Core\Geonames\Jobs\ImportPostcodes;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\File;
 use ReflectionClass;
-use RuntimeException;
 use SplFileInfo;
 
 /**
@@ -111,45 +111,23 @@ final class PlatformAsyncEntryPointInventory
     /**
      * Discover ShouldQueue classes under Base and Core Jobs trees.
      *
+     * @param  list<string>|null  $roots
      * @return list<class-string<ShouldQueue>>
      */
-    public static function discoverQueuedJobClasses(): array
+    public static function discoverQueuedJobClasses(?array $roots = null): array
     {
         $classes = [];
 
-        foreach ([ApplicationTopology::baseRoot(), ApplicationTopology::coreRoot()] as $root) {
+        foreach ($roots ?? [ApplicationTopology::baseRoot(), ApplicationTopology::coreRoot()] as $root) {
             if (! is_dir($root)) {
                 continue;
             }
 
-            /** @var list<SplFileInfo> $files */
-            $files = File::allFiles($root);
-            foreach ($files as $file) {
-                if ($file->getExtension() !== 'php') {
-                    continue;
+            foreach (File::allFiles($root) as $file) {
+                $class = self::queuedJobClassFromFile($file);
+                if ($class !== null) {
+                    $classes[] = $class;
                 }
-
-                $path = $file->getPathname();
-                if (! str_contains($path, DIRECTORY_SEPARATOR.'Jobs'.DIRECTORY_SEPARATOR)
-                    && ! str_ends_with($file->getFilename(), 'Job.php')) {
-                    continue;
-                }
-
-                $class = self::classFromPath($path);
-                if ($class === null || ! class_exists($class)) {
-                    continue;
-                }
-
-                $reflection = new ReflectionClass($class);
-                if ($reflection->isAbstract() || $reflection->isInterface() || $reflection->isTrait()) {
-                    continue;
-                }
-
-                if (! $reflection->implementsInterface(ShouldQueue::class)) {
-                    continue;
-                }
-
-                $classes[] = $class;
             }
         }
 
@@ -160,9 +138,44 @@ final class PlatformAsyncEntryPointInventory
     }
 
     /**
+     * @return class-string<ShouldQueue>|null
+     */
+    private static function queuedJobClassFromFile(SplFileInfo $file): ?string
+    {
+        if ($file->getExtension() !== 'php' || ! self::looksLikeJobPath($file)) {
+            return null;
+        }
+
+        $class = self::classFromPath($file->getPathname());
+        if ($class === null || ! class_exists($class)) {
+            return null;
+        }
+
+        $reflection = new ReflectionClass($class);
+        if ($reflection->isAbstract() || $reflection->isInterface() || $reflection->isTrait()) {
+            return null;
+        }
+
+        if (! $reflection->implementsInterface(ShouldQueue::class)) {
+            return null;
+        }
+
+        /** @var class-string<ShouldQueue> $class */
+        return $class;
+    }
+
+    private static function looksLikeJobPath(SplFileInfo $file): bool
+    {
+        $path = $file->getPathname();
+
+        return str_contains($path, DIRECTORY_SEPARATOR.'Jobs'.DIRECTORY_SEPARATOR)
+            || str_ends_with($file->getFilename(), 'Job.php');
+    }
+
+    /**
      * @return class-string|null
      */
-    private static function classFromPath(string $path): ?string
+    public static function classFromPath(string $path): ?string
     {
         $normalized = str_replace('\\', '/', $path);
         $marker = '/app/';
@@ -172,9 +185,8 @@ final class PlatformAsyncEntryPointInventory
         }
 
         $relative = substr($normalized, $pos + strlen($marker));
-        $class = 'App\\'.str_replace('/', '\\', substr($relative, 0, -4));
 
-        return $class;
+        return 'App\\'.str_replace('/', '\\', substr($relative, 0, -4));
     }
 
     /**
@@ -211,7 +223,7 @@ final class PlatformAsyncEntryPointInventory
         $discovered = self::discoverQueuedJobClasses();
 
         if ($declared !== $discovered) {
-            throw new RuntimeException(
+            throw new PlatformAsyncEntryPointInventoryException(
                 "Platform queued-job inventory drifted.\nDeclared: "
                 .implode(', ', $declared)
                 ."\nDiscovered: "
