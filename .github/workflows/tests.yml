@@ -201,10 +201,12 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     environment: Testing
-    # contents:write lets main raise tests/ci/platform-coverage-baseline.json (#629).
+    # contents + pull-requests: open an auto-merge PR to raise the baseline (#629).
+    # Protect Main refuses direct pushes; a PR is the only legal raise path.
     # Workflow-level contents:read still covers every other job.
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - name: Require successful suites
         env:
@@ -249,41 +251,51 @@ jobs:
 
       # Platform line-coverage ratchet (#629): PRs may not drop below the
       # checked-in baseline by more than tolerance_pp. Main raises the
-      # baseline when coverage improves (never lowers it).
+      # baseline when coverage improves (never lowers it) by opening a PR —
+      # Protect Main's pull_request rule refuses a direct push from Actions.
       - name: Check platform coverage baseline
         if: github.event_name == 'pull_request'
         run: |
           python3 scripts/ci/platform-coverage-ratchet.py check \
-            coverage-unit.xml coverage-feature.xml coverage-modules.xml \
+            coverage-unit.xml coverage-feature-a.xml coverage-feature-b.xml coverage-modules.xml \
             --baseline tests/ci/platform-coverage-baseline.json
 
       - name: Raise platform coverage baseline on main
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          reports=(coverage-unit.xml coverage-feature-a.xml coverage-feature-b.xml coverage-modules.xml)
           python3 scripts/ci/platform-coverage-ratchet.py update \
-            coverage-unit.xml coverage-feature.xml coverage-modules.xml \
+            "${reports[@]}" \
             --baseline tests/ci/platform-coverage-baseline.json
           if git diff --quiet -- tests/ci/platform-coverage-baseline.json; then
             echo 'Coverage baseline unchanged.'
-          else
-            git config user.name 'github-actions[bot]'
-            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add tests/ci/platform-coverage-baseline.json
-            git commit -m "ci: raise platform coverage baseline"
-            # Main moves under load; a bare push reddens the required `ci` check on a
-            # merge race. Rebase and retry — the commit touches only the baseline file.
-            for attempt in 1 2 3; do
-              if git push origin HEAD:main; then
-                echo "Coverage baseline raised (push attempt ${attempt})."
-                exit 0
-              fi
-              echo "Push attempt ${attempt} rejected; rebasing onto origin/main."
-              git fetch origin main
-              git rebase origin/main
-            done
-            echo '::error::could not raise the coverage baseline after three attempts'
-            exit 1
+            exit 0
           fi
+          # Protect Main requires a pull_request; do not push to main. Raise via a
+          # dedicated branch/PR with auto-merge, in a disposable worktree so this
+          # job's checkout (and the Sonar step below) stay on the triggering SHA.
+          branch='ci/raise-coverage-baseline'
+          worktree=$(mktemp -d)
+          git fetch origin main
+          git worktree add -B "$branch" "$worktree" origin/main
+          mkdir -p "$worktree/tests/ci"
+          cp tests/ci/platform-coverage-baseline.json "$worktree/tests/ci/platform-coverage-baseline.json"
+          git -C "$worktree" config user.name 'github-actions[bot]'
+          git -C "$worktree" config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git -C "$worktree" add tests/ci/platform-coverage-baseline.json
+          git -C "$worktree" commit -m 'ci: raise platform coverage baseline'
+          git -C "$worktree" push --force-with-lease origin "HEAD:refs/heads/$branch"
+          git worktree remove "$worktree"
+          existing=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$branch" --base main --state open --json number --jq '.[0].number // empty')
+          if [[ -z "$existing" ]]; then
+            existing=$(gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
+              --title 'ci: raise platform coverage baseline' \
+              --body "$(printf '%s\n' 'Automated raise of `tests/ci/platform-coverage-baseline.json` after main measured a higher line rate (#629).' 'The file is the only change; `paths-ignore` keeps the merge commit from re-entering this workflow.')")
+          fi
+          gh pr merge "$existing" --repo "$GITHUB_REPOSITORY" --auto --squash
+          echo "Opened/updated baseline raise PR #$existing with auto-merge."
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v8 # NOSONAR — official SonarSource scanner action; tag pinning is acceptable for internal projects

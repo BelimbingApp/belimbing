@@ -427,7 +427,6 @@ else
     echo 'SKIP: PHP checks (php is unavailable)' >&2
 fi
 
-echo 'CI script checks passed'
 
 # Platform coverage ratchet (#629): fail-first when coverage drops below the
 # checked-in baseline, then pass at/above baseline; main update raises only.
@@ -448,7 +447,11 @@ assert baseline_path.is_file(), 'missing platform-coverage-baseline.json'
 assert 'platform-coverage-ratchet.py check' in workflow
 assert 'platform-coverage-ratchet.py update' in workflow
 assert 'Raise platform coverage baseline on main' in workflow
-assert 'could not raise the coverage baseline after three attempts' in workflow
+assert 'ci/raise-coverage-baseline' in workflow
+assert 'gh pr create' in workflow
+assert 'gh pr merge' in workflow
+assert 'git push origin HEAD:main' not in workflow
+assert 'coverage-feature-a.xml' in workflow and 'coverage-feature-b.xml' in workflow
 assert 'paths-ignore' in workflow and 'platform-coverage-baseline.json' in workflow
 
 baseline = json.loads(baseline_path.read_text(encoding='utf-8'))
@@ -528,3 +531,5 @@ with tempfile.TemporaryDirectory() as tmp:
     assert missing.returncode != 0, missing.stdout + missing.stderr
     assert 'missing coverage baseline' in missing.stderr
 PY
+
+echo 'CI script checks passed'
