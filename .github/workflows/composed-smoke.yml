@@ -75,14 +75,14 @@ jobs:
           sed -i 's/^DB_DATABASE=.*/DB_DATABASE=:memory:/' .env
           php artisan key:generate --force
 
-      # Materializes People and PeopleConnector at the descriptor's exact refs,
+      # Materializes every Domain at the descriptor's exact refs,
       # then re-runs the autoloader so the mounted modules are discoverable.
       - name: Compose the pinned Domains
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
         run: |
           php scripts/ci/composed-smoke.php --scan-only
           php -r 'require "vendor/autoload.php";' >/dev/null
-          for id in people people-connector; do
+          for id in $(jq -r '.domains | keys[]' scripts/ci/domain-repos.json); do
             repo=$(jq -r --arg id "$id" '.domains[$id].repo' scripts/ci/domain-repos.json)
             ref=$(jq -r --arg id "$id" '.domains[$id].ref' scripts/ci/domain-repos.json)
             path=$(jq -r --arg id "$id" '.domains[$id].path' scripts/ci/domain-repos.json)

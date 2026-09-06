@@ -8,6 +8,8 @@ test("pin advance validates before composing, then publishes only a maintenance 
     const workflow = Bun.YAML.parse(readFileSync(join(root, ".github/workflows/advance-domain-pin.yml"), "utf8")) as any;
     expect(Object.keys(workflow.on)).toEqual(["workflow_dispatch"]);
     expect(workflow.on.workflow_dispatch.inputs["domain-id"].required).toBe(true);
+    const descriptor = JSON.parse(readFileSync(join(root, "scripts/ci/domain-repos.json"), "utf8"));
+    expect(workflow.on.workflow_dispatch.inputs["domain-id"].options.toSorted()).toEqual(Object.keys(descriptor.domains).sort());
     expect(workflow.on.workflow_dispatch.inputs.ref.required).toBe(true);
     expect(workflow.jobs.compose.permissions.contents).toBe("read");
     const steps = workflow.jobs.compose.steps;
@@ -34,6 +36,10 @@ test("pin editor refuses invalid or nonexistent refs without altering the descri
         writeFileSync(resolver, '#!/bin/sh\nprintf \'{"exists":false}\\n\'\n', { mode: 0o755 });
         const run = (ref: string) => Bun.spawnSync(["python3", join(root, "scripts/ci/advance-domain-pin.py"), "people", ref, "--descriptor", descriptor, "--resolver", resolver]);
         expect(run("main").exitCode).not.toBe(0);
+        expect(readFileSync(descriptor, "utf8")).toBe(original);
+        const unknown = Bun.spawnSync(["python3", join(root, "scripts/ci/advance-domain-pin.py"), "unknown", "a".repeat(40), "--descriptor", descriptor]);
+        expect(unknown.exitCode).not.toBe(0);
+        expect(unknown.stderr.toString()).toContain("Domain in the descriptor");
         expect(readFileSync(descriptor, "utf8")).toBe(original);
         expect(run("a".repeat(40)).exitCode).not.toBe(0);
         expect(readFileSync(descriptor, "utf8")).toBe(original);

@@ -7,7 +7,7 @@ on:
         description: Domain covered by the composed smoke surface
         required: true
         type: choice
-        options: [people, people-connector]
+        options: [people, people-connector, commerce, operation]
       ref:
         description: Full lowercase 40-character upstream commit SHA
         required: true
@@ -51,7 +51,7 @@ jobs:
       - name: Regenerate composed surface
         run: |
           set -euo pipefail
-          for id in people people-connector; do
+          for id in $(jq -r '.domains | keys[]' scripts/ci/domain-repos.json); do
             repo=$(jq -r --arg id "$id" '.domains[$id].repo' scripts/ci/domain-repos.json)
             ref=$(jq -r --arg id "$id" '.domains[$id].ref' scripts/ci/domain-repos.json)
             path=$(jq -r --arg id "$id" '.domains[$id].path' scripts/ci/domain-repos.json)

@@ -14,13 +14,14 @@ test("composed-smoke runs on every PR to main without a paths filter", () => {
     expect(workflow.on.workflow_dispatch).toBeDefined();
 });
 
-test("composed-smoke materializes People and PeopleConnector from the descriptor", () => {
+test("composed-smoke materializes every Domain from the descriptor", () => {
     const compose = workflow.jobs["composed-smoke"].steps.find(
         (step: any) => step.name === "Compose the pinned Domains",
     );
     expect(compose).toBeDefined();
     expect(compose.run).toContain("scripts/ci/domain-repos.json");
-    expect(compose.run).toContain("people people-connector");
+    expect(compose.run).toContain("jq -r '.domains | keys[]' scripts/ci/domain-repos.json");
+    expect(compose.run).not.toContain("for id in people people-connector");
     const hold = workflow.jobs["composed-smoke"].steps.find(
         (step: any) => step.name === "Boot the composed application and hold it to the surface",
     );

@@ -1,15 +1,34 @@
 {
-    "_comment": "Expected Domain surface of the platform composed with the People and PeopleConnector domains at the refs pinned in domain-repos.json: the Domain route names and their count. Platform routes are not part of it. Regenerate with scripts/ci/composed-smoke.php --print-surface when a pin advances; the smoke test fails when the pins here and in the descriptor disagree.",
+    "_comment": "Expected Domain surface of the platform composed with every Domain pinned in domain-repos.json. Platform routes are not part of it. Regenerate with scripts/ci/composed-smoke.php --print-surface when a pin advances; the smoke test fails when the pins here and in the descriptor disagree.",
     "pins": {
         "people": "0194f97782a28c42276cf52d0dce095aaa1a9c53",
+        "commerce": "deac42bc27e912555c4dbfcf773045f3242be8bd",
+        "operation": "8a21b59ffd37ff4c6a93f135e735926782ea228a",
         "people-connector": "5dd1ab00815dbbb7cfa07b953567367855a3c952"
     },
-    "domain_route_count": 50,
+    "domain_route_count": 73,
     "route_names": [
         "admin.integration.outbound-exchanges.index",
         "admin.integration.outbound-exchanges.show",
         "admin.people-connector.connections.index",
         "admin.people-connector.reconciliation.index",
+        "commerce.catalog.attributes",
+        "commerce.catalog.categories",
+        "commerce.catalog.index",
+        "commerce.catalog.templates",
+        "commerce.inventory.items.create",
+        "commerce.inventory.items.index",
+        "commerce.inventory.items.show",
+        "commerce.marketplace.ebay.index",
+        "commerce.marketplace.ebay.oauth.callback",
+        "commerce.marketplace.ebay.settings",
+        "commerce.marketplace.ebay.webhooks.account-deletion",
+        "commerce.sales.export.csv",
+        "commerce.settings",
+        "it.tickets.board",
+        "it.tickets.create",
+        "it.tickets.index",
+        "it.tickets.show",
         "people.attendance.allowance-rules",
         "people.attendance.approvals",
         "people.attendance.clocking-locations",
@@ -55,6 +74,12 @@
         "people.skill.development-actions.index",
         "people.skill.requirement-profiles.show",
         "people.training.catalog.index",
-        "people.training.events.index"
+        "people.training.events.index",
+        "quality.ncr.create",
+        "quality.ncr.index",
+        "quality.ncr.show",
+        "quality.scar.create",
+        "quality.scar.index",
+        "quality.scar.show"
     ]
 }

@@ -174,9 +174,16 @@ The PostgreSQL mirror remains a separate job with its own driver-sensitive set.
 
 [PR #712](https://github.com/BelimbingApp/belimbing/pull/712) (issue [#600](https://github.com/BelimbingApp/belimbing/issues/600)) landed
 [`.github/workflows/composed-smoke.yml`](../../.github/workflows/composed-smoke.yml). It boots the
-platform with People and PeopleConnector at the refs in
+platform with every pinned Domain (People, Commerce, Operation, and PeopleConnector) at the refs in
 [`scripts/ci/domain-repos.json`](../../scripts/ci/domain-repos.json) and holds the result to
 [`scripts/ci/composed-surface.json`](../../scripts/ci/composed-surface.json).
+
+Both smoke and pin-advance workflows enumerate descriptor keys. The smoke script
+defaults to all descriptor entries; `--domains` is only an explicit subset override.
+The surface counts the owning route prefixes (`people`, `commerce`, `it`, `quality`,
+and the connector's admin prefixes); add a new Domain's prefixes to the smoke
+classifier when introducing it. The `advance-domain-pin` dispatch accepts all four
+Domains and regenerates the complete surface before opening its maintenance PR.
 
 Every pull request to `main` runs that check, including a pin-advance PR that edits the
 descriptor ([issue #627](https://github.com/BelimbingApp/belimbing/issues/627)). The workflow does
