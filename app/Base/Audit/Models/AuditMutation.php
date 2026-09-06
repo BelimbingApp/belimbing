@@ -2,8 +2,29 @@
 
 namespace App\Base\Audit\Models;
 
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @property int|null $id
+ * @property int|null $company_id
+ * @property int|null $tenant_id
+ * @property string|null $actor_type
+ * @property int|null $actor_id
+ * @property string|null $actor_role
+ * @property string|null $auditable_type
+ * @property string|null $auditable_id
+ * @property string|null $subject_name
+ * @property string|null $subject_id
+ * @property string|null $subject_identifier
+ * @property string|null $source
+ * @property string|null $event
+ * @property array<string, mixed>|null $old_values
+ * @property array<string, mixed>|null $new_values
+ * @property string|null $trace_id
+ * @property CarbonInterface|null $occurred_at
+ * @property string|null $actor_name
+ */
 class AuditMutation extends Model
 {
     /**
