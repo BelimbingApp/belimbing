@@ -17,6 +17,7 @@ class Index extends Component
         return view('livewire.admin.system.tenant-audit.index', [
             'routeRows' => $pageData->routeRows(),
             'ownership' => $pageData->ownershipReport(),
+            'missRows' => $pageData->missRows(),
         ]);
     }
 }
