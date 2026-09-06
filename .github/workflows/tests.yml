@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+    # Bot raises of the coverage baseline must not re-enter this workflow (#629 review).
+    paths-ignore:
+      - 'tests/ci/platform-coverage-baseline.json'
   pull_request:
     branches:
       - main
@@ -267,7 +270,19 @@ jobs:
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
             git add tests/ci/platform-coverage-baseline.json
             git commit -m "ci: raise platform coverage baseline"
-            git push origin HEAD:main
+            # Main moves under load; a bare push reddens the required `ci` check on a
+            # merge race. Rebase and retry — the commit touches only the baseline file.
+            for attempt in 1 2 3; do
+              if git push origin HEAD:main; then
+                echo "Coverage baseline raised (push attempt ${attempt})."
+                exit 0
+              fi
+              echo "Push attempt ${attempt} rejected; rebasing onto origin/main."
+              git fetch origin main
+              git rebase origin/main
+            done
+            echo '::error::could not raise the coverage baseline after three attempts'
+            exit 1
           fi
 
       - name: SonarCloud Scan

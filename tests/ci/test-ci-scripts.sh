@@ -448,6 +448,8 @@ assert baseline_path.is_file(), 'missing platform-coverage-baseline.json'
 assert 'platform-coverage-ratchet.py check' in workflow
 assert 'platform-coverage-ratchet.py update' in workflow
 assert 'Raise platform coverage baseline on main' in workflow
+assert 'could not raise the coverage baseline after three attempts' in workflow
+assert 'paths-ignore' in workflow and 'platform-coverage-baseline.json' in workflow
 
 baseline = json.loads(baseline_path.read_text(encoding='utf-8'))
 assert 'line_rate' in baseline and 'tolerance_pp' in baseline
@@ -509,4 +511,20 @@ with tempfile.TemporaryDirectory() as tmp:
         text=True,
     )
     assert 'covered=8 statements=10' in nested, nested
+
+    # Missing baseline must fail closed — a silent default would pass every PR.
+    missing = subprocess.run(
+        [
+            'python3',
+            str(script),
+            'check',
+            *high,
+            '--baseline',
+            str(Path(tmp) / 'does-not-exist.json'),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert missing.returncode != 0, missing.stdout + missing.stderr
+    assert 'missing coverage baseline' in missing.stderr
 PY
