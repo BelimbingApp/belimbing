@@ -18,6 +18,8 @@ beforeEach(function (): void {
 });
 
 afterEach(function (): void {
+    putenv('CLAIM_AGENT');
+
     $root = $this->mutateCmdRoot ?? null;
     if (! is_string($root) || $root === '' || ! is_dir($root)) {
         return;
@@ -26,6 +28,17 @@ afterEach(function (): void {
         @unlink($file);
     }
     @rmdir($root);
+});
+
+it('requires a batch when review evidence is requested', function (): void {
+    $this->artisan('blb:mutate', [
+        'file' => $this->mutateCmdSource,
+        'matcher' => 'GUARD_LINE_UNIQUE',
+        '--test' => $this->mutateCmdTest,
+        '--evidence' => '42',
+    ])
+        ->expectsOutputToContain('requires --batch')
+        ->assertFailed();
 });
 
 it('requires the --test option', function (): void {
@@ -128,6 +141,38 @@ it('runs a batch with restore between entries and prints a Markdown table', func
         ->and($rows[0])->toContain('1 failed, 2 passed / 7 assertions');
     expect($rows[1])->toContain('3 passed / 11 assertions')
         ->and($rows[1])->toContain('1 failed, 2 passed / 7 assertions');
+});
+
+it('prefixes batch output with exact-head review markers', function (): void {
+    $head = str_repeat('a', 40);
+    putenv('CLAIM_AGENT=desktop-sol');
+
+    Process::fake(function ($process) use ($head) {
+        $command = $process->command;
+
+        return match ($command) {
+            ['git', 'status', '--porcelain', '--untracked-files=all'] => Process::result(),
+            ['git', 'rev-parse', 'HEAD'], ['git', 'rev-parse', 'FETCH_HEAD'] => Process::result(output: $head."\n"),
+            ['git', 'fetch', '--quiet', '--no-tags', 'origin', 'refs/pull/42/head'] => Process::result(),
+            default => str_contains((string) end($command), 'dummy-test.php')
+                ? Process::result(output: "Tests:\t3 passed (11 assertions)\n")
+                : Process::result(exitCode: 1, errorOutput: 'unexpected command'),
+        };
+    });
+
+    $batch = json_encode([
+        ['file' => $this->mutateCmdSource, 'pattern' => 'GUARD_LINE_UNIQUE', 'test' => $this->mutateCmdTest],
+    ], JSON_THROW_ON_ERROR);
+
+    $pending = $this->withoutMockingConsoleOutput()->artisan('blb:mutate', [
+        '--batch' => $batch,
+        '--evidence' => '42',
+    ]);
+    $output = Artisan::output();
+
+    expect($pending)->toBe(0)
+        ->and($output)->toStartWith("**From:** desktop-sol\n\n**HEAD reviewed:** {$head}\n\n**Verdict:** <accept|changes required>")
+        ->and($output)->toContain('| Mutation | Before | After | Restored |');
 });
 
 it('refuses an ambiguous batch before mutating any fixture', function (): void {
