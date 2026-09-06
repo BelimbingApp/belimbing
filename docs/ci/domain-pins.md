@@ -67,3 +67,22 @@ exception for that missing baseline name, not a waiver for failed tests,
 independent review, or GitHub-required checks. Do not carry the override into
 ordinary pin updates after the obsolete check leaves the baseline. See the
 [package gate contract](../ai-team/README.md) for current mechanics.
+
+## Sonar quality gate alignment
+
+[PR #607](https://github.com/BelimbingApp/belimbing/pull/607) records the shared SonarCloud gate contract in
+[`scripts/ci/domain-repos.json`](../../scripts/ci/domain-repos.json) under `sonar_quality_gate`. Platform
+(`BelimbingApp_lara`), People (`BelimbingApp_blb-people`), and PeopleConnector
+(`BelimbingApp_blb-people-connector`) all use gate id **9** / **Sonar way**, including `new_coverage` LT **80**.
+The built-in gate cannot have its conditions edited; tightening requires copying to a custom gate first.
+When advancing Domain pins, keep each Domain's `sonar_project_key` pointed at that shared gate rather than
+assuming a looser Domain-specific threshold.
+
+## Pending CI composition work (not yet on main)
+
+These follow-ups belong next to the pin and composition docs once they land; do not treat open PRs as
+established procedure:
+
+- Feature suite sharding across parallel matrix lanes: [issue #576](https://github.com/BelimbingApp/belimbing/issues/576) / [PR #610](https://github.com/BelimbingApp/belimbing/pull/610).
+- Composed-application smoke test at the pinned People and PeopleConnector refs: [issue #600](https://github.com/BelimbingApp/belimbing/issues/600) / [PR #604](https://github.com/BelimbingApp/belimbing/pull/604).
+
