@@ -1,0 +1,51 @@
+name: required-check-audit
+
+# Scheduled follow-up to the PR-time required-check producer audit (#578 / #605).
+# Ruleset policy changes are not a GitHub Actions event; operators re-dispatch
+# after refreshing tests/ci/fixtures/protect-main.ruleset.json.
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Inject a fake missing required name and print the issue body without calling the GitHub Issues API
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: required-check-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Required-check producer audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7 # NOSONAR — well-known GitHub-maintained action; tag pinning is acceptable for internal projects
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2 # NOSONAR — well-known community Bun action; tag pinning is acceptable for internal projects
+        with:
+          bun-version: '1.3.10'
+          no-cache: true
+
+      - name: Run required-check audit
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          args=()
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
+            args+=(--dry-run)
+          fi
+          bun scripts/ci/required-check-audit.ts "${args[@]}"
