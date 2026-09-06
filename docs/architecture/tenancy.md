@@ -2,11 +2,11 @@
 
 **Document Type:** Architecture
 **Scope:** Tenant model, context propagation, isolation enforcement, latent tenancy
-**Last Updated:** 2026-08-11
+**Last Updated:** 2026-09-06
 
 ## Overview
 
-Belimbing runs as a single database with application-layer tenant isolation. The **Tenant** is the platform's outer isolation and subscription boundary — one party renting the software. **Company** remains the inner organizational boundary inside a tenant. Tenants form a hierarchy through `tenants.parent_id`, which gives platform operator → customer (reseller) structures a home.
+Belimbing runs as a single database with application-layer tenant isolation and company boundaries inside each tenant. The [identity vocabulary below](#people-workforce-subject-seam) distinguishes these platform boundaries from workforce and provider identities. Tenants form a hierarchy through `tenants.parent_id`, which gives platform operator → customer (reseller) structures a home.
 
 Exactly one live tenant is explicitly marked as the platform operator. Each provisioned tenant has one primary company; numeric IDs have no semantic meaning. Single-tenant instances use the same shape, while tenant UI remains hidden until a second tenant exists (or `tenancy.show_management` is set). The same shape applies across development, staging, and production.
 
@@ -68,6 +68,33 @@ Consumers fail closed on null: no tenant context must never widen into unscoped 
 Configured system roles remain company-less and reusable in every tenant. Custom
 roles are never deployment-global: their owning company anchors them to one tenant,
 while assignment to users in sibling companies of that tenant remains supported.
+
+### People workforce subject seam
+
+The following vocabulary separates isolation, workforce identity and the principal requesting access. Each term has one definition here; the linked contract or owning type supplies its detailed rules.
+
+| Term | Definition and owner |
+|---|---|
+| Platform tenant | The outer isolation and subscription boundary: one party renting the platform. The ambient ID comes only from [TenantContext](../../app/Base/Tenancy/Contracts/TenantContext.php); the [Tenant model](../../app/Base/Tenancy/Models/Tenant.php) owns the hierarchy. |
+| Platform company | The inner organizational boundary represented by Core `companies`, owned by one tenant. It is the company ID attached to a login user and to a company-scoped provider connection; see [Company](../../app/Core/Company/Models/Company.php). |
+| Stable workforce entity | A provider-neutral identity for a typed workforce resource. Connector [WorkforceEntity](https://github.com/BelimbingApp/blb-people-connector/blob/main/Connector/Models/WorkforceEntity.php) owns its entity ID, distinct from a provider's external ID and from a login user ID. People carries a typed stable ID through [WorkforceSubject](https://github.com/BelimbingApp/blb-people/blob/main/Provider/Data/WorkforceSubject.php), without requiring connector persistence. |
+| Stable workforce company | The company-type workforce identity that owns projected workforce records. Connector `company_entity_id` names this identity, not a platform company; see the [company ownership contract](https://github.com/BelimbingApp/blb-people-connector/blob/main/docs/contracts/company-ownership.md#the-two-words-that-sound-the-same). Equal numeric values do not establish a mapping between the two spaces. |
+| Provider connection | The tenant-owned, optionally platform-company-scoped integration configuration for a provider. Its [ProviderConnection](https://github.com/BelimbingApp/blb-people-connector/blob/main/Connector/Models/ProviderConnection.php) ID identifies that connection, not a workforce company or person. |
+| External reference | The provider ID, resource type and provider-issued external ID identifying a source record, represented by People's [ExternalReference](https://github.com/BelimbingApp/blb-people/blob/main/Provider/Data/ExternalReference.php). It is source provenance, not an authorization grant or a replacement for the stable ID. |
+| Login actor | The authenticated principal requesting an operation, represented for authorization by [Actor::forUser](../../app/Base/Authz/DTO/Actor.php). Its user, platform-company and tenant attribution remain separate from the workforce subject being acted on. |
+
+[ResolvesWorkforceSubjects](https://github.com/BelimbingApp/blb-people/blob/main/Provider/Contracts/ResolvesWorkforceSubjects.php), introduced through [People #112](https://github.com/BelimbingApp/blb-people/issues/112), accepts a subject containing `tenantId`, `companyId`, resource `type`, `stableId` and an optional external reference. Its [resolution](https://github.com/BelimbingApp/blb-people/blob/main/Provider/Data/WorkforceSubjectResolution.php) returns either a record or a typed refusal, never both. The seam keeps People business code independent of connector models; the Connector's integration-only relocation is tracked by [Connector #121](https://github.com/BelimbingApp/blb-people-connector/issues/121).
+
+[ReadsWorkforceDirectory](https://github.com/BelimbingApp/blb-people/blob/main/Provider/Contracts/ReadsWorkforceDirectory.php), added by [People #121](https://github.com/BelimbingApp/blb-people/pull/121), supplies the explicit bridge: `companyForPlatform` maps an allowed platform company to its provider-stable workforce company; `employees` enumerates one such company; `employeeForUser` resolves the portal-user relationship within that company; `remap` returns an adapter-supplied audit fact when available. A missing mapping is not permission to cast or reuse the caller's ID. The native implementation does not guess historical connector remaps. See [NativeWorkforceDirectoryTest](https://github.com/BelimbingApp/blb-people/blob/main/Provider/Tests/Feature/NativeWorkforceDirectoryTest.php).
+
+The ID space is explicit in the selected implementation:
+
+- The [native resolver](https://github.com/BelimbingApp/blb-people/blob/main/Provider/Services/NativeWorkforceSubjectResolver.php) interprets `companyId` as a platform company and `stableId` as the corresponding native record ID (company, employee, organization-unit or position reference).
+- The [projection resolver](https://github.com/BelimbingApp/blb-people-connector/blob/main/Connector/Services/ProjectionWorkforceSubjectResolver.php) interprets `companyId` as a workforce company entity and `stableId` as a workforce entity. A company projection is its own company axis; other projections carry `company_entity_id`.
+
+Callers must supply the correct space; switching a resolver does not make platform IDs interchangeable with projection IDs. A successful subject lookup also does not authorize the login actor: the existing tenant/company policy pipeline and capability checks still apply.
+
+Both implementations fail closed when the ambient tenant or subject company is missing, the subject tenant does not match, or the requested identity cannot be resolved. A record found within the tenant but owned by a different company returns `WrongCompany` with no record; deactivated records return `Deactivated`. Thus a sibling company inside the same tenant is a real denial case, not permission to reuse a found record. The [native resolver tests](https://github.com/BelimbingApp/blb-people/blob/main/Provider/Tests/Feature/NativeWorkforceSubjectResolverTest.php), [projection resolver tests](https://github.com/BelimbingApp/blb-people-connector/blob/main/Connector/Tests/Feature/ProjectionWorkforceSubjectResolverTest.php), and [shared denial parity tests](https://github.com/BelimbingApp/blb-people-connector/blob/main/Connector/Tests/Feature/WorkforceSubjectDenialParityTest.php) preserve this contract.
 
 ### Settings
 
