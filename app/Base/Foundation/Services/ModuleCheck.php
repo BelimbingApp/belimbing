@@ -96,6 +96,42 @@ final class ModuleCheck
     }
 
     /**
+     * Inspect ownership across every enabled Domain Module in the composed app.
+     *
+     * A single-module smoke check only sees that Module's dependency closure.
+     * This wider view catches an unrelated pinned Module claiming the same
+     * table, route key, or route name before migration or route registration.
+     *
+     * @return array{
+     *     modules: list<string>,
+     *     refusals: list<string>,
+     *     ok: bool
+     * }
+     */
+    public function inspectDomainOwnership(): array
+    {
+        $roots = $this->reader()->moduleRoots();
+        $modules = array_keys(array_filter(
+            $roots,
+            fn (string $path): bool => ApplicationTopology::belongsToRoot($path, ApplicationTopology::DOMAINS),
+        ));
+        sort($modules);
+
+        $refusals = [
+            ...$this->tableCollisions($modules, $roots),
+            ...$this->routeCollisions($modules, $roots),
+        ];
+        $refusals = array_values(array_unique($refusals));
+        sort($refusals);
+
+        return [
+            'modules' => $modules,
+            'refusals' => $refusals,
+            'ok' => $refusals === [],
+        ];
+    }
+
+    /**
      * Stable plain-text report for humans and snapshot tests.
      *
      * @param  array{
@@ -156,6 +192,37 @@ final class ModuleCheck
         } else {
             foreach ($report['bindings'] as $binding) {
                 $lines[] = '  - '.$binding['abstract'].' ['.($binding['resolved'] ? 'resolved' : 'missing').']';
+            }
+        }
+
+        $lines[] = 'status: '.($report['ok'] ? 'ok' : 'refused');
+
+        return implode("\n", $lines)."\n";
+    }
+
+    /**
+     * Stable plain-text ownership report for humans and CI logs.
+     *
+     * @param  array{modules: list<string>, refusals: list<string>, ok: bool}  $report
+     */
+    public function renderDomainOwnership(array $report): string
+    {
+        $lines = ['domain modules:'];
+
+        if ($report['modules'] === []) {
+            $lines[] = '  (none)';
+        } else {
+            foreach ($report['modules'] as $module) {
+                $lines[] = '  - '.$module;
+            }
+        }
+
+        $lines[] = 'refusals:';
+        if ($report['refusals'] === []) {
+            $lines[] = '  (none)';
+        } else {
+            foreach ($report['refusals'] as $refusal) {
+                $lines[] = '  - '.$refusal;
             }
         }
 
