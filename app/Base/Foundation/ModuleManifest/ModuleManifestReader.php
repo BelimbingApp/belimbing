@@ -25,6 +25,7 @@ class ModuleManifestReader
     public function __construct(
         private readonly array $rootPaths,
         private readonly ?ModuleVersionConstraint $versionConstraint = null,
+        private readonly ?string $projectRoot = null,
     ) {}
 
     /**
@@ -61,14 +62,38 @@ class ModuleManifestReader
      */
     public function moduleRoots(): array
     {
+        return $this->moduleRootsFrom($this->all(), $this->discoverModuleRoots());
+    }
+
+    /**
+     * Installed module roots for source-analysis tools that must inspect code
+     * even when its optional Domain is disabled at runtime.
+     *
+     * @return array<string, string>
+     */
+    public function moduleRootsIncludingDisabledDomains(): array
+    {
+        return $this->moduleRootsFrom(
+            $this->allIncludingDisabledDomains(),
+            $this->discoverModuleRoots(filterDisabledDomains: false),
+        );
+    }
+
+    /**
+     * @param  list<ModuleManifest>  $manifests
+     * @param  list<string>  $discoveredRoots
+     * @return array<string, string>
+     */
+    private function moduleRootsFrom(array $manifests, array $discoveredRoots): array
+    {
         $roots = [];
         $manifestsByRoot = [];
 
-        foreach ($this->all() as $manifest) {
+        foreach ($manifests as $manifest) {
             $manifestsByRoot[$this->normalizePath($manifest->path)] = $manifest;
         }
 
-        foreach ($this->discoverModuleRoots() as $root) {
+        foreach ($discoveredRoots as $root) {
             $manifest = $manifestsByRoot[$this->normalizePath($root)] ?? null;
             $module = $manifest !== null && $manifest->module !== ''
                 ? $manifest->module
@@ -186,6 +211,7 @@ class ModuleManifestReader
             optionalModules: $this->normaliseModuleMap($blb['optional-modules'] ?? []),
             publishesEvents: $this->normaliseStringList($blb['publishes-events'] ?? []),
             consumesEvents: $this->normaliseStringList($blb['consumes-events'] ?? []),
+            sharedTables: $this->normaliseStringList($blb['shared-tables'] ?? []),
             featureFlags: $this->normaliseFeatureFlags($blb['feature-flags'] ?? []),
         );
     }
@@ -331,7 +357,9 @@ class ModuleManifestReader
 
     private function relativeBasePath(string $path): string
     {
-        return str_replace([base_path().DIRECTORY_SEPARATOR, '\\'], ['', '/'], $path);
+        $base = $this->projectRoot ?? base_path();
+
+        return str_replace([rtrim($base, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR, '\\'], ['', '/'], $path);
     }
 
     private function normalizePath(string $path): string

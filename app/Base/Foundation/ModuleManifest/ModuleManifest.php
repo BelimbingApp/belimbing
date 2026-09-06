@@ -15,6 +15,7 @@ final readonly class ModuleManifest
      * @param  array<string, string>  $optionalModules
      * @param  list<string>  $publishesEvents
      * @param  list<string>  $consumesEvents
+     * @param  list<string>  $sharedTables
      * @param  array<string, array{default?: bool, description?: string}>  $featureFlags
      */
     public function __construct(
@@ -27,6 +28,7 @@ final readonly class ModuleManifest
         public array $optionalModules = [],
         public array $publishesEvents = [],
         public array $consumesEvents = [],
+        public array $sharedTables = [],
         public array $featureFlags = [],
     ) {}
 }

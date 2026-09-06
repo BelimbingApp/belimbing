@@ -21,3 +21,11 @@ services:
             projectRoot: %currentWorkingDirectory%
         tags:
             - phpstan.rules.rule
+    -
+        class: App\Base\Foundation\PHPStan\DomainTableBoundaryRule
+        arguments:
+            projectRoot: %currentWorkingDirectory%
+            # Module ID => table => reviewed justification. No blanket exemptions.
+            allowlist: []
+        tags:
+            - phpstan.rules.rule
