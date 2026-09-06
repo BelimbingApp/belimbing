@@ -4,6 +4,7 @@ namespace App\Base\Audit\Listeners;
 
 use App\Base\Audit\DTO\RequestContext;
 use App\Base\Audit\Services\AuditBuffer;
+use App\Base\Tenancy\Contracts\TenantContext;
 use Illuminate\Console\Events\CommandFinished;
 
 /**
@@ -33,7 +34,7 @@ class CommandListener
 
         $this->buffer->bufferAction([
             'company_id' => $this->context->companyId,
-            'tenant_id' => $this->context->tenantId,
+            'tenant_id' => app(TenantContext::class)->currentTenantId() ?? $this->context->tenantId,
             'actor_type' => $this->context->actorType,
             'actor_id' => $this->context->actorId,
             'actor_role' => $this->context->actorRole,

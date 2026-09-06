@@ -16,9 +16,13 @@ own customer sub-tenants (resale).
 - `TenantContext` (scoped binding) is the only current-tenant carrier. Web requests
   resolve it via `ResolveTenantContext` middleware; queue jobs are stamped with the
   dispatch-time tenant on the payload and rehydrated on `JobProcessing`, then cleared
-  on completion so worker processes never leak context between jobs; CLI/scheduler
-  tenant work wraps execution in `TenantContext::runForTenant($id, ...)`. Consumers
-  fail closed on null — never widen to unscoped access.
+  on completion so worker processes never leak context between jobs; Domain console
+  commands that touch tenant data extend `TenantScopedCommand` (required `--tenant`,
+  refuses unknown/inactive tenants, binds context before `handle()`, refreshes audit
+  `RequestContext`); other CLI/scheduler tenant work wraps execution in
+  `TenantContext::runForTenant($id, ...)`. Audit Domain commands that skip the base
+  with `blb:domain-commands --audit`. Consumers fail closed on null — never widen to
+  unscoped access.
 - Base cannot depend on Core: `Tenant` has no `companies()` relation. The inverse
   (`Company::tenant()`) and the company→tenant lookup (`CompanyTenantDirectory`,
   bound against Authz's `TenantDirectory` contract) live in Core/Company.
