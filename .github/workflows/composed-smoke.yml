@@ -7,7 +7,9 @@ name: composed-smoke
 # scripts/ci/domain-repos.json compose into one application: no route
 # collision (#570), no duplicate migration name (#117), the expected route
 # table. A pin advance that breaks composition fails here, on the PR that
-# advances it.
+# advances it. The nightly schedule (#663) re-runs the same assertion against
+# the pins on main and opens or updates one "Composed boot failed" issue on
+# refusal so drift between pin advances is visible without waiting for a PR.
 
 on:
   push:
@@ -16,26 +18,35 @@ on:
   pull_request:
     branches:
       - main
+  schedule:
+    - cron: '41 5 * * *'
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Skip the boot; print the Composed boot failed issue body without calling the GitHub Issues API
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: composed-smoke-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
 
 jobs:
   composed-smoke:
     permissions:
       contents: read
+      issues: write
     runs-on: ubuntu-latest
     env:
       PLATFORM_OPERATOR_COMPANY_NAME: Belimbing CI
       PLATFORM_OPERATOR_COMPANY_CODE: belimbing_ci
-
     steps:
       - name: Checkout
         uses: actions/checkout@v7 # NOSONAR — well-known GitHub-maintained action; tag pinning is acceptable for internal projects
 
       - name: Setup PHP
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
         uses: shivammathur/setup-php@v2 # NOSONAR — well-known community PHP action; tag pinning is acceptable for internal projects
         with:
           php-version: '8.5'
@@ -44,15 +55,18 @@ jobs:
           coverage: none
 
       - name: Restore dependency cache
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
         uses: actions/cache@v6 # NOSONAR — official GitHub action
         with:
           path: vendor
           key: deps-v1-${{ runner.os }}-${{ runner.arch }}-php8.5-composer-${{ hashFiles('composer.lock', 'composer.json') }}
 
       - name: Install Dependencies
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
 
       - name: Configure the application
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
         run: |
           cp .env.example .env
           sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=sqlite/' .env
@@ -62,6 +76,7 @@ jobs:
       # Materializes People and PeopleConnector at the descriptor's exact refs,
       # then re-runs the autoloader so the mounted modules are discoverable.
       - name: Compose the pinned Domains
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
         run: |
           php scripts/ci/composed-smoke.php --scan-only
           php -r 'require "vendor/autoload.php";' >/dev/null
@@ -77,4 +92,61 @@ jobs:
           composer dump-autoload --optimize
 
       - name: Boot the composed application and hold it to the surface
-        run: php scripts/ci/composed-smoke.php
+        id: boot
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+        run: |
+          set +e
+          php scripts/ci/composed-smoke.php >"${RUNNER_TEMP}/composed-smoke.stdout" 2>"${RUNNER_TEMP}/composed-smoke.stderr"
+          status=$?
+          if [ -s "${RUNNER_TEMP}/composed-smoke.stdout" ]; then
+            cat "${RUNNER_TEMP}/composed-smoke.stdout"
+          fi
+          if [ -s "${RUNNER_TEMP}/composed-smoke.stderr" ]; then
+            cat "${RUNNER_TEMP}/composed-smoke.stderr" >&2
+          fi
+          {
+            echo "exit_code=${status}"
+            echo "refusal<<COMPOSED_SMOKE_EOF"
+            if [ -s "${RUNNER_TEMP}/composed-smoke.stderr" ]; then
+              cat "${RUNNER_TEMP}/composed-smoke.stderr"
+            elif [ -s "${RUNNER_TEMP}/composed-smoke.stdout" ]; then
+              cat "${RUNNER_TEMP}/composed-smoke.stdout"
+            else
+              echo "composed-smoke: exited ${status} with no output"
+            fi
+            echo "COMPOSED_SMOKE_EOF"
+          } >> "${GITHUB_OUTPUT}"
+          exit 0
+
+      - name: Setup Bun
+        if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+        uses: oven-sh/setup-bun@v2 # NOSONAR — well-known community Bun action; tag pinning is acceptable for internal projects
+        with:
+          bun-version: '1.3.10'
+          no-cache: true
+
+      - name: Report composed boot refusal
+        if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMPOSED_SMOKE_REFUSAL: ${{ steps.boot.outputs.refusal }}
+        run: |
+          args=()
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
+            args+=(--dry-run)
+            bun scripts/ci/composed-boot-failure-report.ts "${args[@]}"
+            exit 0
+          fi
+          if [ "${{ steps.boot.outputs.exit_code }}" = "0" ]; then
+            echo "Composed smoke passed; no refusal issue."
+            exit 0
+          fi
+          bun scripts/ci/composed-boot-failure-report.ts
+
+      - name: Fail when the composed boot refused
+        if: ${{ steps.boot.outcome == 'success' && steps.boot.outputs.exit_code != '0' }}
+        run: |
+          echo "composed-smoke refused (exit ${{ steps.boot.outputs.exit_code }})"
+          exit 1
