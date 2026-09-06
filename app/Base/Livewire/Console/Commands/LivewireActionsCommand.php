@@ -12,6 +12,7 @@ final class LivewireActionsCommand extends Command
     protected $signature = 'blb:livewire-actions
         {--domain= : Installed, enabled Domain directory name}
         {--json : Emit JSON instead of a table}
+        {--explain : Name new unreferenced actions when the baseline check fails}
         {--check-baseline= : Fail when module-owned unreferenced count exceeds this JSON baseline}
         {--write-baseline= : Write the current module-owned unreferenced snapshot to this JSON path}';
 
@@ -115,6 +116,15 @@ final class LivewireActionsCommand extends Command
         }
 
         $this->error($result['message']);
+        if ($this->option('explain')) {
+            if (($result['new_actions'] ?? null) === null) {
+                $this->comment('This baseline has no action list; only the count can be compared.');
+            } else {
+                foreach ($result['new_actions'] as $action) {
+                    $this->line($action);
+                }
+            }
+        }
 
         return self::FAILURE;
     }

@@ -7,6 +7,42 @@ use Tests\TestCase;
 
 uses(TestCase::class);
 
+test('baseline explanations name only newly unreferenced actions and preserve legacy counts', function (): void {
+    $suffix = bin2hex(random_bytes(6));
+    $domain = 'ZzExplain'.$suffix;
+    $directory = app_path('Domains/'.$domain.'/Example/Livewire');
+    $baseline = storage_path('framework/testing/explain-'.$suffix.'.json');
+    File::ensureDirectoryExists($directory);
+    File::ensureDirectoryExists(dirname($baseline));
+
+    try {
+        foreach (['Old', 'Added'] as $phase) {
+            file_put_contents($directory.'/'.$phase.'.php', '<?php namespace App\\Domains\\'.$domain.'\\Example\\Livewire;
+class '.$phase.' extends \\Livewire\\Component { public function action'.$phase.$suffix.'() {} public function render() {} }');
+            if ($phase === 'Old') {
+                Artisan::call('blb:livewire-actions', ['--domain' => $domain, '--write-baseline' => $baseline]);
+            }
+        }
+        $old = 'App\\Domains\\'.$domain.'\\Example\\Livewire\\Old::actionOld'.$suffix;
+        $new = 'App\\Domains\\'.$domain.'\\Example\\Livewire\\Added::actionAdded'.$suffix;
+        $snapshot = json_decode(file_get_contents($baseline), true, flags: JSON_THROW_ON_ERROR);
+        expect($snapshot['actions'] ?? null)->toBe([$old]);
+        expect(Artisan::call('blb:livewire-actions', ['--domain' => $domain, '--check-baseline' => $baseline, '--explain' => true]))->toBe(1)
+            ->and(Artisan::output())->toContain($new)->not->toContain($old);
+
+        unset($snapshot['actions']);
+        file_put_contents($baseline, json_encode($snapshot));
+        expect(Artisan::call('blb:livewire-actions', ['--domain' => $domain, '--check-baseline' => $baseline, '--explain' => true]))->toBe(1)
+            ->and(Artisan::output())->toContain('no action list')->not->toContain($new);
+        $snapshot['module_owned_unreferenced'] = 2;
+        file_put_contents($baseline, json_encode($snapshot));
+        expect(Artisan::call('blb:livewire-actions', ['--domain' => $domain, '--check-baseline' => $baseline, '--explain' => true]))->toBe(0);
+    } finally {
+        File::deleteDirectory(app_path('Domains/'.$domain));
+        File::delete($baseline);
+    }
+});
+
 test('action inventory reports real fixture methods and lexical test references without invoking components', function (): void {
     $suffix = bin2hex(random_bytes(6));
     $domain = 'ZzActionInventory'.$suffix;
