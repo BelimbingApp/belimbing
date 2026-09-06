@@ -19,6 +19,16 @@ class RouteDiscoveryService
     private array $fileByRouteKey = [];
 
     /**
+     * Route file that first registered each route name, across every
+     * registerRoutes() call on this instance. Names are the second axis
+     * Laravel keeps last-wins on: route('people.skills') would silently
+     * resolve to whichever module loaded last (#615).
+     *
+     * @var array<string, string>
+     */
+    private array $fileByRouteName = [];
+
+    /**
      * Glob patterns for route directory discovery.
      *
      * Supports Base components and modules in Core, Domains, and Extensions.
@@ -57,7 +67,7 @@ class RouteDiscoveryService
     /**
      * Load discovered route files into the router, one file at a time, and
      * refuse the composed application when a later file registers a method
-     * and URI an earlier file already registered.
+     * and URI, or a route name, an earlier file already registered.
      *
      * Laravel's RouteCollection keeps the last route for a method and URI and
      * says nothing, so two modules that both ship `GET people/skills` would
@@ -110,6 +120,24 @@ class RouteDiscoveryService
 
                 $this->fileByRouteKey[$key] = $file;
             }
+
+            $name = $route->getName();
+            if ($name === null || $name === '') {
+                continue;
+            }
+
+            $owner = $this->fileByRouteName[$name] ?? null;
+
+            if ($owner !== null && $owner !== $file) {
+                throw new RouteCollisionException(sprintf(
+                    'Route name %s is registered by more than one module route file: %s and %s. Laravel would keep only the last one; give each module its own route name.',
+                    $name,
+                    $owner,
+                    $file,
+                ));
+            }
+
+            $this->fileByRouteName[$name] = $file;
         }
     }
 
