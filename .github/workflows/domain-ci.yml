@@ -230,6 +230,44 @@ jobs:
       - name: Run Tests
         run: ./vendor/bin/pest "$DOMAIN_PATH" --coverage-clover=coverage.xml
 
+      # Exercise every Module in the reviewed pin set, not only the caller and
+      # its declared dependencies. Repositories already composed above retain
+      # their exact checkout; missing siblings are materialized at their pins.
+      - name: Module smoke composition
+        run: |
+          while IFS=$'\t' read -r domain_id repo domain_path ref; do
+            if [ ! -d "$domain_path" ]; then
+              mkdir -p "$(dirname "$domain_path")"
+              git clone --quiet --filter=blob:none --no-checkout "https://github.com/${repo}.git" "$domain_path"
+              git -C "$domain_path" checkout --quiet --detach "$ref"
+            fi
+
+            while IFS= read -r module_path; do
+              module_id=''
+              if [ -f "$module_path/composer.json" ]; then
+                module_id=$(jq -r '.extra.blb.module // empty' "$module_path/composer.json")
+              fi
+              if [ -z "$module_id" ]; then
+                module_name="${module_path##*/}"
+                module_slug=$(printf '%s' "$module_name" \
+                  | sed -E 's/([a-z0-9])([A-Z])/\1-\2/g; s/([A-Z])([A-Z][a-z])/\1-\2/g' \
+                  | tr '[:upper:]' '[:lower:]')
+                module_id="$domain_id/$module_slug"
+              fi
+
+              php artisan blb:module-check "$module_id"
+            done < <(
+              find "$domain_path" -mindepth 1 -maxdepth 1 -type d \
+                \( -exec test -f '{}/composer.json' \; \
+                -o -exec test -f '{}/ServiceProvider.php' \; \
+                -o -exec test -d '{}/Database/Migrations' \; \) \
+                -print | sort
+            )
+          done < <(
+            jq -r '.domains | to_entries[] | [.key, .value.repo, .value.path, .value.ref] | @tsv' \
+              scripts/ci/domain-repos.json
+          )
+
       - name: Ratchet Livewire action debt
         run: |
           domain_name="${DOMAIN_PATH##*/}"

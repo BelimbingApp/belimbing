@@ -6,6 +6,7 @@ use App\Base\Foundation\Services\ModuleCheck;
 use App\Base\Support\AppPath;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
+use Symfony\Component\Process\Process;
 
 /**
  * @param  array<string, string>  $requires
@@ -110,6 +111,17 @@ bindings:
 status: refused
 
 TXT);
+});
+
+test('the workflow command invocation exits one for an unmet dependency', function (): void {
+    moduleCheckFixture($this->moduleCheckGroup, 'Dependent', 'check/dependent', ['check/missing' => '*']);
+
+    $process = new Process([PHP_BINARY, 'artisan', 'blb:module-check', 'check/dependent'], base_path());
+    $process->run();
+
+    expect($process->getExitCode())->toBe(1)
+        ->and($process->getOutput().$process->getErrorOutput())
+        ->toContain('check/dependent requires check/missing');
 });
 
 test('a module with its dependency reports routes tables and resolved bindings', function (): void {

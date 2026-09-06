@@ -6,6 +6,9 @@ const root = resolve(import.meta.dir, "../..");
 const workflow = Bun.YAML.parse(
     readFileSync(join(root, ".github/workflows/domain-ci.yml"), "utf8"),
 ) as any;
+const domainRegistry = JSON.parse(
+    readFileSync(join(root, "scripts/ci/domain-repos.json"), "utf8"),
+) as { domains: Record<string, unknown> };
 
 const sqliteSteps = () => workflow.jobs.sqlite.steps;
 const step = (name: string) => {
@@ -66,4 +69,18 @@ test("domain CI scans composed Domains Livewire for raw subject-id request reads
     // Lexical only — keep it off the postgres-mirror lane.
     const pgNames = (workflow.jobs["postgres-mirror"].steps as any[]).map((entry: any) => entry.name);
     expect(pgNames).not.toContain("Scan Domain Livewire for raw subject-id request reads");
+});
+
+test("module smoke checks every pinned Domain after its suite", () => {
+    const smoke = step("Module smoke composition");
+
+    expect(Object.keys(domainRegistry.domains).length).toBeGreaterThan(0);
+    expect(smoke.run).toContain(".domains | to_entries[]");
+    expect(smoke.run).toContain("domain_id repo domain_path ref");
+    expect(smoke.run).toContain('git clone --quiet --filter=blob:none --no-checkout');
+    expect(smoke.run).toContain('git -C "$domain_path" checkout --quiet --detach "$ref"');
+    expect(smoke.run).toContain('php artisan blb:module-check "$module_id"');
+
+    const names = sqliteSteps().map((entry: any) => entry.name);
+    expect(names.indexOf("Run Tests")).toBeLessThan(names.indexOf("Module smoke composition"));
 });
