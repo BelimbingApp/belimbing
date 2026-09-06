@@ -1,0 +1,105 @@
+name: refresh-feature-shard-timings
+
+# Manual refresh of Feature directory timing summary and shard map from the
+# latest successful platform timing artifacts on main (#695). Opens a PR; never
+# pushes to main (Protect Main).
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Optional tests workflow run id on main (default latest success)
+        required: false
+        type: string
+
+concurrency:
+  group: refresh-feature-shard-timings
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7 # NOSONAR — well-known GitHub-maintained action; tag pinning is acceptable for internal projects
+
+      - name: Download Feature lane timing artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID_INPUT: ${{ inputs.run_id }}
+        run: |
+          set -euo pipefail
+          if [ -n "${RUN_ID_INPUT}" ]; then
+            run_id="${RUN_ID_INPUT}"
+          else
+            run_id=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow=tests.yml \
+              --branch main --status success --limit 1 --json databaseId \
+              --jq '.[0].databaseId')
+          fi
+          if [ -z "${run_id}" ] || [ "${run_id}" = "null" ]; then
+            echo "No successful tests.yml run on main to download timings from." >&2
+            exit 1
+          fi
+          echo "Using timing artifacts from run ${run_id}"
+          mkdir -p timing
+          gh run download "${run_id}" --repo "$GITHUB_REPOSITORY" \
+            -n platform-timing-Feature-a \
+            -n platform-timing-Feature-b \
+            -D timing
+          find timing -type f -name "*.json" | while read -r path; do
+            base=$(basename "$path")
+            if [ "$path" != "timing/${base}" ]; then
+              mv "$path" "timing/${base}"
+            fi
+          done
+          find timing -mindepth 1 -type d -empty -delete || true
+          ls -la timing
+
+      - name: Refresh timing summary and rebalance shards
+        run: |
+          set -euo pipefail
+          python3 scripts/ci/platform-feature-shard-timings.py \
+            --timing-dir timing \
+            --write
+          python3 scripts/ci/platform-feature-shards.py --write-balanced
+          python3 scripts/ci/platform-feature-shards.py --validate-only
+
+      - name: Open PR with refreshed timings
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- \
+            scripts/ci/platform-feature-shard-timings.json \
+            scripts/ci/platform-feature-shards.json; then
+            echo "Feature shard timings and membership unchanged."
+            exit 0
+          fi
+          # Protect Main refuses direct pushes; open a PR and never push to main.
+          branch="ci/refresh-feature-shard-timings"
+          worktree=$(mktemp -d)
+          git fetch origin main
+          git worktree add -B "${branch}" "${worktree}" origin/main
+          cp scripts/ci/platform-feature-shard-timings.json \
+            "${worktree}/scripts/ci/platform-feature-shard-timings.json"
+          cp scripts/ci/platform-feature-shards.json \
+            "${worktree}/scripts/ci/platform-feature-shards.json"
+          git -C "${worktree}" config user.name "github-actions[bot]"
+          git -C "${worktree}" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C "${worktree}" add \
+            scripts/ci/platform-feature-shard-timings.json \
+            scripts/ci/platform-feature-shards.json
+          git -C "${worktree}" commit -m "ci: refresh Feature shard timings from measured lanes"
+          git -C "${worktree}" push --force-with-lease origin "HEAD:refs/heads/${branch}"
+          git worktree remove "${worktree}"
+          existing=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "${branch}" --base main \
+            --state open --json number --jq '.[0].number')
+          if [ -z "${existing}" ] || [ "${existing}" = "null" ]; then
+            existing=$(gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "${branch}" \
+              --title "ci: refresh Feature shard timings from measured lanes" \
+              --body "Automated refresh of Feature shard timings from Feature lane suite measurements on main (#695). Opened by workflow_dispatch; does not push to main.")
+          fi
+          echo "Opened/updated timings refresh PR #${existing}"
