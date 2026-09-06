@@ -182,3 +182,21 @@ test('an unknown module id is refused', function (): void {
     expect($report['ok'])->toBeFalse()
         ->and($report['refusals'])->toBe(['unknown module: check/does-not-exist']);
 });
+
+test('a declared binding whose provider is not registered is reported as missing', function (): void {
+    moduleCheckFixture($this->moduleCheckGroup, 'Dependent', 'check/dependent', [], ['binding' => true]);
+    $probe = AppPath::toClass(
+        base_path(ApplicationTopology::relativePathUnder(
+            ApplicationTopology::DOMAINS,
+            $this->moduleCheckGroup,
+            'Dependent',
+        ).'/ModuleCheckProbeContract.php'),
+    );
+
+    $exit = Artisan::call('blb:module-check', ['module' => 'check/dependent']);
+    $output = Artisan::output();
+
+    expect($exit)->toBe(0)
+        ->and($output)->toContain('  - '.$probe.' [missing]')
+        ->and($output)->not->toContain('[resolved]');
+});
