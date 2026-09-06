@@ -19,6 +19,9 @@ own customer sub-tenants (resale).
   on completion so worker processes never leak context between jobs; CLI/scheduler
   tenant work wraps execution in `TenantContext::runForTenant($id, ...)`. Consumers
   fail closed on null — never widen to unscoped access.
+- Tenant-scoped console commands dispatch jobs through `DispatchesWithTenant`.
+  Jobs implement `CarriesTenant`; a job naming a different tenant is refused before
+  queueing, while the queue payload hook carries the matching context to the worker.
 - Base cannot depend on Core: `Tenant` has no `companies()` relation. The inverse
   (`Company::tenant()`) and the company→tenant lookup (`CompanyTenantDirectory`,
   bound against Authz's `TenantDirectory` contract) live in Core/Company.
