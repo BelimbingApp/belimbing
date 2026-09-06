@@ -7,6 +7,29 @@ use Tests\TestCase;
 
 uses(TestCase::class);
 
+test('a new unreferenced Base action makes the platform baseline check fail', function (): void {
+    $suffix = bin2hex(random_bytes(6));
+    $component = 'ZzPlatformActions'.$suffix;
+    $directory = app_path('Base/'.$component.'/Livewire');
+    $baseline = storage_path('framework/testing/platform-actions-'.$suffix.'.json');
+    File::ensureDirectoryExists(dirname($baseline));
+    try {
+        expect(Artisan::call('blb:livewire-actions', ['--write-baseline' => $baseline]))->toBe(0);
+        $before = json_decode(file_get_contents($baseline), true, flags: JSON_THROW_ON_ERROR);
+        expect(Artisan::call('blb:livewire-actions', ['--check-baseline' => $baseline]))->toBe(0);
+        File::ensureDirectoryExists($directory);
+        file_put_contents($directory.'/Example.php', '<?php namespace App\\Base\\'.$component.'\\Livewire; class Example extends \\Livewire\\Component { public function untested'.$suffix.'() {} public function render() {} }');
+        expect(Artisan::call('blb:livewire-actions', ['--check-baseline' => $baseline, '--explain' => true]))->toBe(1)
+            ->and(Artisan::output())->toContain('App\\Base\\'.$component.'\\Livewire\\Example::untested'.$suffix);
+        Artisan::call('blb:livewire-actions', ['--write-baseline' => $baseline]);
+        $after = json_decode(file_get_contents($baseline), true, flags: JSON_THROW_ON_ERROR);
+        expect($after['module_owned_unreferenced'])->toBe($before['module_owned_unreferenced'] + 1);
+    } finally {
+        File::deleteDirectory(app_path('Base/'.$component));
+        File::delete($baseline);
+    }
+});
+
 test('strict action names refuse equal-count substitutions and require an identity snapshot', function (): void {
     $suffix = bin2hex(random_bytes(6));
     $domain = 'ZzStrict'.$suffix;

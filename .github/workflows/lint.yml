@@ -69,6 +69,11 @@ jobs:
       - name: Run Larastan on app/Base
         run: vendor/bin/phpstan analyse --memory-limit=2G
 
+      - name: Check platform Livewire action baseline
+        env:
+          APP_ENV: testing
+        run: php artisan blb:livewire-actions --check-baseline=tests/ci/livewire-actions-baselines/platform.json
+
       - name: Check module feature flag ownership
         run: vendor/bin/phpstan analyse -c phpstan-feature-flags.neon --memory-limit=2G
 
