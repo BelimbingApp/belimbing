@@ -68,6 +68,87 @@ final class ActionInventory
         return $rows;
     }
 
+
+    /**
+     * Count module-owned actions with no lexical test reference for a Domain.
+     *
+     * Used by the CI ratchet (#630). Lexical references remain search leads,
+     * not proof of exercised behavior — see ActionInventory::scan().
+     */
+    public function moduleOwnedUnreferencedCount(?string $domain = null): int
+    {
+        $count = 0;
+        foreach ($this->scan($domain) as $row) {
+            if ($row['module_owned'] && ! $row['referenced_in_tests']) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
+    /**
+     * @return array{domain: string|null, module_owned_unreferenced: int}
+     */
+    public function baselineSnapshot(?string $domain = null): array
+    {
+        return [
+            'domain' => $domain,
+            'module_owned_unreferenced' => $this->moduleOwnedUnreferencedCount($domain),
+        ];
+    }
+
+    /**
+     * @param  array{domain?: string|null, module_owned_unreferenced?: mixed}  $baseline
+     * @return array{ok: bool, current: int, baseline: int, message: string}
+     */
+    public function compareToBaseline(array $baseline, ?string $domain = null): array
+    {
+        if (! array_key_exists('module_owned_unreferenced', $baseline)
+            || ! is_int($baseline['module_owned_unreferenced'])
+            || $baseline['module_owned_unreferenced'] < 0) {
+            throw new ActionInventoryException('Baseline must include a non-negative integer module_owned_unreferenced.');
+        }
+
+        $expectedDomain = $baseline['domain'] ?? null;
+        if (is_string($expectedDomain) && $expectedDomain !== '' && $domain !== null && $expectedDomain !== $domain) {
+            throw new ActionInventoryException(
+                'Baseline domain '.$expectedDomain.' does not match requested Domain '.$domain.'.'
+            );
+        }
+
+        $current = $this->moduleOwnedUnreferencedCount($domain);
+        $limit = $baseline['module_owned_unreferenced'];
+        if ($current > $limit) {
+            return [
+                'ok' => false,
+                'current' => $current,
+                'baseline' => $limit,
+                'message' => sprintf(
+                    'Livewire action debt rose for %s: %d module-owned unreferenced actions (baseline %d). Cover new actions or raise only with justification.',
+                    $domain ?? 'all components',
+                    $current,
+                    $limit,
+                ),
+            ];
+        }
+
+        return [
+            'ok' => true,
+            'current' => $current,
+            'baseline' => $limit,
+            'message' => sprintf(
+                'Livewire action debt for %s is %d (baseline %d).%s',
+                $domain ?? 'all components',
+                $current,
+                $limit,
+                $current < $limit
+                    ? ' Lower the committed baseline in the same PR to lock the improvement.'
+                    : '',
+            ),
+        ];
+    }
+
     /** @return list<string> */
     private function lifecycleMethods(string $class): array
     {

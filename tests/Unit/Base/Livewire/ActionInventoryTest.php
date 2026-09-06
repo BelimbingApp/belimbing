@@ -83,3 +83,90 @@ test('disabled domains are refused and an enabled domain without components repo
         File::deleteDirectory(app_path('Domains/'.$domain));
     }
 });
+
+test('livewire action baseline check fails first when an untested module-owned action is added', function (): void {
+    $suffix = bin2hex(random_bytes(6));
+    $domain = 'ZzActionBaseline'.$suffix;
+    $directory = app_path('Domains/'.$domain.'/Example');
+    File::ensureDirectoryExists($directory.'/Livewire');
+    File::ensureDirectoryExists($directory.'/Tests');
+    $baseline = storage_path('framework/testing/livewire-actions-baseline-'.$suffix.'.json');
+
+    try {
+        file_put_contents($directory.'/Livewire/Index.php', '<?php namespace App\\Domains\\'.$domain.'\\Example\\Livewire;
+class Index extends \Livewire\Component {
+    public function covered'.$suffix.'() {}
+    public function render() { return "<div></div>"; }
+}');
+        file_put_contents($directory.'/Tests/ReferenceTest.php', "<?php\ncovered".$suffix."\n");
+
+        expect(Artisan::call('blb:livewire-actions', [
+            '--domain' => $domain,
+            '--write-baseline' => $baseline,
+        ]))->toBe(0);
+
+        $snapshot = json_decode((string) file_get_contents($baseline), true, flags: JSON_THROW_ON_ERROR);
+        expect($snapshot)->toMatchArray([
+            'domain' => $domain,
+            'module_owned_unreferenced' => 0,
+        ]);
+
+        expect(Artisan::call('blb:livewire-actions', [
+            '--domain' => $domain,
+            '--check-baseline' => $baseline,
+        ]))->toBe(0);
+
+        file_put_contents($directory.'/Livewire/Index.php', '<?php namespace App\\Domains\\'.$domain.'\\Example\\Livewire;
+class Index extends \Livewire\Component {
+    public function covered'.$suffix.'() {}
+    public function untested'.$suffix.'() {}
+    public function render() { return "<div></div>"; }
+}');
+
+        expect(Artisan::call('blb:livewire-actions', [
+            '--domain' => $domain,
+            '--check-baseline' => $baseline,
+        ]))->toBe(1)
+            ->and(Artisan::output())->toContain('Livewire action debt rose');
+
+        expect(Artisan::call('blb:livewire-actions', [
+            '--domain' => $domain,
+            '--write-baseline' => $baseline,
+        ]))->toBe(0);
+
+        $raised = json_decode((string) file_get_contents($baseline), true, flags: JSON_THROW_ON_ERROR);
+        expect($raised['module_owned_unreferenced'])->toBe(1);
+
+        expect(Artisan::call('blb:livewire-actions', [
+            '--domain' => $domain,
+            '--check-baseline' => $baseline,
+        ]))->toBe(0)
+            ->and(Artisan::output())->toContain('baseline 1');
+    } finally {
+        File::deleteDirectory(app_path('Domains/'.$domain));
+        @unlink($baseline);
+    }
+});
+
+test('livewire action baseline check refuses a mismatched domain label', function (): void {
+    $baseline = storage_path('framework/testing/livewire-actions-baseline-mismatch.json');
+    file_put_contents($baseline, json_encode([
+        'domain' => 'People',
+        'module_owned_unreferenced' => 0,
+    ], JSON_THROW_ON_ERROR));
+
+    try {
+        $domain = 'ZzMismatch'.bin2hex(random_bytes(4));
+        File::ensureDirectoryExists(app_path('Domains/'.$domain));
+        DomainState::enable($domain);
+
+        expect(Artisan::call('blb:livewire-actions', [
+            '--domain' => $domain,
+            '--check-baseline' => $baseline,
+        ]))->toBe(1)
+            ->and(Artisan::output())->toContain('does not match');
+    } finally {
+        File::deleteDirectory(app_path('Domains/'.$domain));
+        @unlink($baseline);
+    }
+});
