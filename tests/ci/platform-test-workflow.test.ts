@@ -119,13 +119,14 @@ test("all shard reports feed one Sonar scan and downstream dispatch still requir
     expect(workflow.jobs["postgres-mirror"].steps.some((entry: any) => entry.name === "Run native and portable mirror integration tests")).toBeTrue();
 });
 
-test("committed Feature shards are disjoint and cover every first-level Feature directory", () => {
+test("committed Feature shards are disjoint and cover every Feature test file exactly once", () => {
     const validation = spawnSync("python3", ["scripts/ci/platform-feature-shards.py", "--validate-only"], {
         cwd: root,
         encoding: "utf-8",
     });
     expect(validation.status).toBe(0);
     expect(validation.stdout).toContain("ok:");
+    expect(validation.stdout).toContain("test files");
     for (const shard of ["a", "b"]) {
         const listed = spawnSync("python3", ["scripts/ci/platform-feature-shards.py", shard], {
             cwd: root,

@@ -60,12 +60,14 @@ python3 -m json.tool docs/ci/dependency-audit-policy.json >/dev/null
 python3 -m json.tool scripts/ci/domain-repos.json >/dev/null
 
 # Feature shards must stay disjoint and cover every first-level Feature
-# directory so CI cannot silently drop a folder when a new one lands (#576).
+# directory / test file so CI cannot silently drop coverage (#576 / #626).
 python3 -m json.tool scripts/ci/platform-feature-shards.json >/dev/null
+python3 -m json.tool scripts/ci/platform-feature-shard-timings.json >/dev/null
 python3 scripts/ci/platform-feature-shards.py --validate-only >/dev/null
 grep -q 'platform-feature-shards.py' .github/workflows/tests.yml
+grep -q 'platform-feature-shard-timings.json' scripts/ci/platform-feature-shards.json
 
-# Feature shard membership must fail closed, not merely parse (#576).
+# Feature shard membership must fail closed, not merely parse (#576 / #626).
 shard_root="$(mktemp -d)"
 mkdir -p "$shard_root/tests/Feature/Alpha" "$shard_root/tests/Feature/Beta" "$shard_root/tests/Feature/Gamma"
 touch "$shard_root/tests/Feature/Alpha/AlphaTest.php" "$shard_root/tests/Feature/Beta/BetaTest.php" "$shard_root/tests/Feature/Gamma/GammaTest.php"
@@ -90,6 +92,30 @@ printf '{"shards":{"a":["Alpha","Beta"],"b":["Gamma"]}}' > "$shard_file"
 touch "$shard_root/tests/Feature/LooseTest.php"
 if python3 scripts/ci/platform-feature-shards.py --root "$shard_root" --shards-file "$shard_file" --validate-only >/dev/null 2>&1; then
     echo 'Feature shard validator accepted a loose Feature test file' >&2; exit 1
+fi
+rm -f "$shard_root/tests/Feature/LooseTest.php"
+
+# Nested files under a claimed directory are covered; omitting the directory
+# must fail closed so every Feature *Test.php stays in exactly one shard (#626).
+mkdir -p "$shard_root/tests/Feature/Alpha/Nested"
+touch "$shard_root/tests/Feature/Alpha/Nested/HiddenTest.php"
+printf '{"shards":{"a":["Alpha","Beta"],"b":["Gamma"]}}' > "$shard_file"
+if ! python3 scripts/ci/platform-feature-shards.py --root "$shard_root" --shards-file "$shard_file" --validate-only >/dev/null; then
+    echo 'Feature shard validator rejected a nested file under a claimed directory' >&2; exit 1
+fi
+printf '{"shards":{"a":["Beta"],"b":["Gamma"]}}' > "$shard_file"
+if python3 scripts/ci/platform-feature-shards.py --root "$shard_root" --shards-file "$shard_file" --validate-only >/dev/null 2>&1; then
+    echo 'Feature shard validator accepted omitted Alpha files' >&2; exit 1
+fi
+
+# --write-balanced must place directories by longest-processing-time so the
+# heaviest directory sits alone against the two lighter ones (#626).
+printf '{"directories":{"Alpha":{"wall_seconds":10},"Beta":{"wall_seconds":6},"Gamma":{"wall_seconds":5}}}' > "$shard_root/timings.json"
+printf '{"shards":{"a":["Alpha","Beta"],"b":["Gamma"]}}' > "$shard_file"
+python3 scripts/ci/platform-feature-shards.py --root "$shard_root" --shards-file "$shard_file" --timings-file "$shard_root/timings.json" --write-balanced >/dev/null
+balanced=$(python3 -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1]))["shards"], sort_keys=True))' "$shard_file")
+if [ "$balanced" != '{"a": ["Alpha"], "b": ["Beta", "Gamma"]}' ]; then
+    echo "Feature shard balancer did not apply longest-processing-time: $balanced" >&2; exit 1
 fi
 rm -rf "$shard_root"
 
