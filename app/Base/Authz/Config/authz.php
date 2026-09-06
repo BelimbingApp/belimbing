@@ -40,6 +40,26 @@ return [
         'upload',
         'follow-up',
         'hod-approve',
+
+        /*
+         * Directional external-provider ports (#779).
+         *
+         * `read` is this installation pulling records from a provider; `write`
+         * is pushing them back. They are not the CRUD pair and must not be
+         * used as one. `view` is a person looking at a record in the
+         * interface, bounded by that person's company and audience; `read` is
+         * a port draining a provider on nobody's behalf in particular, bounded
+         * by nothing but this grant. Keeping them apart is what stops "may see
+         * an employee" from becoming "may siphon the employee table out of the
+         * vendor system".
+         *
+         * The verb is the LAST segment of a capability key, so a port
+         * capability reads domain.resource.read — for example
+         * people-connector.workforce-port.read. A key with the direction in
+         * the middle parses its last segment as the verb and is rejected.
+         */
+        'read',
+        'write',
     ],
 
     // Capabilities owned by the base framework (no module to host them yet).

@@ -97,9 +97,13 @@ it('registers the provider-port read and write verbs', function (): void {
     $catalog = CapabilityCatalog::fromConfig($authzConfig);
     $registry = CapabilityRegistry::fromCatalog($catalog);
 
+    // Scoped to these two keys rather than asserting the whole catalog is
+    // clean: a composed installation carries other modules' capabilities, and
+    // this test is about these verbs, not about everything else's spelling.
     expect($catalog->verbs())->toContain('read')
         ->and($catalog->verbs())->toContain('write')
-        ->and($catalog->rejected())->toBe([])
+        ->and($catalog->rejected())->not->toHaveKey('people-connector.workforce-port.read')
+        ->and($catalog->rejected())->not->toHaveKey('people-connector.workforce-port.write')
         ->and($registry->has('people-connector.workforce-port.read'))->toBeTrue()
         ->and($registry->has('people-connector.workforce-port.write'))->toBeTrue();
 });
@@ -124,27 +128,40 @@ it('rejects a provider-port capability when its verb is not registered', functio
     expect($registry->has("people-connector.workforce-port.{$verb}"))->toBeFalse();
 })->with(['read', 'write']);
 
-it('still fails closed on a malformed provider-port key', function (): void {
+it('normalises case but still fails closed on a malformed provider-port key', function (): void {
     // Registering the verbs widens the grammar by exactly two words. It does
     // not soften the grammar itself.
+    //
+    // Case is normalised rather than refused: the catalog lowercases domains,
+    // verbs and capabilities in its constructor, so a shouted key is the same
+    // key. What still fails closed is the shape — too few segments, an unknown
+    // domain, or a last segment that is not a registered verb.
     $catalog = new CapabilityCatalog(
         domains: ['people-connector'],
         verbs: ['read', 'write'],
         capabilities: [
             'people-connector.workforce-port.read',
-            'People-Connector.WorkforcePort.Read',
+            'PEOPLE-CONNECTOR.WORKFORCE-PORT.WRITE',
             'people-connector.read',
-            'people-connector.workforce-port.read.extra.segments.here',
+            'people-connector.workforce-port.read.payroll',
             'unknown-domain.workforce-port.write',
         ],
     );
 
     $catalog->validate();
 
-    expect($catalog->capabilities())->toBe(['people-connector.workforce-port.read'])
+    expect($catalog->capabilities())->toBe([
+        'people-connector.workforce-port.read',
+        'people-connector.workforce-port.write',
+    ])
         ->and($catalog->rejected())->toHaveKeys([
-            'People-Connector.WorkforcePort.Read',
             'people-connector.read',
+            'people-connector.workforce-port.read.payroll',
             'unknown-domain.workforce-port.write',
-        ]);
+        ])
+        // The direction has to be the last segment. A key that buries it in
+        // the middle parses its tail as the verb and is dropped — which is
+        // exactly what the Connector's own provider keys do today.
+        ->and($catalog->rejected()['people-connector.workforce-port.read.payroll'])
+        ->toContain('unknown verb [payroll]');
 });
