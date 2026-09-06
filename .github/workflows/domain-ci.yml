@@ -271,6 +271,12 @@ jobs:
               scripts/ci/domain-repos.json
           )
 
+      # The smoke loop checks each Module's declared dependency closure. With
+      # every immutable pin now materialized, check unrelated Domain Modules
+      # against each other for table and route ownership collisions as well.
+      - name: Check composed Domain ownership
+        run: php artisan blb:module-ownership
+
       - name: Ratchet Livewire action debt
         run: |
           domain_name="${DOMAIN_PATH##*/}"
