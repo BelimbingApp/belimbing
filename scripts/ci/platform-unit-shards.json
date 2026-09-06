@@ -1,0 +1,18 @@
+{
+  "generated_from": "platform-unit-shard-timings.json",
+  "balance": "longest-processing-time",
+  "estimated_wall_seconds": {
+    "a": 71.452,
+    "b": 19.756
+  },
+  "shards": {
+    "a": [
+      "Core"
+    ],
+    "b": [
+      "AI",
+      "Base",
+      "Database"
+    ]
+  }
+}

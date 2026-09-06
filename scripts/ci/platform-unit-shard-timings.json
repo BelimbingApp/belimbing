@@ -1,0 +1,23 @@
+{
+  "source": "local-directory-pest-walls-no-coverage",
+  "measured_at": "2026-09-06T14:44:36.183951+00:00",
+  "note": "Sequential first-level Unit directory Pest elapsed times; relative balancing inputs, not hosted coverage timings.",
+  "directories": {
+    "AI": {
+      "wall_seconds": 0.118,
+      "test_files": 2
+    },
+    "Base": {
+      "wall_seconds": 18.427,
+      "test_files": 63
+    },
+    "Core": {
+      "wall_seconds": 71.452,
+      "test_files": 115
+    },
+    "Database": {
+      "wall_seconds": 1.211,
+      "test_files": 1
+    }
+  }
+}

@@ -25,10 +25,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Unit stays one lane. Feature is sharded by first-level directory
-        # (scripts/ci/platform-feature-shards.json) because it remains the
-        # wall-clock long pole after Unit/Feature concurrency (#576 / #597).
-        suite: [Unit, Feature-a, Feature-b]
+        # Unit and Feature use validated disjoint directory shards.
+        suite: [Unit-a, Unit-b, Feature-a, Feature-b]
     runs-on: ubuntu-latest
     environment: Testing
     env:
@@ -137,12 +135,17 @@ jobs:
       # on #537. Unit and Feature already run concurrently (#597); Feature is
       # further split by committed directory shards (#576). The ci job below
       # gathers their Clover reports for one analysis.
-      - name: Run Tests (Unit)
-        if: matrix.suite == 'Unit'
+      - name: Run Tests (Unit shard)
+        if: startsWith(matrix.suite, 'Unit-')
         env:
           MATRIX_SUITE: ${{ matrix.suite }}
           TIMING_DIR: timing
-        run: scripts/ci/record-pest-timing.sh Unit -- --testsuite=Unit --coverage-clover=coverage-unit.xml
+        run: |
+          python3 scripts/ci/platform-feature-shards.py --suite=Unit --validate-only
+          shard="${MATRIX_SUITE#Unit-}"
+          mapfile -t paths < <(python3 scripts/ci/platform-feature-shards.py --suite=Unit "$shard")
+          test "${#paths[@]}" -gt 0
+          scripts/ci/record-pest-timing.sh "Unit-${shard}" -- "${paths[@]}" --coverage-clover="coverage-unit-${shard}.xml"
       - name: Run Tests (Feature shard)
         if: startsWith(matrix.suite, 'Feature-')
         env:
@@ -165,7 +168,7 @@ jobs:
       # after a rename or glob drift while covering nothing: the names are
       # checked against phpunit.xml first, and a missing one fails the step.
       - name: Run Tests (Core, Domains, Extensions)
-        if: matrix.suite == 'Unit'
+        if: matrix.suite == 'Unit-a'
         env:
           MATRIX_SUITE: ${{ matrix.suite }}
           TIMING_DIR: timing
@@ -175,7 +178,7 @@ jobs:
           done
           scripts/ci/record-pest-timing.sh Core,Domains,Extensions -- --do-not-fail-on-empty-test-suite --testsuite=Core,Domains,Extensions --coverage-clover=coverage-modules.xml
 
-      # The Unit lane also owns the optional module suites. Each artifact
+      # The Unit-a lane also owns the optional module suites. Each artifact
       # carries only reports produced by its successful isolated checkout.
       - name: Upload suite coverage
         uses: actions/upload-artifact@v7
@@ -193,6 +196,19 @@ jobs:
           path: timing/*.json
           if-no-files-found: error
           retention-days: 1
+
+  # Preserve the historical Unit context while the matrix runs Unit-a/Unit-b.
+  # The matrix result requires every shard, including both Unit shards, to pass.
+  unit-compatibility:
+    name: suites (Unit)
+    needs: [suites]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require successful shard matrix
+        env:
+          SUITES_RESULT: ${{ needs.suites.result }}
+        run: test "$SUITES_RESULT" = success
 
   # Keep the existing required check name. A failed/skipped/cancelled lane
   # must produce a failed ci check, never a successful skipped analysis.
@@ -232,10 +248,15 @@ jobs:
       - name: Enforce Pest timing baseline
         run: python3 scripts/ci/pest-timing-ratchet.py timing
 
-      - name: Download Unit coverage
+      - name: Download Unit-a coverage
         uses: actions/download-artifact@v8
         with:
-          name: platform-coverage-Unit
+          name: platform-coverage-Unit-a
+
+      - name: Download Unit-b coverage
+        uses: actions/download-artifact@v8
+        with:
+          name: platform-coverage-Unit-b
 
       - name: Download Feature-a coverage
         uses: actions/download-artifact@v8
@@ -249,7 +270,7 @@ jobs:
 
       - name: Require all coverage reports
         run: |
-          for report in coverage-unit.xml coverage-feature-a.xml coverage-feature-b.xml coverage-modules.xml; do
+          for report in coverage-unit-a.xml coverage-unit-b.xml coverage-feature-a.xml coverage-feature-b.xml coverage-modules.xml; do
             test -s "$report" || { echo "::error::Missing coverage report $report"; exit 1; }
           done
 
@@ -261,7 +282,7 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           python3 scripts/ci/platform-coverage-ratchet.py check \
-            coverage-unit.xml coverage-feature-a.xml coverage-feature-b.xml coverage-modules.xml \
+            coverage-unit-a.xml coverage-unit-b.xml coverage-feature-a.xml coverage-feature-b.xml coverage-modules.xml \
             --baseline tests/ci/platform-coverage-baseline.json
 
       - name: Upsert PR timing and coverage comment
@@ -273,7 +294,7 @@ jobs:
           python3 scripts/ci/upsert-pr-ci-summary-comment.py \
             --timing-dir timing \
             --baseline tests/ci/platform-coverage-baseline.json \
-            coverage-unit.xml coverage-feature-a.xml coverage-feature-b.xml coverage-modules.xml
+            coverage-unit-a.xml coverage-unit-b.xml coverage-feature-a.xml coverage-feature-b.xml coverage-modules.xml
 
       # Org policy refuses GITHUB_TOKEN createPullRequest (#686). Push stays on
       # github.token; PR open/label/auto-merge use COVERAGE_BASELINE_RAISE_TOKEN.
@@ -285,7 +306,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           COVERAGE_BASELINE_RAISE_TOKEN: ${{ secrets.COVERAGE_BASELINE_RAISE_TOKEN }}
         run: |
-          reports=(coverage-unit.xml coverage-feature-a.xml coverage-feature-b.xml coverage-modules.xml)
+          reports=(coverage-unit-a.xml coverage-unit-b.xml coverage-feature-a.xml coverage-feature-b.xml coverage-modules.xml)
           python3 scripts/ci/platform-coverage-ratchet.py update \
             "${reports[@]}" \
             --baseline tests/ci/platform-coverage-baseline.json
@@ -349,7 +370,7 @@ jobs:
             -Dsonar.organization=belimbingapp
             -Dsonar.sources=app,resources/core
             -Dsonar.tests=tests
-            -Dsonar.php.coverage.reportPaths=coverage-unit.xml,coverage-feature-a.xml,coverage-feature-b.xml,coverage-modules.xml
+            -Dsonar.php.coverage.reportPaths=coverage-unit-a.xml,coverage-unit-b.xml,coverage-feature-a.xml,coverage-feature-b.xml,coverage-modules.xml
             -Dsonar.coverage.exclusions=resources/**
 
   # Every supported database driver is a production driver; the main job's

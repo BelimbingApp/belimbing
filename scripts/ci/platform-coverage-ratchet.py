@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Ratchet platform line coverage against a checked-in baseline (#629).
 
-Combines one or more PHPUnit/Pest Clover reports by summing statement counts,
-never by averaging rates. PR checks fail when the measured line rate falls
+Combines PHPUnit/Pest Clover reports by source file and statement line identity.
+A statement is covered if any shard executed it. PR checks fail when the line rate falls
 more than ``tolerance_pp`` percentage points below the baseline. On main, the
 baseline is raised (never lowered) when the measured rate is higher.
 """
@@ -19,33 +19,38 @@ DEFAULT_BASELINE = Path("tests/ci/platform-coverage-baseline.json")
 DEFAULT_TOLERANCE_PP = 0.05
 
 
-def parse_clover(path: Path) -> tuple[int, int]:
-    """Read project-level statement counts only.
-
-    PHPUnit Clover repeats ``metrics`` under packages/files/classes. Summing
-    every node double-counts; the project metrics element is the aggregate.
-    """
+def parse_clover(path: Path) -> dict[tuple[str, int], bool]:
+    """Read statement identities, ignoring repeated aggregate/class metrics."""
     root = ET.parse(path).getroot()
     project = root.find("project")
     if project is None:
         raise SystemExit(f"clover report missing project element: {path}")
-    metrics = project.find("metrics")
-    if metrics is None:
-        raise SystemExit(f"clover report missing project metrics: {path}")
-    statements = int(metrics.get("statements") or 0)
-    covered = int(metrics.get("coveredstatements") or 0)
-    if statements < 1:
-        raise SystemExit(f"clover report has no statements: {path}")
-    return statements, covered
+    statements: dict[tuple[str, int], bool] = {}
+    for file in project.iter("file"):
+        name = file.get("name")
+        if not name:
+            raise SystemExit(f"clover file missing name: {path}")
+        for line in file.findall("line"):
+            if line.get("type") != "stmt":
+                continue
+            number = int(line.get("num") or 0)
+            count = int(line.get("count") or 0)
+            if number < 1 or count < 0:
+                raise SystemExit(f"invalid Clover statement in {path}: {name}")
+            key = (name, number)
+            statements[key] = statements.get(key, False) or count > 0
+    if not statements:
+        raise SystemExit(f"clover report has no statement line identities: {path}")
+    return statements
 
 
 def combined_line_rate(reports: list[Path]) -> tuple[float, int, int]:
-    statements = 0
-    covered = 0
+    lines: dict[tuple[str, int], bool] = {}
     for report in reports:
-        s, c = parse_clover(report)
-        statements += s
-        covered += c
+        for identity, executed in parse_clover(report).items():
+            lines[identity] = lines.get(identity, False) or executed
+    statements = len(lines)
+    covered = sum(lines.values())
     if statements < 1:
         raise SystemExit("combined clover reports have no statements")
     rate = 100.0 * covered / statements
@@ -127,7 +132,7 @@ def build_parser() -> argparse.ArgumentParser:
             "reports",
             nargs="+",
             type=Path,
-            help="Clover XML report paths (statements are summed)",
+            help="Clover XML report paths (statement identities are unioned)",
         )
 
     measure = sub.add_parser("measure", help="Print combined line coverage")

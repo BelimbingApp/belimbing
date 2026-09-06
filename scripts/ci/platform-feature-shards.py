@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Emit Feature-suite shard paths for platform CI (#576 / #626).
+"""Emit Unit or Feature suite shard paths for platform CI (#576 / #626).
 
-The Feature suite remains one logical suite in phpunit.xml. CI runs disjoint
+Each suite remains one logical suite in phpunit.xml. CI runs disjoint
 directory shards concurrently. Membership is generated from the checked-in
-directory timing summary (#626) and validated so every Feature *Test.php file
+directory timing summary (#626) and validated so every selected *Test.php file
 belongs to exactly one shard.
 """
 
@@ -15,8 +15,6 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SURFACE = ROOT / 'tests' / 'Feature'
-SHARDS_PATH = Path(__file__).resolve().with_name('platform-feature-shards.json')
 TIMINGS_PATH = Path(__file__).resolve().with_name('platform-feature-shard-timings.json')
 
 
@@ -63,12 +61,12 @@ def load_timings(path: Path) -> dict[str, float]:
 
 def feature_directories(surface: Path) -> set[str]:
     if not surface.is_dir():
-        raise SystemExit(f'Feature surface missing: {surface}')
+        raise SystemExit(f'Test surface missing: {surface}')
     dirs = {path.name for path in surface.iterdir() if path.is_dir()}
     loose = sorted(path.name for path in surface.glob('*Test.php'))
     if loose:
         raise SystemExit(
-            'Feature tests must live under a first-level directory so shards can '
+            'Tests must live under a first-level directory so shards can '
             f'own them; found loose files: {", ".join(loose)}'
         )
     return dirs
@@ -81,7 +79,7 @@ def feature_test_files(surface: Path) -> list[Path]:
 def balance_from_timings(timings: dict[str, float], shard_names: list[str]) -> dict[str, list[str]]:
     if len(shard_names) < 2:
         raise SystemExit('need at least two shard names to balance')
-    # Longest-processing-time into equal-count bins.
+    # Place each next longest directory into the least-loaded shard.
     ordered = sorted(timings.items(), key=lambda item: (-item[1], item[0]))
     loads = {name: 0.0 for name in shard_names}
     bins: dict[str, list[str]] = {name: [] for name in shard_names}
@@ -95,7 +93,7 @@ def balance_from_timings(timings: dict[str, float], shard_names: list[str]) -> d
 def validate(shards: dict[str, list[str]], surface: Path) -> None:
     claimed = [directory for directories in shards.values() for directory in directories]
     if len(claimed) != len(set(claimed)):
-        raise SystemExit('Feature shards overlap: a directory appears in more than one shard')
+        raise SystemExit('Test shards overlap: a directory appears in more than one shard')
     present = feature_directories(surface)
     missing = sorted(present - set(claimed))
     extra = sorted(set(claimed) - present)
@@ -112,34 +110,34 @@ def validate(shards: dict[str, list[str]], surface: Path) -> None:
             if not any(path.rglob('*Test.php')):
                 raise SystemExit(f'shard {name!r} directory {directory!r} contains no *Test.php files')
 
-    # Every Feature test file must resolve to exactly one shard (#626).
+    # Every test file must resolve to exactly one shard (#626).
     owner: dict[str, str] = {}
     for name, directories in shards.items():
         for directory in directories:
             for test in (surface / directory).rglob('*Test.php'):
                 rel = test.relative_to(surface).as_posix()
                 if rel in owner:
-                    raise SystemExit(f'Feature test {rel} is claimed by shards {owner[rel]!r} and {name!r}')
+                    raise SystemExit(f'Test {rel} is claimed by shards {owner[rel]!r} and {name!r}')
                 owner[rel] = name
     files = [path.relative_to(surface).as_posix() for path in feature_test_files(surface)]
     omitted = [path for path in files if path not in owner]
     if omitted:
-        raise SystemExit('Feature test files missing from every shard: ' + ', '.join(omitted[:20]))
+        raise SystemExit('Test files missing from every shard: ' + ', '.join(omitted[:20]))
 
 
 def paths_for(shard: str, shards: dict[str, list[str]], surface: Path, root: Path) -> list[str]:
     if shard not in shards:
-        raise SystemExit(f'unknown Feature shard {shard!r}; known: {", ".join(sorted(shards))}')
+        raise SystemExit(f'unknown test shard {shard!r}; known: {", ".join(sorted(shards))}')
     return [str((surface / directory).relative_to(root).as_posix()) for directory in shards[shard]]
 
 
-def write_shards(path: Path, shards: dict[str, list[str]], timings: dict[str, float]) -> None:
+def write_shards(path: Path, shards: dict[str, list[str]], timings: dict[str, float], timings_path: Path = TIMINGS_PATH) -> None:
     loads = {
         name: round(sum(timings[directory] for directory in directories), 3)
         for name, directories in shards.items()
     }
     payload = {
-        'generated_from': TIMINGS_PATH.name,
+        'generated_from': timings_path.name,
         'balance': 'longest-processing-time',
         'estimated_wall_seconds': loads,
         'shards': shards,
@@ -149,9 +147,10 @@ def write_shards(path: Path, shards: dict[str, list[str]], timings: dict[str, fl
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--root', type=Path, default=ROOT, help='repository root (tests live under tests/Feature)')
-    parser.add_argument('--shards-file', type=Path, default=SHARDS_PATH)
-    parser.add_argument('--timings-file', type=Path, default=TIMINGS_PATH)
+    parser.add_argument('--root', type=Path, default=ROOT, help='repository root (tests live under tests/<suite>)')
+    parser.add_argument('--suite', choices=['Feature', 'Unit'], default='Feature')
+    parser.add_argument('--shards-file', type=Path)
+    parser.add_argument('--timings-file', type=Path)
     parser.add_argument('--validate-only', action='store_true')
     parser.add_argument(
         '--write-balanced',
@@ -161,7 +160,9 @@ def main(argv: list[str]) -> int:
     parser.add_argument('shard', nargs='?', help='shard id to emit (e.g. a)')
     args = parser.parse_args(argv)
 
-    surface = args.root / 'tests' / 'Feature'
+    surface = args.root / 'tests' / args.suite
+    args.shards_file = args.shards_file or Path(__file__).with_name(f'platform-{args.suite.lower()}-shards.json')
+    args.timings_file = args.timings_file or Path(__file__).with_name(f'platform-{args.suite.lower()}-shard-timings.json')
 
     if args.write_balanced:
         timings = load_timings(args.timings_file)
@@ -180,7 +181,7 @@ def main(argv: list[str]) -> int:
         shard_names = sorted(existing)
         shards = balance_from_timings(timings, shard_names)
         validate(shards, surface)
-        write_shards(args.shards_file, shards, timings)
+        write_shards(args.shards_file, shards, timings, args.timings_file)
         print(
             f'wrote {args.shards_file.relative_to(args.root)} '
             f'({len(shards)} shards; estimated walls '
@@ -195,7 +196,7 @@ def main(argv: list[str]) -> int:
     if args.validate_only:
         files = len(feature_test_files(surface))
         print(
-            f'ok: {len(shards)} Feature shards cover {sum(len(v) for v in shards.values())} '
+            f'ok: {len(shards)} {args.suite} shards cover {sum(len(v) for v in shards.values())} '
             f'directories and {files} test files'
         )
         return 0
