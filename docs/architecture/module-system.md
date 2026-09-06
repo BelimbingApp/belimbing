@@ -216,7 +216,9 @@ Every new cross-root scanner must:
 
 ### Composed-application refusals
 
-Composition rejects conflicting ownership and impossible dependency graphs. The route and table checks landed in [#570](https://github.com/BelimbingApp/belimbing/pull/570); [#588](https://github.com/BelimbingApp/belimbing/pull/588) also enforces table ownership at boot. Provider dependency ordering landed in [#599](https://github.com/BelimbingApp/belimbing/pull/599). These checks apply to enabled Domains and discovered Extensions as well as Base and Core.
+Composition rejects conflicting ownership and impossible dependency graphs. The route and table checks landed in [#570](https://github.com/BelimbingApp/belimbing/pull/570); [#588](https://github.com/BelimbingApp/belimbing/pull/588) also enforces table ownership at boot. Provider dependency ordering landed in [#599](https://github.com/BelimbingApp/belimbing/pull/599). Route-name collision refusal landed in [#618](https://github.com/BelimbingApp/belimbing/pull/618). These checks apply to enabled Domains and discovered Extensions as well as Base and Core.
+
+Descriptor validation that would refuse a mounted module whose `requires-modules` names an unmounted ID ([#608](https://github.com/BelimbingApp/belimbing/issues/608) / closed PR [#613](https://github.com/BelimbingApp/belimbing/pull/613)) did not land; missing dependencies still surface through provider-order resolution (`missing` / later-root / cycle) above. The composed-application smoke test ([#604](https://github.com/BelimbingApp/belimbing/issues/604) / PR [#604](https://github.com/BelimbingApp/belimbing/pull/604)) is not on `main` yet.
 
 The following are literal diagnostic templates from the owning code. PHP replaces `%s` and interpolated variables with the detected identities and paths; a cycle message appends the closed chain of module IDs and a final period.
 
@@ -226,7 +228,15 @@ The following are literal diagnostic templates from the owning code. PHP replace
 Route %s is registered by more than one module route file: %s and %s. Laravel would keep only the last one; give each module its own URI.
 ```
 
-The substitutions are the method/domain/URI key, first file, and later file. For a route without a domain constraint, a key is `GET /people/skills`. Give the competing module a distinct URI, or remove the obsolete route from a relocated module. Changing its route name alone does not resolve a key collision. Different HTTP methods remain distinct; route-name duplication and declarations within the same file are outside this guard. This check runs when module route files are loaded; rebuild route caches after changing the composition.
+The substitutions are the method/domain/URI key, first file, and later file. For a route without a domain constraint, a key is `GET /people/skills`. Give the competing module a distinct URI, or remove the obsolete route from a relocated module. Changing its route name alone does not resolve a key collision. Different HTTP methods remain distinct; declarations within the same file are outside this guard. This check runs when module route files are loaded; rebuild route caches after changing the composition.
+
+**Route name ownership — `RouteCollisionException`.** The same [RouteDiscoveryService](../../app/Base/Routing/RouteDiscoveryService.php) also refuses a later module route file that registers a non-empty route name another file already owns ([#618](https://github.com/BelimbingApp/belimbing/pull/618)):
+
+```text
+Route name %s is registered by more than one module route file: %s and %s. Laravel would keep only the last one; give each module its own route name.
+```
+
+The substitutions are the colliding name, first file, and later file. Give the competing module a distinct name, or remove the obsolete registration. Reusing a name inside one file remains that module's own concern, matching the URI guard. Unnamed routes are ignored by this check. Distinct URIs do not excuse a shared name: Laravel's name map would still keep only the last registration.
 
 **Table ownership — `ModuleManifestException`.** [ModuleMigrationDependencyChecker](../../app/Base/Database/Services/ModuleMigrationDependencyChecker.php) uses the same source-only check during Database provider boot and migration preflight. Its multiline exception starts with:
 
@@ -260,7 +270,7 @@ Providerless modules participate in dependency resolution. Rebuild cached config
 | Migrations | `Database/Migrations/` under Base components, Core Modules, Domain Modules, and Extension Modules; plus Laravel `database/migrations/` | Base Database migration commands |
 | Production/dev seeders | `Database/Seeders/` and `Database/Seeders/Dev/` under all four roots | Base Database seeder discovery |
 | Menus | `Config/menu.php` under Base/Core Modules, Domain/Extension source anchors, and Domain/Extension Modules | `App\Base\Menu\Services\MenuDiscoveryService` |
-| Routes | `Routes/web.php` and `Routes/api.php` under Base components, Core Modules, Domain Modules, and Extension Modules; a file that registers an HTTP method and URI an earlier file already registered refuses boot with `RouteCollisionException`, because Laravel would otherwise keep only the last route | `App\Base\Routing\RouteDiscoveryService` |
+| Routes | `Routes/web.php` and `Routes/api.php` under Base components, Core Modules, Domain Modules, and Extension Modules; a file that registers an HTTP method and URI, or a non-empty route name, an earlier file already registered refuses boot with `RouteCollisionException`, because Laravel would otherwise keep only the last route | `App\Base\Routing\RouteDiscoveryService` |
 | Settings | Module-level `Config/settings.php` under all four roots | `App\Base\Settings\ServiceProvider` |
 | Authorization | `Config/authz.php` under all four roots, including an explicit Extension source anchor where needed | `App\Base\Authz\ServiceProvider` |
 | Audit, dashboard, and other contributions | The documented `Config/{surface}.php` under supported Module roots | Owning Base discovery service |
