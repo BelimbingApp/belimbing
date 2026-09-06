@@ -13,6 +13,8 @@ class ServiceProvider extends BaseServiceProvider
      */
     public function register(): void
     {
+        $this->mergeConfigFrom(__DIR__.'/Config/domain_routes.php', 'domain_routes');
+
         $this->app->singleton(RouteDiscoveryService::class);
         $this->commands([DomainRoutesCommand::class]);
     }

@@ -2,7 +2,6 @@
 
 namespace App\Base\Routing;
 
-use App\Base\Foundation\ApplicationTopology;
 use Illuminate\Routing\Route as RegisteredRoute;
 use Illuminate\Routing\Router;
 
@@ -59,20 +58,7 @@ final class DomainRouteInventory
             return null;
         }
 
-        $root = rtrim(str_replace('\\', '/', ApplicationTopology::domainsRoot()), '/').'/';
-        $source = str_replace('\\', '/', $source);
-
-        if (! str_starts_with($source, $root)) {
-            return null;
-        }
-
-        $segments = explode('/', substr($source, strlen($root)));
-
-        if (count($segments) !== 4 || $segments[2] !== 'Routes') {
-            return null;
-        }
-
-        return ['domain' => $segments[0], 'module' => $segments[1]];
+        return $this->discovery->domainModuleForSource($source);
     }
 
     /**

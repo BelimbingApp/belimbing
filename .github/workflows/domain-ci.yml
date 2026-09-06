@@ -220,6 +220,26 @@ jobs:
       - name: Run Tests
         run: ./vendor/bin/pest "$DOMAIN_PATH" --coverage-clover=coverage.xml
 
+      - name: Ratchet Livewire action debt
+        run: |
+          domain_name="${DOMAIN_PATH##*/}"
+          domain_id="$DOMAIN_ID"
+          if [ -z "$domain_id" ]; then
+            domain_id=$(jq -r --arg path "$DOMAIN_PATH" '
+              .domains | to_entries[] | select(.value.path == $path) | .key
+            ' scripts/ci/domain-repos.json)
+          fi
+          if [ -z "$domain_id" ] || [ "$domain_id" = "null" ]; then
+            echo "::error::Cannot resolve domain-id for Livewire action baseline (DOMAIN_PATH=$DOMAIN_PATH)"
+            exit 1
+          fi
+          baseline="tests/ci/livewire-actions-baselines/${domain_id}.json"
+          if [ ! -f "$baseline" ]; then
+            echo "::error::Missing Livewire action baseline $baseline for $domain_id"
+            exit 1
+          fi
+          php artisan blb:livewire-actions --domain="$domain_name" --check-baseline="$baseline"
+
       # Domains are nested checkouts ignored by the platform .gitignore
       # (/app/Domains/*). Sonar's SCM exclusion would otherwise index zero
       # files and silently drop coverage — including Skills/Training after
