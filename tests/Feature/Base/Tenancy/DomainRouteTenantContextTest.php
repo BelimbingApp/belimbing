@@ -66,6 +66,15 @@ it('allows only named exclusions carrying a non-empty reason', function (): void
     $this->getJson('/zz-tenant-required/probe')
         ->assertOk()
         ->assertExactJson(['reached' => true]);
+
+    config()->set('domain_routes.tenant_context.exclusions', [TENANT_REQUIRED_ROUTE_NAME => '  ']);
+    $GLOBALS[TENANT_REQUIRED_ROUTE_PROBE] = false;
+
+    $this->getJson('/zz-tenant-required/probe')
+        ->assertNotFound()
+        ->assertJson(['reason_code' => 'tenant_context_missing']);
+
+    expect($GLOBALS[TENANT_REQUIRED_ROUTE_PROBE])->toBeFalse();
 });
 
 it('declares the guarded domains, an empty exclusion list, and visible middleware provenance', function (): void {
