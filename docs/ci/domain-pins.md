@@ -188,6 +188,18 @@ must contain statement lines; aggregate-only metrics cannot prove overlap.
 
 ## Composed smoke on pin advances
 
+Bot-maintenance PRs are reconsidered by
+[`land-bot-maintenance`](../../.github/workflows/land-bot-maintenance.yml) when a
+relevant CI workflow completes. It fetches candidate commits without checking out
+their code, repeats the trusted file policy, and requires all configured checks
+to report success from their configured integrations. It excludes agent lanes,
+forks, drafts, and holds. Repository merge settings, active rulesets, and classic
+protection determine the merge method; GitHub still enforces approval and other
+merge rules. The final merge is bound to the checked SHA and uses
+`COVERAGE_BASELINE_RAISE_TOKEN`. If policy cannot be read, the workflow refuses.
+Rerun the trusted independent-review check to reconsider an already-green bot PR
+whose last CI run predates this workflow; this does not bypass any checks.
+
 [PR #712](https://github.com/BelimbingApp/belimbing/pull/712) (issue [#600](https://github.com/BelimbingApp/belimbing/issues/600)) landed
 [`.github/workflows/composed-smoke.yml`](../../.github/workflows/composed-smoke.yml). It boots the
 platform with every pinned Domain (People, Commerce, Operation, and PeopleConnector) at the refs in
