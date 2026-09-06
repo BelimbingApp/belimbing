@@ -14,6 +14,22 @@ const step = (steps: any[], name: string) => {
     return found;
 };
 
+test("legacy Unit context requires the matrix containing both Unit shards", () => {
+    const unitGate = workflow.jobs["unit-compatibility"];
+    expect(unitGate).toBeDefined();
+    expect(unitGate.name).toBe("suites (Unit)");
+    expect(unitGate.needs).toEqual(["suites"]);
+    expect(unitGate.if).toBe("always()");
+    expect(workflow.jobs.suites.strategy.matrix.suite).toContain("Unit-a");
+    expect(workflow.jobs.suites.strategy.matrix.suite).toContain("Unit-b");
+    const guard = unitGate.steps[0];
+    expect(guard.env.SUITES_RESULT).toBe("${{ needs.suites.result }}");
+    for (const result of ["success", "failure", "cancelled", "skipped", ""]) {
+        const checked = spawnSync("bash", ["-e", "-c", guard.run], { env: { ...process.env, SUITES_RESULT: result } });
+        expect(checked.status === 0).toBe(result === "success");
+    }
+});
+
 test("Unit and Feature shards run concurrently, with neither failed lane cancelling the other", () => {
     expect(workflow.jobs.suites).toBeDefined();
     expect(workflow.jobs.suites.needs).toBeUndefined();
