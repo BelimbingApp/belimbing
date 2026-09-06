@@ -8,6 +8,15 @@ explanation reports that their missing action list prevents identity comparison.
 The count remains the gate, so exchanging an old action for a new one at the same
 count does not fail. Lexical references are search leads, not proof of coverage.
 
+Opt into set equality with `--check-baseline=<path> --strict-names`, or put
+`"strict": true` in a baseline that includes `actions`. Any set change then
+fails, including equal-count substitutions and removal-only improvements that
+need a refreshed snapshot. New identities are printed without requiring
+`--explain`. Strict mode refuses count-only baselines; use `--write-baseline`
+first. Write with `--strict-names` as well to persist the opt-in in the new file.
+Writing without it produces the default count-mode snapshot. Domain CI continues
+to use count mode unless its committed baseline explicitly opts in.
+
 Run `php artisan blb:livewire-actions` from the platform checkout. Use
 `--domain=People` to select an installed, enabled Domain by its directory
 name; use `--json` for machine-readable output. An unknown or disabled

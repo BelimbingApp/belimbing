@@ -13,6 +13,7 @@ final class LivewireActionsCommand extends Command
         {--domain= : Installed, enabled Domain directory name}
         {--json : Emit JSON instead of a table}
         {--explain : Name new unreferenced actions when the baseline check fails}
+        {--strict-names : Also fail when the unreferenced action set changes}
         {--check-baseline= : Fail when module-owned unreferenced count exceeds this JSON baseline}
         {--write-baseline= : Write the current module-owned unreferenced snapshot to this JSON path}';
 
@@ -62,6 +63,9 @@ final class LivewireActionsCommand extends Command
     private function writeBaseline(ActionInventory $inventory, ?string $domain, string $path): int
     {
         $snapshot = $inventory->baselineSnapshot($domain);
+        if ($this->option('strict-names')) {
+            $snapshot['strict'] = true;
+        }
         $directory = dirname($path);
         if ($directory !== '.' && ! is_dir($directory) && ! mkdir($directory, 0777, true) && ! is_dir($directory)) {
             $this->error('Cannot create baseline directory: '.$directory);
@@ -105,10 +109,11 @@ final class LivewireActionsCommand extends Command
             return self::FAILURE;
         }
 
-        /** @var array{domain?: string|null, module_owned_unreferenced?: mixed} $baseline */
+        /** @var array{domain?: string|null, module_owned_unreferenced?: mixed, actions?: mixed, strict?: bool} $baseline */
         $baseline = $decoded;
 
-        $result = $inventory->compareToBaseline($baseline, $domain);
+        $strictNames = (bool) $this->option('strict-names') || ($baseline['strict'] ?? false) === true;
+        $result = $inventory->compareToBaseline($baseline, $domain, $strictNames);
         if ($result['ok']) {
             $this->info($result['message']);
 
@@ -116,7 +121,7 @@ final class LivewireActionsCommand extends Command
         }
 
         $this->error($result['message']);
-        if ($this->option('explain')) {
+        if ($this->option('explain') || $strictNames) {
             if (($result['new_actions'] ?? null) === null) {
                 $this->comment('This baseline has no action list; only the count can be compared.');
             } else {
