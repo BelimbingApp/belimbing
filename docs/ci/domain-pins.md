@@ -189,4 +189,8 @@ owner wants it blocking. Recover refusals with the
 A nightly schedule ([#663](https://github.com/BelimbingApp/belimbing/issues/663)) re-runs the same
 assertion against the pins on `main` and opens or updates one issue titled **Composed boot failed**
 on refusal; `workflow_dispatch` accepts a dry-run input that exercises the issue body path without
-calling the Issues API.
+calling the Issues API. The same nightly/dispatch path runs
+[`validate-domain-pins.py`](../../scripts/ci/validate-domain-pins.py) after boot and opens or updates
+one **Domain pins stale** issue when a pin is more than 50 commits behind `main`. That issue lists
+the Domain, repository, immutable ref, and measured count. A successful validation with no warnings
+closes it automatically; validator errors fail the run and do not close an existing alert.

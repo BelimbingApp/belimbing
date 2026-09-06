@@ -62,7 +62,7 @@ export function composedBootFailedIssueBody(refusal: string, runUrl?: string): s
     return lines.join("\n");
 }
 
-function gh(args: string[]): { status: number; stdout: string; stderr: string } {
+export function gh(args: string[]): { status: number; stdout: string; stderr: string } {
     const result = spawnSync("gh", args, {
         encoding: "utf8",
         env: process.env,
@@ -74,7 +74,7 @@ function gh(args: string[]): { status: number; stdout: string; stderr: string } 
     };
 }
 
-function findOpenIssue(repo: string): number | null {
+export function findOpenIssue(repo: string, title: string): number | null {
     const listed = gh([
         "issue",
         "list",
@@ -83,7 +83,7 @@ function findOpenIssue(repo: string): number | null {
         "--state",
         "open",
         "--search",
-        `in:title "${COMPOSED_BOOT_FAILED_ISSUE_TITLE}"`,
+        `in:title "${title}"`,
         "--json",
         "number,title",
         "--limit",
@@ -93,12 +93,12 @@ function findOpenIssue(repo: string): number | null {
         throw new Error(`gh issue list failed: ${listed.stderr || listed.stdout}`);
     }
     const rows = JSON.parse(listed.stdout || "[]") as Array<{ number: number; title: string }>;
-    const exact = rows.find((row) => row.title === COMPOSED_BOOT_FAILED_ISSUE_TITLE);
+    const exact = rows.find((row) => row.title === title);
     return exact?.number ?? null;
 }
 
-function upsertIssue(repo: string, body: string): number {
-    const existing = findOpenIssue(repo);
+export function upsertIssue(repo: string, title: string, body: string): number {
+    const existing = findOpenIssue(repo, title);
     if (existing != null) {
         const updated = gh(["issue", "edit", String(existing), "--repo", repo, "--body", body]);
         if (updated.status !== 0) {
@@ -112,7 +112,7 @@ function upsertIssue(repo: string, body: string): number {
         "--repo",
         repo,
         "--title",
-        COMPOSED_BOOT_FAILED_ISSUE_TITLE,
+        title,
         "--body",
         body,
     ]);
@@ -124,6 +124,16 @@ function upsertIssue(repo: string, body: string): number {
         throw new Error(`gh issue create succeeded without an issue URL: ${created.stdout}`);
     }
     return Number(match[1]);
+}
+
+export function closeOpenIssue(repo: string, title: string): number | null {
+    const existing = findOpenIssue(repo, title);
+    if (existing == null) return null;
+    const closed = gh(["issue", "close", String(existing), "--repo", repo]);
+    if (closed.status !== 0) {
+        throw new Error(`gh issue close failed: ${closed.stderr || closed.stdout}`);
+    }
+    return existing;
 }
 
 function main(): number {
@@ -144,7 +154,7 @@ function main(): number {
         return 0;
     }
 
-    const number = upsertIssue(repo, body);
+    const number = upsertIssue(repo, COMPOSED_BOOT_FAILED_ISSUE_TITLE, body);
     console.error(`Reported on issue #${number}`);
     return 0;
 }
