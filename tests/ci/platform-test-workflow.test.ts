@@ -59,8 +59,8 @@ test("all expected reports are uploaded and downloaded by exact artifact name", 
         .toContain("scripts/ci/aggregate-pest-timing.py timing");
     expect(step(gateSteps(), "Enforce Pest timing baseline").run)
         .toContain("scripts/ci/pest-timing-ratchet.py timing");
-    expect(gateSteps().indexOf(step(gateSteps(), "Publish per-run timing summary")))
-        .toBeLessThan(gateSteps().indexOf(step(gateSteps(), "Enforce Pest timing baseline")));
+    expect(gateSteps().indexOf(step(gateSteps(), "Enforce Pest timing baseline")))
+        .toBe(gateSteps().indexOf(step(gateSteps(), "Publish per-run timing summary")) + 1);
     expect(gateSteps().indexOf(step(gateSteps(), "Publish per-run timing summary")))
         .toBeLessThan(gateSteps().indexOf(step(gateSteps(), "SonarCloud Scan")));
     expect(gateSteps().indexOf(step(gateSteps(), "Require all coverage reports")))

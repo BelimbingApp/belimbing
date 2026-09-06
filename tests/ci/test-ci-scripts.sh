@@ -5,7 +5,7 @@ root=$(git rev-parse --show-toplevel)
 cd "$root"
 python3 tests/ci/test-domain-pins.py
 bash -n scripts/ci/changed-authorable-php.sh scripts/ci/extension-conformance.sh scripts/ci/mount-guard.sh scripts/ci/phpstan-baseline-gate.sh scripts/ci/record-pest-timing.sh
-python3 -m py_compile scripts/ci/aggregate-pest-timing.py
+python3 -m py_compile scripts/ci/aggregate-pest-timing.py scripts/ci/pest-timing-ratchet.py
 
 # Timing aggregator (#614): one table from per-suite JSON, fail-closed on empty.
 timing_fixture=$(mktemp -d)
@@ -710,6 +710,31 @@ with tempfile.TemporaryDirectory() as tmp:
         text=True,
     )
     assert passed.returncode == 0, passed.stdout + passed.stderr
+
+    # A new or missing lane cannot silently escape comparison.
+    (timing / 'Unit__Unit.json').write_text(
+        json.dumps({'job': 'Unit', 'suite': 'Unit', 'wall_seconds': 1.0}) + '\n',
+        encoding='utf-8',
+    )
+    mismatch = subprocess.run(
+        ['python3', str(script), str(timing), '--baseline', str(baseline)],
+        capture_output=True,
+        text=True,
+    )
+    assert mismatch.returncode != 0, mismatch.stdout + mismatch.stderr
+    assert 'suites absent from baseline: Unit' in mismatch.stderr
+
+    refreshed = fixture / 'refreshed.json'
+    subprocess.check_call(
+        [
+            'python3', str(script), str(timing), '--baseline', str(refreshed),
+            '--write-baseline', '--source', 'fixture-run',
+        ],
+    )
+    payload = json.loads(refreshed.read_text(encoding='utf-8'))
+    assert payload['source'] == 'fixture-run'
+    assert payload['suites']['Feature-a']['wall_seconds'] == 14.0
+    assert payload['suites']['Unit']['wall_seconds'] == 1.0
 PY
 
 echo 'CI script checks passed'
