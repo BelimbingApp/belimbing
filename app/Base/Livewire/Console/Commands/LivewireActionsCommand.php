@@ -91,19 +91,21 @@ final class LivewireActionsCommand extends Command
         }
 
         try {
-            /** @var array{domain?: string|null, module_owned_unreferenced?: mixed} $baseline */
-            $baseline = json_decode((string) file_get_contents($path), true, flags: JSON_THROW_ON_ERROR);
+            $decoded = json_decode((string) file_get_contents($path), true, flags: JSON_THROW_ON_ERROR);
         } catch (JsonException $exception) {
             $this->error('Baseline JSON is invalid: '.$exception->getMessage());
 
             return self::FAILURE;
         }
 
-        if (! is_array($baseline)) {
+        if (! is_array($decoded)) {
             $this->error('Baseline JSON must be an object.');
 
             return self::FAILURE;
         }
+
+        /** @var array{domain?: string|null, module_owned_unreferenced?: mixed} $baseline */
+        $baseline = $decoded;
 
         $result = $inventory->compareToBaseline($baseline, $domain);
         if ($result['ok']) {
