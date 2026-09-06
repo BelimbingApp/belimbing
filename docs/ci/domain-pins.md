@@ -96,11 +96,31 @@ revision includes #636; a platform descriptor update alone does not change an
 older caller workflow. Record the exact run and attempt when comparing timings:
 a cancelled older PR run is not evidence that its tests passed.
 
+## Read the timing summary
+
+[PR #677](https://github.com/BelimbingApp/belimbing/pull/677) replaced the closed,
+unmerged #624 and added a **Per-run timing summary** to the platform `ci` job's
+GitHub Actions summary. Rows identify Job, Suite, Wall (s), Tests, and Assertions
+for Unit, Feature, and the combined Core/Domain/Extension invocation. The
+[recorder](../../scripts/ci/record-pest-timing.sh) measures each Pest process's
+elapsed time, including its coverage work but excluding job setup. Its test count
+includes reported passed, failed, skipped, and other footer statuses; it is not
+a passed-test count. The wrapper preserves Pest's exit status.
+
+The matrix jobs upload `platform-timing-<suite>` JSON artifacts with one-day
+retention. The `ci` job downloads these and runs the
+[aggregator](../../scripts/ci/aggregate-pest-timing.py). Its sum is total recorded
+Pest process time, not workflow elapsed time: concurrent invocations overlap.
+Use the Actions job timestamps to measure the critical path, queueing, and setup;
+these rows do not time `postgres-mirror`, quality, or Domain caller jobs. Compare
+the same composition, suite membership, and run attempt before claiming a gain.
+The aggregate is published after the suite-success check; a failed or cancelled
+run need not have a complete aggregate table.
+
 ## Pending CI composition work (not yet on main)
 
 These follow-ups belong next to the pin and composition docs once they land; do not treat open PRs as
 established procedure:
 
 - Feature suite sharding across parallel matrix lanes: [issue #576](https://github.com/BelimbingApp/belimbing/issues/576) / [PR #674](https://github.com/BelimbingApp/belimbing/pull/674), replacing closed, unmerged [PR #610](https://github.com/BelimbingApp/belimbing/pull/610). Current main runs Unit and Feature concurrently; it does not yet split Feature into shards.
-- Per-run job and suite timing summaries: [issue #614](https://github.com/BelimbingApp/belimbing/issues/614) / [PR #677](https://github.com/BelimbingApp/belimbing/pull/677), replacing closed, unmerged [PR #624](https://github.com/BelimbingApp/belimbing/pull/624).
 - Composed-application smoke test at the pinned People and PeopleConnector refs: [issue #600](https://github.com/BelimbingApp/belimbing/issues/600) / [PR #675](https://github.com/BelimbingApp/belimbing/pull/675), replacing closed, unmerged [PR #604](https://github.com/BelimbingApp/belimbing/pull/604).
