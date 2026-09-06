@@ -217,6 +217,13 @@ jobs:
       - name: Run Pint
         run: vendor/bin/pint --test "$DOMAIN_PATH"
 
+      # Platform tests.yml only sees an empty Domains tree; the real hit surface
+      # is composed here. Fixture cases stay in SubjectIdRequestScanTest.
+      # Run before the Domain Pest suite so ambient suite failures cannot skip
+      # this ratchet (GitHub skips later steps on failure).
+      - name: Scan Domain Livewire for raw subject-id request reads
+        run: ./vendor/bin/pest --filter='keeps the production Domain Livewire tree free of unallowlisted subject-id request reads'
+
       - name: Run Tests
         run: ./vendor/bin/pest "$DOMAIN_PATH" --coverage-clover=coverage.xml
 
@@ -240,10 +247,6 @@ jobs:
           fi
           php artisan blb:livewire-actions --domain="$domain_name" --check-baseline="$baseline"
 
-      # Platform tests.yml only sees an empty Domains tree; the real hit surface
-      # is composed here. Fixture cases stay in SubjectIdRequestScanTest.
-      - name: Scan Domain Livewire for raw subject-id request reads
-        run: ./vendor/bin/pest --filter='keeps the production Domain Livewire tree free of unallowlisted subject-id request reads'
 
       # Domains are nested checkouts ignored by the platform .gitignore
       # (/app/Domains/*). Sonar's SCM exclusion would otherwise index zero
