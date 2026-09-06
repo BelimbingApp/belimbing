@@ -165,3 +165,65 @@ it('normalises case but still fails closed on a malformed provider-port key', fu
         ->and($catalog->rejected()['people-connector.workforce-port.read.payroll'])
         ->toContain('unknown verb [payroll]');
 });
+
+/*
+ * Connector action verbs (#787).
+ *
+ * These five name something the installation does, so they belong in the verb
+ * list: an identity is audited, exported or imported; retention purges; and
+ * support breaks glass. They were shipped as capability keys before the verbs
+ * existed, which meant the catalog dropped them and every check against them
+ * was denied — the features were unreachable for everybody, quietly.
+ *
+ * The audience keys in the same report are deliberately not here.
+ * `people.organisation.audience.hod` names an audience where the grammar wants
+ * an action, and declaring "hod" a verb would bend the grammar to fit a
+ * category error rather than fix the key.
+ */
+it('registers the connector action verbs', function (string $capability, string $verb): void {
+    /** @var array<string, mixed> $authzConfig */
+    $authzConfig = config('authz');
+    $authzConfig['domains']['people-connector'] = 'People Connector domain';
+    $authzConfig['capabilities'][] = $capability;
+
+    $catalog = CapabilityCatalog::fromConfig($authzConfig);
+    $registry = CapabilityRegistry::fromCatalog($catalog);
+
+    expect($catalog->verbs())->toContain($verb)
+        ->and($catalog->rejected())->not->toHaveKey($capability)
+        ->and($registry->has($capability))->toBeTrue();
+})->with([
+    ['people-connector.identity.audit', 'audit'],
+    ['people-connector.identity.export', 'export'],
+    ['people-connector.identity.import', 'import'],
+    ['people-connector.retention.purge', 'purge'],
+    ['people-connector.support.break-glass', 'break-glass'],
+]);
+
+it('drops a connector capability again if its verb leaves the grammar', function (): void {
+    // The registration is what makes these reachable; nothing else does.
+    $catalog = new CapabilityCatalog(
+        domains: ['people-connector'],
+        verbs: ['audit', 'export', 'import', 'purge'],
+        capabilities: ['people-connector.support.break-glass'],
+    );
+
+    $catalog->validate();
+
+    expect($catalog->capabilities())->toBe([])
+        ->and($catalog->rejected()['people-connector.support.break-glass'])
+        ->toContain('unknown verb [break-glass]');
+});
+
+it('does not declare an audience as a verb', function (string $audience): void {
+    // Reported alongside the others in #787 and deliberately left rejected:
+    // the fix is the key's shape, which is People's to choose. Declaring these
+    // would make the grammar accept a noun in the action position and lose the
+    // one thing it is for.
+    /** @var array<string, mixed> $authzConfig */
+    $authzConfig = config('authz');
+
+    $catalog = CapabilityCatalog::fromConfig($authzConfig);
+
+    expect($catalog->verbs())->not->toContain($audience);
+})->with(['executive', 'hod', 'employee', 'hr', 'auditor']);
