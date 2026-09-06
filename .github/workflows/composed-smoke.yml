@@ -147,6 +147,29 @@ jobs:
           fi
           bun scripts/ci/composed-boot-failure-report.ts
 
+      - name: Validate pinned Domain freshness
+        id: validate-pins
+        if: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+        run: |
+          set +e
+          python3 scripts/ci/validate-domain-pins.py >"${RUNNER_TEMP}/domain-pin-validation.txt" 2>&1
+          status=$?
+          cat "${RUNNER_TEMP}/domain-pin-validation.txt"
+          exit "${status}"
+
+      - name: Report stale Domain pins
+        if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
+            bun scripts/ci/domain-pin-stale-report.ts --dry-run
+            exit 0
+          fi
+          bun scripts/ci/domain-pin-stale-report.ts --warnings-file "${RUNNER_TEMP}/domain-pin-validation.txt"
+
       - name: Fail when the composed boot refused
         if: ${{ steps.boot.outcome == 'success' && steps.boot.outputs.exit_code != '0' }}
         run: |

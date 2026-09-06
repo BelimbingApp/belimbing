@@ -28,3 +28,31 @@ test("composed-smoke materializes People and PeopleConnector from the descriptor
     expect(hold.run).toContain("GITHUB_OUTPUT");
     expect(hold.id).toBe("boot");
 });
+
+test("validates pins after boot and reports stale pins only on nightly or dispatch runs", () => {
+    const validation = workflow.jobs["composed-smoke"].steps.find(
+        (step: any) => step.name === "Validate pinned Domain freshness",
+    );
+    expect(validation).toBeDefined();
+    expect(validation.run).toContain("scripts/ci/validate-domain-pins.py");
+    const bootIndex = workflow.jobs["composed-smoke"].steps.findIndex(
+        (step: any) => step.name === "Boot the composed application and hold it to the surface",
+    );
+    const validationIndex = workflow.jobs["composed-smoke"].steps.findIndex(
+        (step: any) => step.name === "Validate pinned Domain freshness",
+    );
+    expect(validationIndex).toBeGreaterThan(bootIndex);
+    const composedReportIndex = workflow.jobs["composed-smoke"].steps.findIndex(
+        (step: any) => step.name === "Report composed boot refusal",
+    );
+    expect(composedReportIndex).toBeLessThan(validationIndex);
+
+    const report = workflow.jobs["composed-smoke"].steps.find(
+        (step: any) => step.name === "Report stale Domain pins",
+    );
+    expect(report).toBeDefined();
+    expect(report.if).toContain("github.event_name == 'schedule'");
+    expect(report.if).toContain("github.event_name == 'workflow_dispatch'");
+    expect(report.run).toContain("domain-pin-stale-report.ts");
+    expect(report.run).toContain("--warnings-file");
+});
