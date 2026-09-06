@@ -18,9 +18,15 @@
       "wall_seconds": 183.928,
       "source_run": "https://github.com/BelimbingApp/belimbing/actions/runs/34028500325"
     },
-    "Unit": {
+    "Unit-a": {
       "wall_seconds": 160.084,
-      "source_run": "https://github.com/BelimbingApp/belimbing/actions/runs/34028175949"
+      "source_run": "https://github.com/BelimbingApp/belimbing/actions/runs/34028175949",
+      "note": "Initial conservative upper bound from the previous unsplit Unit measurement; refresh from successful hosted shard artifacts."
+    },
+    "Unit-b": {
+      "wall_seconds": 160.084,
+      "source_run": "https://github.com/BelimbingApp/belimbing/actions/runs/34028175949",
+      "note": "Initial conservative upper bound from the previous unsplit Unit measurement; refresh from successful hosted shard artifacts."
     }
   }
 }

@@ -137,15 +137,26 @@ baseline from reviewed timing artifacts with
 and submit the resulting baseline change through a PR; never push it directly
 to `main`.
 
-## Feature shard membership and coverage
+## Unit and Feature shard membership and coverage
 
 [PR #674](https://github.com/BelimbingApp/belimbing/pull/674) replaced the closed,
-unmerged #610. The platform matrix runs `Unit`, `Feature-a`, and `Feature-b`
+unmerged #610. The platform matrix runs `Unit-a`, `Unit-b`, `Feature-a`, and `Feature-b`
 concurrently, one Pest process per invocation. Feature remains one logical suite
 in `phpunit.xml`; CI divides its first-level directories using the committed
-[membership map](../../scripts/ci/platform-feature-shards.json). The Unit lane
+[membership map](../../scripts/ci/platform-feature-shards.json). The Unit-a lane
 also runs the combined Core/Domain/Extension invocation. This does not compose
 optional Domains into the platform checkout or change the Domain caller's tests.
+
+Unit uses the same validator and longest-processing-time placement with
+`--suite=Unit`, its own [timing summary](../../scripts/ci/platform-unit-shard-timings.json),
+and [membership map](../../scripts/ci/platform-unit-shards.json). Regenerate with
+`python3 scripts/ci/platform-feature-shards.py --suite=Unit --write-balanced` and
+check with `--suite=Unit --validate-only`. Directory measurements exclude coverage;
+Core dominates the current Unit surface, so these indivisible directory shards
+are unequal. Hosted timing artifacts are the evidence for actual CI improvement.
+The initial Unit shard ratchet bounds each use the previous unsplit Unit timing,
+explicitly recorded in the baseline; refresh them from successful hosted shard
+artifacts with `refresh-pest-timing-baseline` after the first main run.
 
 After adding, moving, or removing a Feature directory, add its measured
 `wall_seconds` to the committed
@@ -164,8 +175,8 @@ to rewrite the summary from Feature-* suite timing artifacts and open a PR
 with the rebalanced shard map ([#695](https://github.com/BelimbingApp/belimbing/issues/695)).
 
 Each matrix lane uploads `platform-coverage-<suite>`. The aggregate `ci` job
-requires `coverage-unit.xml`, `coverage-feature-a.xml`, `coverage-feature-b.xml`,
-and `coverage-modules.xml`, then supplies all four paths to Sonar. `ci` remains
+requires `coverage-unit-a.xml`, `coverage-unit-b.xml`, `coverage-feature-a.xml`,
+`coverage-feature-b.xml`, and `coverage-modules.xml`, then supplies all five paths to Sonar. `ci` remains
 the aggregate check; a failed, skipped, or cancelled matrix lane does not become
 a successful aggregate. Preserve the complete report set when changing shards.
 The PostgreSQL mirror remains a separate job with its own driver-sensitive set.
