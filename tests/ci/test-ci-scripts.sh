@@ -28,6 +28,33 @@ fi
 rm -rf "$timing_fixture"
 trap - EXIT
 
+# record-pest-timing.sh must parse colourised Pest footers (#614).
+ansi_fixture=$(mktemp -d)
+trap 'rm -rf "$ansi_fixture"' EXIT
+mkdir -p "$ansi_fixture/vendor/bin" "$ansi_fixture/scripts/ci"
+cp scripts/ci/record-pest-timing.sh "$ansi_fixture/scripts/ci/"
+cat > "$ansi_fixture/vendor/bin/pest" <<'PEST'
+#!/usr/bin/env bash
+printf '  \033[90mTests:\033[39m    \033[32;1m1525 passed\033[39;22m\033[90m (10675 assertions)\033[39m\n'
+printf '  \033[90mDuration:\033[39m \033[39m147.86s\033[39m\n'
+exit 0
+PEST
+chmod +x "$ansi_fixture/vendor/bin/pest"
+(
+  cd "$ansi_fixture"
+  MATRIX_SUITE=Unit TIMING_DIR=timing bash scripts/ci/record-pest-timing.sh Unit -- --testsuite=Unit >/dev/null
+  python3 - <<'CHECK'
+import json
+from pathlib import Path
+payload = json.loads(Path("timing/Unit__Unit.json").read_text(encoding="utf-8"))
+assert payload["tests"] == 1525, payload
+assert payload["assertions"] == 10675, payload
+assert abs(float(payload["pest_duration_seconds"]) - 147.86) < 0.001, payload
+CHECK
+)
+rm -rf "$ansi_fixture"
+trap - EXIT
+
 python3 -m json.tool scripts/ci/domain-repos.json >/dev/null
 
 # Database feature tests prove the behaviour most exposed to dialect, schema,
