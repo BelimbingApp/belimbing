@@ -84,3 +84,17 @@ test("module smoke checks every pinned Domain after its suite", () => {
     const names = sqliteSteps().map((entry: any) => entry.name);
     expect(names.indexOf("Run Tests")).toBeLessThan(names.indexOf("Module smoke composition"));
 });
+
+test("composed Domain ownership runs immediately after module smoke", () => {
+    const ownership = step("Check composed Domain ownership");
+
+    expect(ownership.run).toBe("php artisan blb:module-ownership");
+    expect(ownership.if).toBeUndefined();
+    expect(ownership["continue-on-error"]).toBeUndefined();
+
+    const names = sqliteSteps().map((entry: any) => entry.name);
+    expect(names.indexOf("Check composed Domain ownership"))
+        .toBe(names.indexOf("Module smoke composition") + 1);
+    expect(workflow.jobs["postgres-mirror"].steps.map((entry: any) => entry.name))
+        .not.toContain("Check composed Domain ownership");
+});
