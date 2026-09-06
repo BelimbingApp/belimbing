@@ -127,6 +127,16 @@ the same composition, suite membership, and run attempt before claiming a gain.
 The aggregate is published after the suite-success check; a failed or cancelled
 run need not have a complete aggregate table.
 
+The `ci` job then compares each recorded suite against the checked-in
+[`pest-timing-baseline.json`](../../tests/ci/pest-timing-baseline.json). A suite
+fails only when it is both more than 25% and more than 20 seconds slower, so
+normal variance and large relative changes to short suites do not block a PR.
+Missing, extra, duplicate, or malformed suite records fail closed. Refresh the
+baseline from reviewed timing artifacts with
+`python3 scripts/ci/pest-timing-ratchet.py timing --write-baseline --source <run-url>`
+and submit the resulting baseline change through a PR; never push it directly
+to `main`.
+
 ## Feature shard membership and coverage
 
 [PR #674](https://github.com/BelimbingApp/belimbing/pull/674) replaced the closed,
@@ -160,9 +170,18 @@ the aggregate check; a failed, skipped, or cancelled matrix lane does not become
 a successful aggregate. Preserve the complete report set when changing shards.
 The PostgreSQL mirror remains a separate job with its own driver-sensitive set.
 
-## Pending CI composition work (not yet on main)
+## Composed smoke on pin advances
 
-These follow-ups belong next to the pin and composition docs once they land; do not treat open PRs as
-established procedure:
+[PR #712](https://github.com/BelimbingApp/belimbing/pull/712) (issue [#600](https://github.com/BelimbingApp/belimbing/issues/600)) landed
+[`.github/workflows/composed-smoke.yml`](../../.github/workflows/composed-smoke.yml). It boots the
+platform with People and PeopleConnector at the refs in
+[`scripts/ci/domain-repos.json`](../../scripts/ci/domain-repos.json) and holds the result to
+[`scripts/ci/composed-surface.json`](../../scripts/ci/composed-surface.json).
 
-- Composed-application smoke test at the pinned People and PeopleConnector refs: [issue #600](https://github.com/BelimbingApp/belimbing/issues/600) / [PR #675](https://github.com/BelimbingApp/belimbing/pull/675), replacing closed, unmerged [PR #604](https://github.com/BelimbingApp/belimbing/pull/604).
+Every pull request to `main` runs that check, including a pin-advance PR that edits the
+descriptor ([issue #627](https://github.com/BelimbingApp/belimbing/issues/627)). The workflow does
+**not** use a `paths:` filter on `pull_request`. A path-filtered workflow that is also a
+branch-protection required check leaves unrelated PRs waiting for a status that never reports.
+Keep the job always reporting; require the `composed-smoke` context in Protect Main when the
+owner wants it blocking. Recover refusals with the
+[composed-app runbook](composed-app-runbook.md).

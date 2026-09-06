@@ -5,7 +5,7 @@ root=$(git rev-parse --show-toplevel)
 cd "$root"
 python3 tests/ci/test-domain-pins.py
 bash -n scripts/ci/changed-authorable-php.sh scripts/ci/extension-conformance.sh scripts/ci/mount-guard.sh scripts/ci/phpstan-baseline-gate.sh scripts/ci/record-pest-timing.sh
-python3 -m py_compile scripts/ci/aggregate-pest-timing.py
+python3 -m py_compile scripts/ci/aggregate-pest-timing.py scripts/ci/pest-timing-ratchet.py
 
 # Timing aggregator (#614): one table from per-suite JSON, fail-closed on empty.
 timing_fixture=$(mktemp -d)
@@ -675,6 +675,96 @@ with tempfile.TemporaryDirectory() as tmp:
     )
     assert missing.returncode != 0, missing.stdout + missing.stderr
     assert 'missing coverage baseline' in missing.stderr
+PY
+
+# Pest timing ratchet (#711): regressions must exceed both the percentage and
+# absolute tolerances. Fixtures are local JSON only; no hosted timings leak in.
+python3 - <<'PY'
+from pathlib import Path
+import json
+import subprocess
+import tempfile
+
+root = Path('.').resolve()
+script = root / 'scripts/ci/pest-timing-ratchet.py'
+workflow = (root / '.github/workflows/tests.yml').read_text(encoding='utf-8')
+
+assert script.is_file(), 'missing pest-timing-ratchet.py'
+assert 'pest-timing-ratchet.py timing' in workflow
+
+with tempfile.TemporaryDirectory() as tmp:
+    fixture = Path(tmp)
+    baseline = fixture / 'baseline.json'
+    timing = fixture / 'timing'
+    timing.mkdir()
+    baseline.write_text(
+        json.dumps({'suites': {'Feature-a': {'wall_seconds': 100.0}}}) + '\n',
+        encoding='utf-8',
+    )
+
+    def write_wall(seconds: float) -> None:
+        (timing / 'Feature-a__Feature-a.json').write_text(
+            json.dumps({'job': 'Feature-a', 'suite': 'Feature-a', 'wall_seconds': seconds}) + '\n',
+            encoding='utf-8',
+        )
+
+    # Failing-first: 30% and 30 seconds slower must name both measurements.
+    write_wall(130.0)
+    failed = subprocess.run(
+        ['python3', str(script), str(timing), '--baseline', str(baseline)],
+        capture_output=True,
+        text=True,
+    )
+    assert failed.returncode == 1, failed.stdout + failed.stderr
+    assert 'Feature-a' in failed.stderr
+    assert '100.000' in failed.stderr and '130.000' in failed.stderr
+
+    # Both boundaries are strict: exactly 25% slower remains within tolerance.
+    write_wall(125.0)
+    passed = subprocess.run(
+        ['python3', str(script), str(timing), '--baseline', str(baseline)],
+        capture_output=True,
+        text=True,
+    )
+    assert passed.returncode == 0, passed.stdout + passed.stderr
+
+    # A large percentage on a short suite is still below the 20-second floor.
+    baseline.write_text(
+        json.dumps({'suites': {'Feature-a': {'wall_seconds': 10.0}}}) + '\n',
+        encoding='utf-8',
+    )
+    write_wall(14.0)
+    passed = subprocess.run(
+        ['python3', str(script), str(timing), '--baseline', str(baseline)],
+        capture_output=True,
+        text=True,
+    )
+    assert passed.returncode == 0, passed.stdout + passed.stderr
+
+    # A new or missing lane cannot silently escape comparison.
+    (timing / 'Unit__Unit.json').write_text(
+        json.dumps({'job': 'Unit', 'suite': 'Unit', 'wall_seconds': 1.0}) + '\n',
+        encoding='utf-8',
+    )
+    mismatch = subprocess.run(
+        ['python3', str(script), str(timing), '--baseline', str(baseline)],
+        capture_output=True,
+        text=True,
+    )
+    assert mismatch.returncode != 0, mismatch.stdout + mismatch.stderr
+    assert 'suites absent from baseline: Unit' in mismatch.stderr
+
+    refreshed = fixture / 'refreshed.json'
+    subprocess.check_call(
+        [
+            'python3', str(script), str(timing), '--baseline', str(refreshed),
+            '--write-baseline', '--source', 'fixture-run',
+        ],
+    )
+    payload = json.loads(refreshed.read_text(encoding='utf-8'))
+    assert payload['source'] == 'fixture-run'
+    assert payload['suites']['Feature-a']['wall_seconds'] == 14.0
+    assert payload['suites']['Unit']['wall_seconds'] == 1.0
 PY
 
 echo 'CI script checks passed'

@@ -76,30 +76,39 @@ final class ActionInventory
      */
     public function moduleOwnedUnreferencedCount(?string $domain = null): int
     {
-        $count = 0;
+        return count($this->moduleOwnedUnreferencedActions($domain));
+    }
+
+    /** @return list<string> */
+    private function moduleOwnedUnreferencedActions(?string $domain): array
+    {
+        $actions = [];
         foreach ($this->scan($domain) as $row) {
             if ($row['module_owned'] && ! $row['referenced_in_tests']) {
-                $count++;
+                $actions[] = $row['component'].'::'.$row['method'];
             }
         }
 
-        return $count;
+        return $actions;
     }
 
     /**
-     * @return array{domain: string|null, module_owned_unreferenced: int}
+     * @return array{domain: string|null, module_owned_unreferenced: int, actions: list<string>}
      */
     public function baselineSnapshot(?string $domain = null): array
     {
+        $actions = $this->moduleOwnedUnreferencedActions($domain);
+
         return [
             'domain' => $domain,
-            'module_owned_unreferenced' => $this->moduleOwnedUnreferencedCount($domain),
+            'module_owned_unreferenced' => count($actions),
+            'actions' => $actions,
         ];
     }
 
     /**
-     * @param  array{domain?: string|null, module_owned_unreferenced?: mixed}  $baseline
-     * @return array{ok: bool, current: int, baseline: int, message: string}
+     * @param  array{domain?: string|null, module_owned_unreferenced?: mixed, actions?: mixed}  $baseline
+     * @return array{ok: bool, current: int, baseline: int, message: string, new_actions?: list<string>|null}
      */
     public function compareToBaseline(array $baseline, ?string $domain = null): array
     {
@@ -116,13 +125,24 @@ final class ActionInventory
             );
         }
 
-        $current = $this->moduleOwnedUnreferencedCount($domain);
+        $actions = $this->moduleOwnedUnreferencedActions($domain);
+        $current = count($actions);
         $limit = $baseline['module_owned_unreferenced'];
         if ($current > $limit) {
+            $newActions = null;
+            if (array_key_exists('actions', $baseline)) {
+                if (! is_array($baseline['actions']) || ! array_is_list($baseline['actions'])
+                    || count(array_filter($baseline['actions'], is_string(...))) !== count($baseline['actions'])) {
+                    throw new ActionInventoryException('Baseline actions must be a list of component::method strings.');
+                }
+                $newActions = array_values(array_diff($actions, $baseline['actions']));
+            }
+
             return [
                 'ok' => false,
                 'current' => $current,
                 'baseline' => $limit,
+                'new_actions' => $newActions,
                 'message' => sprintf(
                     'Livewire action debt rose for %s: %d module-owned unreferenced actions (baseline %d). Cover new actions or raise only with justification.',
                     $domain ?? 'all components',

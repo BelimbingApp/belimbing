@@ -1,5 +1,13 @@
 # Find Livewire actions and test references
 
+Add `--explain` to `--check-baseline=<path>` to print newly unreferenced
+module-owned `Component::method` identities when the count increases.
+`--write-baseline=<path>` stores an `actions` list alongside the count, ordered
+by component and method. Older count-only files retain their pass/fail behavior;
+explanation reports that their missing action list prevents identity comparison.
+The count remains the gate, so exchanging an old action for a new one at the same
+count does not fail. Lexical references are search leads, not proof of coverage.
+
 Run `php artisan blb:livewire-actions` from the platform checkout. Use
 `--domain=People` to select an installed, enabled Domain by its directory
 name; use `--json` for machine-readable output. An unknown or disabled
