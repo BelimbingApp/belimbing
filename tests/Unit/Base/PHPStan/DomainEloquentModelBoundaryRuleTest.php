@@ -53,4 +53,36 @@ class DomainEloquentModelBoundaryRuleTest extends RuleTestCase
             $root.'/app/Domains/Beta/Provider/Contracts/ForeignContract.php',
         ], []);
     }
+
+    public function test_nullable_union_and_return_foreign_models_are_refused_while_same_domain_and_non_models_pass(): void
+    {
+        $root = $this->fixtureRoot();
+        $foreign = 'DomainBoundaryFixture\Beta\Provider\Models\ForeignModel';
+        $message = 'Module [alpha/consumer] must not reference Eloquent model ['.$foreign.'] owned by module [beta/provider]; use an exported contract instead.';
+        $this->analyse([
+            $root.'/app/Domains/Alpha/Consumer/UsesNullableUnionAndReturn.php',
+            $root.'/app/Domains/Alpha/Sibling/Models/LocalModel.php',
+            $root.'/app/Domains/Beta/Provider/Models/ForeignModel.php',
+            $root.'/app/Domains/Beta/Provider/Contracts/ForeignContract.php',
+            $root.'/app/Domains/Beta/Provider/Services/NotAModel.php',
+        ], [
+            [$message, 26],
+            [$message, 30],
+            [$message, 34],
+        ]);
+    }
+
+    public function test_manifest_fallback_names_modules_from_path(): void
+    {
+        $root = $this->fixtureRoot();
+        $this->analyse([
+            $root.'/app/Domains/Alpha/Consumer/UsesBareForeignModel.php',
+            $root.'/app/Domains/Gamma/Bare/Models/BareModel.php',
+        ], [
+            [
+                'Module [alpha/consumer] must not reference Eloquent model [DomainBoundaryFixture\Gamma\Bare\Models\BareModel] owned by module [gamma/bare]; use an exported contract instead.',
+                9,
+            ],
+        ]);
+    }
 }
