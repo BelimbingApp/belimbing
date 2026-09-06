@@ -127,12 +127,17 @@ in `phpunit.xml`; CI divides its first-level directories using the committed
 also runs the combined Core/Domain/Extension invocation. This does not compose
 optional Domains into the platform checkout or change the Domain caller's tests.
 
-After adding, moving, or removing a Feature directory, update the map and run
-`python3 scripts/ci/platform-feature-shards.py --validate-only`.
-The [validator](../../scripts/ci/platform-feature-shards.py) refuses missing or
-unknown directories, overlap, empty test directories, and loose top-level
-`*Test.php` files. Membership must stay complete and disjoint when balancing work;
-use the per-shard timing rows to measure a proposed split instead of assuming
+After adding, moving, or removing a Feature directory, add its measured
+`wall_seconds` to the committed
+[timing summary](../../scripts/ci/platform-feature-shard-timings.json), then
+regenerate the map with
+`python3 scripts/ci/platform-feature-shards.py --write-balanced` and confirm it
+with `--validate-only` ([PR #692](https://github.com/BelimbingApp/belimbing/pull/692)
+replaced the hand-kept map with longest-processing-time placement from that
+file). The [validator](../../scripts/ci/platform-feature-shards.py) refuses
+missing or unknown directories, overlap, empty test directories, loose top-level
+`*Test.php` files, and any Feature test file that is not owned by exactly one
+shard. Use the per-shard timing rows to refresh the summary instead of assuming
 equal directory counts mean equal execution time.
 
 Each matrix lane uploads `platform-coverage-<suite>`. The aggregate `ci` job
