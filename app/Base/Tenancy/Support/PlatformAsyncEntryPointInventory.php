@@ -216,11 +216,14 @@ final class PlatformAsyncEntryPointInventory
         return implode("\n", $lines)."\n";
     }
 
-    public static function assertJobsMatchDiscovery(): void
+    /**
+     * @param  list<string>|null  $discoveryRoots
+     */
+    public static function assertJobsMatchDiscovery(?array $discoveryRoots = null): void
     {
         $declared = self::queuedJobClasses();
         sort($declared);
-        $discovered = self::discoverQueuedJobClasses();
+        $discovered = self::discoverQueuedJobClasses($discoveryRoots);
 
         if ($declared !== $discovered) {
             throw new PlatformAsyncEntryPointInventoryException(

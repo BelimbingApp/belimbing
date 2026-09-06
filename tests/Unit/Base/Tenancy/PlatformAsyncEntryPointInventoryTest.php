@@ -51,10 +51,19 @@ final class NotQueuedProbe {}
 PHP);
         file_put_contents($jobs.'/notes.txt', 'ignore');
 
+        $support = $root.'/app/Base/Tenancy/Support';
+        File::ensureDirectoryExists($support);
+        file_put_contents($support.'/NotAJobProbe.php', <<<'PHP'
+<?php
+namespace App\Base\Tenancy\Support;
+final class NotAJobProbe {}
+PHP);
+
         // Force classmap/autoload for the temporary namespace via require.
         require $jobs.'/ConcreteProbeJob.php';
         require $jobs.'/AbstractProbeJob.php';
         require $jobs.'/NotQueuedProbe.php';
+        require $support.'/NotAJobProbe.php';
 
         $discovered = PlatformAsyncEntryPointInventory::discoverQueuedJobClasses([$root.'/app']);
 
@@ -66,20 +75,25 @@ PHP);
     }
 });
 
+it('builds a dispatchable instance for every declared queued job class', function (): void {
+    $fixtures = PlatformAsyncEntryPointInventory::dispatchableQueuedJobs();
+    $fixtureClasses = array_map(fn (array $pair): string => $pair[0], $fixtures);
+
+    expect($fixtureClasses)->toBe(PlatformAsyncEntryPointInventory::queuedJobClasses());
+
+    foreach ($fixtures as [$class, $job]) {
+        expect($job)->toBeInstanceOf($class);
+    }
+});
+
 it('throws a tenancy inventory exception when discovery drifts from the declaration', function (): void {
     $root = storage_path('framework/testing/async-inventory-drift-'.bin2hex(random_bytes(4)));
     // Empty root discovers nothing while declaration is non-empty.
     File::ensureDirectoryExists($root);
 
     try {
-        expect(fn () => (function () use ($root): void {
-            $declared = PlatformAsyncEntryPointInventory::queuedJobClasses();
-            sort($declared);
-            $discovered = PlatformAsyncEntryPointInventory::discoverQueuedJobClasses([$root]);
-            if ($declared !== $discovered) {
-                throw new PlatformAsyncEntryPointInventoryException('drift');
-            }
-        })())->toThrow(PlatformAsyncEntryPointInventoryException::class);
+        expect(fn () => PlatformAsyncEntryPointInventory::assertJobsMatchDiscovery([$root]))
+            ->toThrow(PlatformAsyncEntryPointInventoryException::class);
     } finally {
         File::deleteDirectory($root);
     }
