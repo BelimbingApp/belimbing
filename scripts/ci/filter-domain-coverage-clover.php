@@ -11,7 +11,6 @@ declare(strict_types=1);
  * scanning the connector). Sonar must attribute coverage only to the domain
  * whose sonar_project_key owns the scan.
  */
-
 function usage(): never
 {
     fwrite(STDERR, "usage: filter-domain-coverage-clover.php --domain-path=<path> --coverage=<clover.xml>\n");
@@ -27,6 +26,7 @@ function parseArguments(array $argv): array
     foreach (array_slice($argv, 1) as $argument) {
         if (str_starts_with($argument, '--domain-path=')) {
             $domainPath = substr($argument, strlen('--domain-path='));
+
             continue;
         }
         if (str_starts_with($argument, '--coverage=')) {
@@ -80,6 +80,7 @@ foreach ($nodes as $file) {
     if (! $inDomain) {
         $file->parentNode?->removeChild($file);
         $removed++;
+
         continue;
     }
     $kept++;
