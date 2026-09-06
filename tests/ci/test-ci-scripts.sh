@@ -428,3 +428,85 @@ else
 fi
 
 echo 'CI script checks passed'
+
+# Platform coverage ratchet (#629): fail-first when coverage drops below the
+# checked-in baseline, then pass at/above baseline; main update raises only.
+python3 - <<'PY'
+from pathlib import Path
+import json
+import subprocess
+import tempfile
+
+root = Path('.').resolve()
+script = root / 'scripts/ci/platform-coverage-ratchet.py'
+fixtures = root / 'tests/ci/fixtures/coverage-ratchet'
+baseline_path = root / 'tests/ci/platform-coverage-baseline.json'
+workflow = (root / '.github/workflows/tests.yml').read_text(encoding='utf-8')
+
+assert script.is_file(), 'missing platform-coverage-ratchet.py'
+assert baseline_path.is_file(), 'missing platform-coverage-baseline.json'
+assert 'platform-coverage-ratchet.py check' in workflow
+assert 'platform-coverage-ratchet.py update' in workflow
+assert 'Raise platform coverage baseline on main' in workflow
+
+baseline = json.loads(baseline_path.read_text(encoding='utf-8'))
+assert 'line_rate' in baseline and 'tolerance_pp' in baseline
+
+high = [
+    str(fixtures / 'high-a.xml'),
+    str(fixtures / 'high-b.xml'),
+]
+low = [
+    str(fixtures / 'low-a.xml'),
+    str(fixtures / 'low-b.xml'),
+]
+
+with tempfile.TemporaryDirectory() as tmp:
+    tmp_baseline = Path(tmp) / 'baseline.json'
+    tmp_baseline.write_text(
+        json.dumps({'line_rate': 90.0, 'tolerance_pp': 0.05, 'coveredstatements': 90, 'statements': 100})
+        + '\n',
+        encoding='utf-8',
+    )
+
+    # Fail-first: deleting covered statements drops below the floor.
+    failed = subprocess.run(
+        ['python3', str(script), 'check', *low, '--baseline', str(tmp_baseline)],
+        capture_output=True,
+        text=True,
+    )
+    assert failed.returncode != 0, failed.stdout + failed.stderr
+    assert 'below the baseline floor' in failed.stderr
+
+    passed = subprocess.run(
+        ['python3', str(script), 'check', *high, '--baseline', str(tmp_baseline)],
+        capture_output=True,
+        text=True,
+    )
+    assert passed.returncode == 0, passed.stdout + passed.stderr
+
+    # Update raises when higher, refuses to lower.
+    subprocess.check_call(
+        ['python3', str(script), 'update', *high, '--baseline', str(tmp_baseline)],
+    )
+    raised = json.loads(tmp_baseline.read_text(encoding='utf-8'))
+    assert raised['line_rate'] == 90.0
+
+    lower_probe = Path(tmp) / 'lower.json'
+    lower_probe.write_text(
+        json.dumps({'line_rate': 95.0, 'tolerance_pp': 0.05, 'coveredstatements': 95, 'statements': 100})
+        + '\n',
+        encoding='utf-8',
+    )
+    subprocess.check_call(
+        ['python3', str(script), 'update', *high, '--baseline', str(lower_probe)],
+    )
+    unchanged = json.loads(lower_probe.read_text(encoding='utf-8'))
+    assert unchanged['line_rate'] == 95.0, 'update must never lower the baseline'
+
+    nested = subprocess.check_output(
+        ['python3', str(script), 'measure', str(fixtures / 'nested-metrics.xml')],
+        text=True,
+    )
+    assert 'covered=8 statements=10' in nested, nested
+PY

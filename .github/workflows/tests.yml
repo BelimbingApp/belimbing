@@ -198,6 +198,10 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     environment: Testing
+    # contents:write lets main raise tests/ci/platform-coverage-baseline.json (#629).
+    # Workflow-level contents:read still covers every other job.
+    permissions:
+      contents: write
     steps:
       - name: Require successful suites
         env:
@@ -239,6 +243,32 @@ jobs:
           for report in coverage-unit.xml coverage-feature-a.xml coverage-feature-b.xml coverage-modules.xml; do
             test -s "$report" || { echo "::error::Missing coverage report $report"; exit 1; }
           done
+
+      # Platform line-coverage ratchet (#629): PRs may not drop below the
+      # checked-in baseline by more than tolerance_pp. Main raises the
+      # baseline when coverage improves (never lowers it).
+      - name: Check platform coverage baseline
+        if: github.event_name == 'pull_request'
+        run: |
+          python3 scripts/ci/platform-coverage-ratchet.py check \
+            coverage-unit.xml coverage-feature.xml coverage-modules.xml \
+            --baseline tests/ci/platform-coverage-baseline.json
+
+      - name: Raise platform coverage baseline on main
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          python3 scripts/ci/platform-coverage-ratchet.py update \
+            coverage-unit.xml coverage-feature.xml coverage-modules.xml \
+            --baseline tests/ci/platform-coverage-baseline.json
+          if git diff --quiet -- tests/ci/platform-coverage-baseline.json; then
+            echo 'Coverage baseline unchanged.'
+          else
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add tests/ci/platform-coverage-baseline.json
+            git commit -m "ci: raise platform coverage baseline"
+            git push origin HEAD:main
+          fi
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v8 # NOSONAR — official SonarSource scanner action; tag pinning is acceptable for internal projects
