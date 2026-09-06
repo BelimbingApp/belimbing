@@ -595,6 +595,9 @@ assert 'upsert-pr-ci-summary-comment.py' in workflow
 assert 'ci/raise-coverage-baseline' in workflow
 assert 'gh pr create' in workflow
 assert 'gh pr merge' in workflow
+assert 'COVERAGE_BASELINE_RAISE_TOKEN: ${{ secrets.COVERAGE_BASELINE_RAISE_TOKEN }}' in workflow, 'raise token must be wired from secrets, not only mentioned'
+assert 'AI-Team-Lane-Issue: none' in workflow
+assert 'task:ready' in workflow
 assert 'git push origin HEAD:main' not in workflow
 assert 'coverage-feature-a.xml' in workflow and 'coverage-feature-b.xml' in workflow
 assert 'paths-ignore' in workflow and 'platform-coverage-baseline.json' in workflow
