@@ -1,0 +1,1 @@
+{"advisories":{"vendor/package":[{"advisoryId":"PKSA-test-0001","packageName":"vendor/package","severity":"high","title":"Test advisory","cve":"CVE-2026-90001"}]}}

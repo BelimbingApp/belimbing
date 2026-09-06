@@ -5,6 +5,7 @@ namespace App\Base\Routing;
 use App\Base\Foundation\ApplicationTopology;
 use App\Base\Foundation\Services\DomainState;
 use App\Base\Routing\Exceptions\RouteCollisionException;
+use App\Base\Tenancy\Middleware\RequireTenantContext;
 use Illuminate\Routing\Route as RegisteredRoute;
 use Illuminate\Support\Facades\Route;
 
@@ -90,17 +91,54 @@ class RouteDiscoveryService
         $discovered ??= $this->discover();
 
         foreach ($discovered['web'] ?? [] as $file) {
-            $this->registerFile($file, fn () => Route::middleware('web')->group($file));
+            $this->registerFile($file, fn () => Route::middleware($this->middlewareFor($file, 'web'))->group($file));
         }
 
         foreach ($discovered['api'] ?? [] as $file) {
-            $this->registerFile($file, fn () => Route::middleware('api')->prefix('api')->group($file));
+            $this->registerFile($file, fn () => Route::middleware($this->middlewareFor($file, 'api'))->prefix('api')->group($file));
         }
     }
 
     public function sourceFileFor(RegisteredRoute $route): ?string
     {
         return $this->fileByRouteObjectId[spl_object_id($route)] ?? null;
+    }
+
+    /**
+     * @return array{domain: string, module: string}|null
+     */
+    public function domainModuleForSource(string $file): ?array
+    {
+        $root = rtrim(str_replace('\\', '/', ApplicationTopology::domainsRoot()), '/').'/';
+        $source = str_replace('\\', '/', $file);
+
+        if (! str_starts_with($source, $root)) {
+            return null;
+        }
+
+        $segments = explode('/', substr($source, strlen($root)));
+
+        if (count($segments) !== 4 || $segments[2] !== 'Routes') {
+            return null;
+        }
+
+        return ['domain' => $segments[0], 'module' => $segments[1]];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function middlewareFor(string $file, string $group): array
+    {
+        $middleware = [$group];
+        $owner = $this->domainModuleForSource($file);
+        $requiredDomains = config('domain_routes.tenant_context.required_domains', []);
+
+        if ($owner !== null && is_array($requiredDomains) && in_array($owner['domain'], $requiredDomains, true)) {
+            $middleware[] = RequireTenantContext::class;
+        }
+
+        return $middleware;
     }
 
     /**

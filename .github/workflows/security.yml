@@ -36,17 +36,14 @@ jobs:
           bun-version: '1.3.10'
           no-cache: true
 
-      # Fails on any known vulnerability in a required package. Advisories that
-      # are reviewed and accepted are listed under config.audit.ignore in
-      # composer.json (see docs/security-advisories.md).
-      - name: Composer audit
-        run: composer audit --locked --no-interaction
-
+      # Policy: docs/ci/dependency-audit-policy.json (severity threshold +
+      # expiring allowlist). Runner: scripts/ci/dependency-audit.py — see
+      # docs/security-advisories.md.
       - name: Install JS dependencies
         run: bun install --frozen-lockfile
 
-      - name: Bun audit
-        run: bun audit
+      - name: Dependency audit (composer + bun)
+        run: python3 scripts/ci/dependency-audit.py
 
   secrets:
     name: Secret scan
