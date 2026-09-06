@@ -184,9 +184,10 @@ The optional `extra.blb` manifest may declare:
 - `version`: Module contract version;
 - `requires-modules`: hard Module dependencies and version constraints;
 - `optional-modules`: integrations that may be absent;
-- `publishes-events` and `consumes-events`: cross-Module event surfaces.
+- `publishes-events` and `consumes-events`: cross-Module event surfaces;
+- `feature-flags`: map of stable flag identities to `{ default, description }` for per-tenant resolution through `App\Base\FeatureFlags\Services\FeatureFlags` (undeclared names refuse; `blb:feature-flags` lists the set).
 
-Manifests support inventory, dependency health, and migration preflight. They do not replace Composer's PHP dependency resolution, provider independence, or runtime authorization.
+Manifests support inventory, dependency health, migration preflight, and feature-flag discovery. They do not replace Composer's PHP dependency resolution, provider independence, or runtime authorization.
 
 `requires-modules` is checked during provider resolution and again before Module-aware migration commands run. A required optional Domain must be installed and enabled. Non-wildcard constraints require the depended-on Module to publish a compatible version. Migration filename ordering must also keep requiring Modules after the migrations they depend on; see `docs/architecture/database.md`.
 
