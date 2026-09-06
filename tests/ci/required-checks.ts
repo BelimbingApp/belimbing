@@ -73,7 +73,9 @@ function explicitlyDisabled(condition: unknown): boolean {
     return value === "false" || /^\$\{\{\s*false\s*\}\}$/.test(value);
 }
 
-export function auditRequiredChecks(ruleset: Mapping, workflows: Mapping): string[] {
+export type RequiredCheck = { context: string; integration_id?: number | null };
+
+export function missingRequiredChecks(ruleset: Mapping, workflows: Mapping): RequiredCheck[] {
     if (ruleset.enforcement !== "active" || ruleset.target !== "branch" ||
         ruleset.source !== "BelimbingApp/belimbing" ||
         !ruleset.conditions?.ref_name?.include?.includes("refs/heads/main") ||
@@ -111,13 +113,45 @@ export function auditRequiredChecks(ruleset: Mapping, workflows: Mapping): strin
         }
     }
 
-    const missing = required.filter((check: Mapping) => {
+    return required.filter((check: Mapping) => {
         const apps = producers.get(check.context);
         return !apps || (check.integration_id != null && !apps.has(check.integration_id));
     });
-    if (missing.length) {
-        throw new Error("Required checks without a PR producer: " +
-            missing.map((check: Mapping) => check.context + " (app " + (check.integration_id ?? "any") + ")").join(", "));
+}
+
+export function formatMissingRequiredChecks(missing: RequiredCheck[]): string {
+    return missing
+        .map((check) => check.context + " (app " + (check.integration_id ?? "any") + ")")
+        .join(", ");
+}
+
+export function requiredCheckAuditIssueBody(missing: RequiredCheck[], runUrl?: string): string {
+    const lines = [
+        "Automated required-check producer audit found required Protect Main contexts without a PR producer.",
+        "",
+        "## Missing required checks",
+        "",
+        ...missing.map((check) =>
+            `- \`${check.context}\` (integration_id: ${check.integration_id ?? "any"})`),
+        "",
+        "Refresh `tests/ci/fixtures/protect-main.ruleset.json` only when policy intentionally changed;",
+        "otherwise restore the renamed or removed PR producer so Protect Main cannot wait forever.",
+    ];
+    if (runUrl) {
+        lines.push("", `Run: ${runUrl}`);
     }
-    return required.map((check: Mapping) => check.context);
+    return lines.join("\n") + "\n";
+}
+
+export const REQUIRED_CHECK_AUDIT_ISSUE_TITLE = "Required check audit failed";
+
+export function auditRequiredChecks(ruleset: Mapping, workflows: Mapping): string[] {
+    const required = ruleset.rules
+        ?.filter((rule: Mapping) => rule.type === "required_status_checks")
+        .flatMap((rule: Mapping) => rule.parameters?.required_status_checks ?? []);
+    const missing = missingRequiredChecks(ruleset, workflows);
+    if (missing.length) {
+        throw new Error("Required checks without a PR producer: " + formatMissingRequiredChecks(missing));
+    }
+    return (required ?? []).map((check: Mapping) => check.context);
 }
