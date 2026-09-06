@@ -7,6 +7,7 @@ use App\Base\Foundation\ApplicationTopology;
 use App\Base\Foundation\ModuleManifest\ModuleManifestReader;
 use App\Base\Foundation\Services\ModuleCheck;
 use App\Base\Routing\DomainRouteMiddlewareAudit;
+use App\Base\Tenancy\Services\TenantContextMissRecorder;
 
 /**
  * Read-only operator feed for the tenant-audit page.
@@ -22,6 +23,7 @@ class TenantAuditPageData
     public function __construct(
         private readonly DomainRouteMiddlewareAudit $routeAudit,
         private readonly ModuleCheck $moduleCheck,
+        private readonly TenantContextMissRecorder $missRecorder,
     ) {}
 
     /**
@@ -97,6 +99,16 @@ class TenantAuditPageData
             'refusals' => $report['refusals'],
             'ok' => $report['ok'],
         ];
+    }
+
+    /**
+     * Last recorded RequireTenantContext misses (route + resolver).
+     *
+     * @return list<array{route: string|null, resolver: string, at: string}>
+     */
+    public function missRows(): array
+    {
+        return $this->missRecorder->recent();
     }
 
     /**

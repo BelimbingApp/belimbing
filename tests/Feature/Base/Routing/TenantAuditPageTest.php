@@ -7,6 +7,7 @@ use App\Base\Routing\RouteDiscoveryService;
 use App\Base\Routing\Services\TenantAuditPageData;
 use App\Base\Tenancy\Contracts\TenantContext;
 use App\Base\Tenancy\Middleware\RequireTenantContext;
+use App\Base\Tenancy\Services\TenantContextMissRecorder;
 use App\Core\Company\Models\Company;
 use App\Core\User\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -92,7 +93,7 @@ it('drops the authorization finding when the page data source check is removed',
         ->not->toBeNull();
 
     // Acceptance mutation: delete/disable the page-owned authz check (not DomainRouteMiddlewareAudit).
-    $mutated = new class(app(DomainRouteMiddlewareAudit::class), app(ModuleCheck::class)) extends TenantAuditPageData
+    $mutated = new class(app(DomainRouteMiddlewareAudit::class), app(ModuleCheck::class), app(TenantContextMissRecorder::class)) extends TenantAuditPageData
     {
         public function routeLacksAuthorizationMiddleware(array $middleware): bool
         {
