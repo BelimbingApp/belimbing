@@ -63,6 +63,34 @@ python3 -m json.tool scripts/ci/platform-feature-shards.json >/dev/null
 python3 scripts/ci/platform-feature-shards.py --validate-only >/dev/null
 grep -q 'platform-feature-shards.py' .github/workflows/tests.yml
 
+# Feature shard membership must fail closed, not merely parse (#576).
+shard_root="$(mktemp -d)"
+mkdir -p "$shard_root/tests/Feature/Alpha" "$shard_root/tests/Feature/Beta" "$shard_root/tests/Feature/Gamma"
+touch "$shard_root/tests/Feature/Alpha/AlphaTest.php" "$shard_root/tests/Feature/Beta/BetaTest.php" "$shard_root/tests/Feature/Gamma/GammaTest.php"
+shard_file="$shard_root/shards.json"
+
+printf '{"shards":{"a":["Alpha","Beta"],"b":["Gamma"]}}' > "$shard_file"
+if ! python3 scripts/ci/platform-feature-shards.py --root "$shard_root" --shards-file "$shard_file" --validate-only >/dev/null; then
+    echo 'Feature shard validator rejected a complete, disjoint layout' >&2; exit 1
+fi
+
+printf '{"shards":{"a":["Alpha"],"b":["Beta"]}}' > "$shard_file"
+if python3 scripts/ci/platform-feature-shards.py --root "$shard_root" --shards-file "$shard_file" --validate-only >/dev/null 2>&1; then
+    echo 'Feature shard validator accepted an unsharded directory' >&2; exit 1
+fi
+
+printf '{"shards":{"a":["Alpha","Beta"],"b":["Beta","Gamma"]}}' > "$shard_file"
+if python3 scripts/ci/platform-feature-shards.py --root "$shard_root" --shards-file "$shard_file" --validate-only >/dev/null 2>&1; then
+    echo 'Feature shard validator accepted overlapping shards' >&2; exit 1
+fi
+
+printf '{"shards":{"a":["Alpha","Beta"],"b":["Gamma"]}}' > "$shard_file"
+touch "$shard_root/tests/Feature/LooseTest.php"
+if python3 scripts/ci/platform-feature-shards.py --root "$shard_root" --shards-file "$shard_file" --validate-only >/dev/null 2>&1; then
+    echo 'Feature shard validator accepted a loose Feature test file' >&2; exit 1
+fi
+rm -rf "$shard_root"
+
 # Database feature tests prove the behaviour most exposed to dialect, schema,
 # and constraint differences. Their PostgreSQL coverage is discovered, not
 # copied into the workflow, so adding a file cannot silently leave it SQLite
