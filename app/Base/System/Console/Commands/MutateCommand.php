@@ -4,6 +4,7 @@ namespace App\Base\System\Console\Commands;
 
 use App\Base\Support\PhpCli;
 use App\Base\System\Exceptions\GuardMutationException;
+use App\Base\System\Services\GuardMutationSuggester;
 use App\Base\System\Services\GuardMutator;
 use App\Base\System\Services\ReviewMutationEvidence;
 use Illuminate\Console\Command;
@@ -11,23 +12,27 @@ use Illuminate\Support\Facades\Process;
 use JsonException;
 use Symfony\Component\Console\Attribute\AsCommand;
 
-/**
- * Delete one named guard line, run a Pest file, restore, and print Markdown evidence.
- */
+/** Suggest guard mutations, or run them with restoration and review evidence. */
 #[AsCommand(name: 'blb:mutate')]
 class MutateCommand extends Command
 {
-    protected $description = 'Temporarily delete one matching source line, run a Pest file, restore, and print Markdown mutation evidence';
+    protected $description = 'Suggest or run restorable guard-line mutations for a Pest file';
 
     protected $signature = 'blb:mutate
         {file? : Source file whose guard line will be deleted}
         {matcher? : Exact line number or unique substring pattern}
         {--test= : Pest test file to run before and after the deletion}
+        {--suggest= : Pest test file whose referenced production guards should form a batch skeleton}
         {--batch= : JSON list of {file, pattern, test} entries for sequential mutations}
         {--evidence= : Pull request number whose exact head will bind the batch review evidence}';
 
     public function handle(): int
     {
+        $suggest = $this->option('suggest');
+        if (is_string($suggest) && trim($suggest) !== '') {
+            return $this->handleSuggestion($suggest);
+        }
+
         $batch = $this->option('batch');
         if (is_string($batch) && trim($batch) !== '') {
             return $this->handleBatch($batch);
@@ -67,6 +72,32 @@ class MutateCommand extends Command
         $this->newLine();
         $this->line($result['markdown']);
         $this->components->info('Source restored; paste the Markdown block into the PR body.');
+
+        return self::SUCCESS;
+    }
+
+    private function handleSuggestion(string $testPath): int
+    {
+        if ($this->argument('file') !== null
+            || $this->argument('matcher') !== null
+            || $this->option('test') !== null
+            || $this->option('batch') !== null
+            || $this->hasEvidenceOption()) {
+            $this->components->error('The --suggest option cannot be combined with mutation or evidence options.');
+
+            return self::FAILURE;
+        }
+
+        try {
+            $suggestions = app(GuardMutationSuggester::class)->suggest($testPath);
+            $json = json_encode($suggestions, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+        } catch (GuardMutationException|JsonException $exception) {
+            $this->components->error($exception->getMessage());
+
+            return self::FAILURE;
+        }
+
+        $this->line($json);
 
         return self::SUCCESS;
     }

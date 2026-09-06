@@ -1,6 +1,8 @@
 <?php
 
+use App\Base\System\Services\GuardMutationSuggester;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 use Tests\TestCase;
 
@@ -15,6 +17,18 @@ beforeEach(function (): void {
     copy(base_path('tests/Unit/Base/System/Fixtures/guard-mutator-sample.php'), $this->mutateCmdSource);
     copy(base_path('tests/Unit/Base/System/Fixtures/guard-mutator-dummy-test.php'), $this->mutateCmdTest);
     $this->mutateCmdOriginal = file_get_contents($this->mutateCmdSource);
+
+    $this->mutateSuggestSource = $root.'/app/Base/System/Fixtures/SuggestedGuardSubject.php';
+    $this->mutateSuggestTest = $root.'/tests/Unit/Base/System/SuggestedGuardSubjectTest.php';
+    File::ensureDirectoryExists(dirname($this->mutateSuggestSource));
+    File::ensureDirectoryExists(dirname($this->mutateSuggestTest));
+    copy(base_path('tests/Unit/Base/System/Fixtures/guard-suggester-source.php'), $this->mutateSuggestSource);
+    copy(base_path('tests/Unit/Base/System/Fixtures/guard-suggester-test.php'), $this->mutateSuggestTest);
+
+    $this->mutateOtherSource = $root.'/app/Base/System/Fixtures/SuggestedOtherGuards.php';
+    $this->mutateOtherTest = $root.'/tests/Unit/Base/System/SuggestedOtherGuardsTest.php';
+    copy(base_path('tests/Unit/Base/System/Fixtures/guard-suggester-other-source.php'), $this->mutateOtherSource);
+    copy(base_path('tests/Unit/Base/System/Fixtures/guard-suggester-other-test.php'), $this->mutateOtherTest);
 });
 
 afterEach(function (): void {
@@ -24,10 +38,76 @@ afterEach(function (): void {
     if (! is_string($root) || $root === '' || ! is_dir($root)) {
         return;
     }
-    foreach (glob($root.'/*') ?: [] as $file) {
-        @unlink($file);
-    }
-    @rmdir($root);
+    File::deleteDirectory($root);
+});
+
+it('suggests referenced guard lines as batch json without changing fixtures', function (): void {
+    app()->instance(
+        GuardMutationSuggester::class,
+        new GuardMutationSuggester($this->mutateCmdRoot),
+    );
+    $sourceBefore = file_get_contents($this->mutateSuggestSource);
+    $testBefore = file_get_contents($this->mutateSuggestTest);
+    Process::fake();
+
+    $pending = $this->withoutMockingConsoleOutput()->artisan('blb:mutate', [
+        '--suggest' => $this->mutateSuggestTest,
+    ]);
+    $suggestions = json_decode(trim(Artisan::output()), true, flags: JSON_THROW_ON_ERROR);
+
+    expect($pending)->toBe(0)
+        ->and($suggestions)->toBe([
+            [
+                'file' => 'app/Base/System/Fixtures/SuggestedGuardSubject.php',
+                'pattern' => '12',
+                'test' => 'tests/Unit/Base/System/SuggestedGuardSubjectTest.php',
+            ],
+            [
+                'file' => 'app/Base/System/Fixtures/SuggestedGuardSubject.php',
+                'pattern' => '15',
+                'test' => 'tests/Unit/Base/System/SuggestedGuardSubjectTest.php',
+            ],
+        ])
+        ->and(file_get_contents($this->mutateSuggestSource))->toBe($sourceBefore)
+        ->and(file_get_contents($this->mutateSuggestTest))->toBe($testBefore);
+
+    Process::assertNothingRan();
+});
+
+it('finds abort and conditional-return guards referenced by qualified class name', function (): void {
+    $sourceBefore = file_get_contents($this->mutateOtherSource);
+
+    expect((new GuardMutationSuggester($this->mutateCmdRoot))->suggest($this->mutateOtherTest))->toBe([
+        [
+            'file' => 'app/Base/System/Fixtures/SuggestedOtherGuards.php',
+            'pattern' => '9',
+            'test' => 'tests/Unit/Base/System/SuggestedOtherGuardsTest.php',
+        ],
+        [
+            'file' => 'app/Base/System/Fixtures/SuggestedOtherGuards.php',
+            'pattern' => '12',
+            'test' => 'tests/Unit/Base/System/SuggestedOtherGuardsTest.php',
+        ],
+    ])->and(file_get_contents($this->mutateOtherSource))->toBe($sourceBefore);
+});
+
+it('keeps suggestion mode separate from mutation execution', function (): void {
+    app()->instance(
+        GuardMutationSuggester::class,
+        new GuardMutationSuggester($this->mutateCmdRoot),
+    );
+    $sourceBefore = file_get_contents($this->mutateSuggestSource);
+    Process::fake();
+
+    $this->artisan('blb:mutate', [
+        '--suggest' => $this->mutateSuggestTest,
+        '--batch' => '[]',
+    ])
+        ->expectsOutputToContain('cannot be combined')
+        ->assertFailed();
+
+    expect(file_get_contents($this->mutateSuggestSource))->toBe($sourceBefore);
+    Process::assertNothingRan();
 });
 
 it('requires a batch when review evidence is requested', function (): void {
