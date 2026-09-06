@@ -1,5 +1,13 @@
 # Find Livewire actions and test references
 
+Platform quality checks `tests/ci/livewire-actions-baselines/platform.json` with
+no `--domain` argument, in the platform-only checkout. Keep optional Domains and
+Extensions unmounted when measuring this baseline: an unfiltered local scan
+includes installed components too. The committed platform baseline uses count
+mode; strict names remain opt-in. To lower the baseline after improvements, run
+`APP_ENV=testing php artisan blb:livewire-actions --write-baseline=tests/ci/livewire-actions-baselines/platform.json`
+and include the reviewed snapshot in the PR.
+
 Add `--explain` to `--check-baseline=<path>` to print newly unreferenced
 module-owned `Component::method` identities when the count increases.
 `--write-baseline=<path>` stores an `actions` list alongside the count, ordered
