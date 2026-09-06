@@ -1,2 +1,3 @@
 <?php
+
 // Fixture: platform migration.
