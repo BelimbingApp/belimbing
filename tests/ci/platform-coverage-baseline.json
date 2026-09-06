@@ -1,0 +1,7 @@
+{
+  "line_rate": 0.0,
+  "coveredstatements": 0,
+  "statements": 0,
+  "tolerance_pp": 0.05,
+  "note": "Bootstrap baseline; first successful main run raises this via platform-coverage-ratchet.py update."
+}
