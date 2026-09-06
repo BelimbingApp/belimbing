@@ -65,6 +65,13 @@ additional module-owned business actions.
 
 ## CI ratchet (module-owned debt)
 
+Dispatch `refresh-livewire-action-baselines` to compose every pinned Domain and
+measure each Domain plus the platform. It opens one `bot-maintenance` PR only
+when a count falls; equal or higher counts leave the baseline unchanged. The
+publisher rechecks against current main and preserves any explicit strict-name
+setting. Composition runs with read-only credentials; PR creation uses the
+existing `COVERAGE_BASELINE_RAISE_TOKEN` required by organization policy.
+
 Domain CI fails when a Domain's count of **module-owned** actions with no
 lexical test reference rises above the committed baseline in
 `tests/ci/livewire-actions-baselines/{domain-id}.json`.

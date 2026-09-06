@@ -1,0 +1,109 @@
+name: refresh-livewire-action-baselines
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: refresh-livewire-action-baselines
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  compose:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      APP_ENV: testing
+      PLATFORM_OPERATOR_COMPANY_NAME: Belimbing CI
+      PLATFORM_OPERATOR_COMPANY_CODE: belimbing_ci
+    steps:
+      - uses: actions/checkout@v7 # NOSONAR — GitHub-maintained action
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: shivammathur/setup-php@v2 # NOSONAR — established project action
+        with:
+          php-version: '8.5'
+          extensions: pdo_sqlite, sqlite3
+          tools: composer:v2
+          coverage: none
+      - name: Prepare application
+        run: |
+          composer install --no-interaction --prefer-dist --optimize-autoloader
+          cp .env.example .env
+          sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=sqlite/' .env
+          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=:memory:/' .env
+          php artisan key:generate --force
+      - name: Compose all pinned domains and measure action debt
+        run: |
+          set -euo pipefail
+          for id in $(jq -r '.domains | keys[]' scripts/ci/domain-repos.json); do
+            repo=$(jq -r --arg id "$id" '.domains[$id].repo' scripts/ci/domain-repos.json)
+            ref=$(jq -r --arg id "$id" '.domains[$id].ref' scripts/ci/domain-repos.json)
+            path=$(jq -r --arg id "$id" '.domains[$id].path' scripts/ci/domain-repos.json)
+            git clone --filter=blob:none --no-checkout "https://github.com/${repo}.git" "$path"
+            git -C "$path" checkout --detach "$ref"
+          done
+          composer dump-autoload --optimize
+          mkdir -p "$RUNNER_TEMP/action-measurements"
+          php artisan blb:livewire-actions --write-baseline="$RUNNER_TEMP/action-measurements/platform.json"
+          for id in $(jq -r '.domains | keys[]' scripts/ci/domain-repos.json); do
+            path=$(jq -r --arg id "$id" '.domains[$id].path' scripts/ci/domain-repos.json)
+            domain=$(basename "$path")
+            php artisan blb:livewire-actions --domain="$domain" --write-baseline="$RUNNER_TEMP/action-measurements/$id.json"
+          done
+          for measured in "$RUNNER_TEMP/action-measurements/"*.json; do
+            python3 scripts/ci/refresh-livewire-action-baselines.py "tests/ci/livewire-actions-baselines/$(basename "$measured")" "$measured"
+          done
+      - uses: actions/upload-artifact@v7 # NOSONAR — GitHub-maintained action
+        with:
+          name: livewire-action-baselines
+          path: tests/ci/livewire-actions-baselines/*.json
+          if-no-files-found: error
+
+  publish:
+    needs: compose
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v7 # NOSONAR — GitHub-maintained action
+        with:
+          ref: main
+      - uses: actions/download-artifact@v8 # NOSONAR — GitHub-maintained action
+        with:
+          name: livewire-action-baselines
+          path: generated
+      - name: Open baseline PR
+        env:
+          GH_TOKEN: ${{ secrets.COVERAGE_BASELINE_RAISE_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Reapply the monotonic guard against the freshly checked-out main.
+          for measured in generated/*.json; do
+            python3 scripts/ci/refresh-livewire-action-baselines.py "tests/ci/livewire-actions-baselines/$(basename "$measured")" "$measured"
+          done
+          if git diff --quiet -- tests/ci/livewire-actions-baselines; then
+            echo "No action-debt count decreased."
+            exit 0
+          fi
+          branch="ci/refresh-livewire-action-baselines-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          if [ -z "$GH_TOKEN" ]; then
+            echo '::error::COVERAGE_BASELINE_RAISE_TOKEN is required; the organization disables GITHUB_TOKEN PR creation.'
+            exit 1
+          fi
+          git switch -c "$branch"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/ci/livewire-actions-baselines
+          git commit -m "ci: lower Livewire action-debt baselines"
+          git push origin "HEAD:refs/heads/$branch"
+          printf 'Lock in lower action-debt counts from all pinned Domains and the platform. Counts never increase.\n\nAI-Team-Lane-Issue: none\n' > "$RUNNER_TEMP/baseline-pr.md"
+          gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
+            --title "ci: lower Livewire action-debt baselines" --body-file "$RUNNER_TEMP/baseline-pr.md" \
+            --label bot-maintenance

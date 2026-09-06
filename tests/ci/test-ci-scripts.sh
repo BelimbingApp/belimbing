@@ -917,6 +917,16 @@ with tempfile.TemporaryDirectory() as tmp:
     head = commit_on('mixed', mixed)
     failed = run_policy(head)
     assert failed.returncode == 1, failed.stdout + failed.stderr
+
+    def action_baselines():
+        directory = repo / 'tests/ci/livewire-actions-baselines'
+        directory.mkdir(parents=True, exist_ok=True)
+        for name in ['platform', 'people', 'people-connector', 'commerce', 'operation']:
+            (directory / f'{name}.json').write_text('{}\n')
+
+    head = commit_on('action-baselines', action_baselines)
+    passed = run_policy(head)
+    assert passed.returncode == 0, passed.stdout + passed.stderr
 PY
 
 # Livewire action debt can decrease automatically, never increase (#775).
