@@ -6,6 +6,12 @@ cd "$root"
 bash -n scripts/ci/changed-authorable-php.sh scripts/ci/extension-conformance.sh scripts/ci/mount-guard.sh
 python3 -m json.tool scripts/ci/domain-repos.json >/dev/null
 
+# Feature shards must stay disjoint and cover every first-level Feature
+# directory so CI cannot silently drop a folder when a new one lands (#576).
+python3 -m json.tool scripts/ci/platform-feature-shards.json >/dev/null
+python3 scripts/ci/platform-feature-shards.py --validate-only >/dev/null
+grep -q 'platform-feature-shards.py' .github/workflows/tests.yml
+
 # Database feature tests prove the behaviour most exposed to dialect, schema,
 # and constraint differences. Their PostgreSQL coverage is discovered, not
 # copied into the workflow, so adding a file cannot silently leave it SQLite
