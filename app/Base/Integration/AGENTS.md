@@ -33,6 +33,7 @@ app/Base/Integration/
 4. **Mandatory redaction** — authorization headers, cookies, API keys, OAuth tokens, client secrets, passwords, and token-like fields stay redacted in stored payloads. Authz controls access, but it does not replace redaction.
 5. **Capability-gated inspection** — metadata listing (`admin.system.outbound-exchange.list`), retained payload inspection (`admin.system.outbound-exchange.payload.view`), and cleanup/delete (`admin.system.outbound-exchange.delete`) are separate authz capabilities.
 6. **General ownership** — use `owner_type`/`owner_id` plus metadata instead of module-specific nullable foreign keys so Integration remains independent of adopting modules.
+7. **Command admission is explicit** — consequential domain commands may opt into `SubjectCommandRateLimiter` through `integration.subject_command_limits`. Its bucket is tenant + operation + subject. A refusal happens before dispatch and maps to not-delivered, never unknown; reads remain undeclared and unlimited.
 
 ## Current Boundary
 
