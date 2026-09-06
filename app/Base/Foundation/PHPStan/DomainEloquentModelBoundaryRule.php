@@ -16,8 +16,8 @@ use PhpParser\Node\UnionType;
 use PHPStan\Analyser\Scope;
 use PHPStan\Node\InClassMethodNode;
 use PHPStan\Reflection\ReflectionProvider;
+use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
-use PHPStan\Rules\RuleError;
 use PHPStan\Rules\RuleErrorBuilder;
 use PHPStan\Type\ObjectType;
 
@@ -44,6 +44,7 @@ final class DomainEloquentModelBoundaryRule implements Rule
         return InClassMethodNode::class;
     }
 
+    /** @return list<IdentifierRuleError> */
     public function processNode(Node $node, Scope $scope): array
     {
         $consumer = $this->domainOwner($scope->getFile());
@@ -109,7 +110,7 @@ final class DomainEloquentModelBoundaryRule implements Rule
         return [];
     }
 
-    private function errorForForeignModel(array $consumer, string $className, int $line): ?RuleError
+    private function errorForForeignModel(array $consumer, string $className, int $line): ?IdentifierRuleError
     {
         if (! $this->reflectionProvider->hasClass($className)) {
             return null;
