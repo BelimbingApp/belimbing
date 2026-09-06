@@ -16,8 +16,10 @@ declare(strict_types=1);
  *
  *   - the boot succeeds (a RouteCollisionException or a shared-table refusal
  *     surfaces here as a failed boot with its message);
- *   - the route table has exactly the expected count and contains every
- *     expected route name;
+ *   - the route table contains every expected Domain route name and exactly
+ *     the expected number of Domain routes (platform routes are counted but
+ *     not held to the surface: a Base or Core route landing on main is not a
+ *     composition change, a Domain route appearing or vanishing is);
  *   - no migration basename appears in more than one migration directory
  *     across Base, Core, the mounted Domains and Extensions (the preflight's
  *     rule, applied without waiting for a migrate run).
@@ -41,6 +43,9 @@ declare(strict_types=1);
  * mount at the pinned ref, route count, expected route names) against
  * fixtures without a network or a boot. Production runs never pass it.
  */
+/** Route names the pinned Domains own; everything else is platform surface. */
+const DOMAIN_ROUTE_NAME = '/^(people\.|admin\.people-connector\.|admin\.integration\.)/';
+
 function fail(string $message): never
 {
     fwrite(STDERR, "composed-smoke: {$message}\n");
@@ -226,20 +231,21 @@ if ($options['routes'] !== null) {
 }
 $names = array_values(array_filter(array_map(fn (array $route): ?string => $route['name'] ?? null, $routes)));
 sort($names);
+$domainNames = array_values(array_filter($names, fn (string $name): bool => preg_match(DOMAIN_ROUTE_NAME, $name) === 1));
 
 if ($options['print-surface']) {
     echo json_encode([
         '_comment' => $surface['_comment'] ?? '',
         'pins' => array_combine($domainIds, array_map(fn (string $id): string => (string) $registry['domains'][$id]['ref'], $domainIds)),
-        'route_count' => count($routes),
-        'route_names' => array_values(array_filter($names, fn (string $name): bool => preg_match('/^(people\.|admin\.people-connector\.|admin\.integration\.)/', $name) === 1)),
+        'domain_route_count' => count($domainNames),
+        'route_names' => $domainNames,
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)."\n";
     exit(0);
 }
 
-$expectedCount = (int) ($surface['route_count'] ?? -1);
-if (count($routes) !== $expectedCount) {
-    $failures[] = sprintf('route count is %d, expected %d', count($routes), $expectedCount);
+$expectedCount = (int) ($surface['domain_route_count'] ?? -1);
+if (count($domainNames) !== $expectedCount) {
+    $failures[] = sprintf('domain route count is %d, expected %d', count($domainNames), $expectedCount);
 }
 $missing = array_values(array_diff((array) ($surface['route_names'] ?? []), $names));
 if ($missing !== []) {
@@ -247,10 +253,11 @@ if ($missing !== []) {
 }
 
 fwrite(STDERR, sprintf(
-    "composed-smoke: %s; %d routes (%d named), %d migration(s), %d duplicate name(s)\n",
+    "composed-smoke: %s; %d routes (%d named, %d domain), %d migration(s), %d duplicate name(s)\n",
     implode(', ', array_map(fn (string $id): string => "{$id}@".substr((string) $registry['domains'][$id]['ref'], 0, 8), $domainIds)),
     count($routes),
     count($names),
+    count($domainNames),
     $migrationCount,
     count($duplicates),
 ));
