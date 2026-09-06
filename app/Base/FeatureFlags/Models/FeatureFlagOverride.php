@@ -5,6 +5,10 @@ namespace App\Base\FeatureFlags\Models;
 use Illuminate\Database\Eloquent\Model;
 
 /**
+ * @property string $flag
+ * @property int $tenant_id
+ * @property bool $enabled
+ *
  * Per-tenant override of a declared feature flag.
  *
  * Defaults live in module descriptors; this row exists only when a tenant
