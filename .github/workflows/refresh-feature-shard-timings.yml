@@ -97,9 +97,21 @@ jobs:
           git worktree remove "${worktree}"
           existing=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "${branch}" --base main \
             --state open --json number --jq '.[0].number')
+          body=$(printf '%s\n' \
+            'AI-Team-Lane-Issue: none' \
+            '' \
+            'Automated refresh of Feature shard timings from Feature lane suite measurements on main (#695).' \
+            'Touches only the timings summary and shards map; opened by workflow_dispatch and never pushes to main.')
           if [ -z "${existing}" ] || [ "${existing}" = "null" ]; then
             existing=$(gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "${branch}" \
               --title "ci: refresh Feature shard timings from measured lanes" \
-              --body "Automated refresh of Feature shard timings from Feature lane suite measurements on main (#695). Opened by workflow_dispatch; does not push to main.")
+              --label task:ready \
+              --label bot-maintenance \
+              --body "$body")
+            existing="${existing##*/}"
+          else
+            gh pr edit "$existing" --repo "$GITHUB_REPOSITORY" --add-label task:ready >/dev/null
+            gh pr edit "$existing" --repo "$GITHUB_REPOSITORY" --add-label bot-maintenance >/dev/null
+            gh pr edit "$existing" --repo "$GITHUB_REPOSITORY" --body "$body" >/dev/null
           fi
           echo "Opened/updated timings refresh PR #${existing}"

@@ -323,10 +323,12 @@ jobs:
             existing=$(gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
               --title 'ci: raise platform coverage baseline' \
               --label task:ready \
+              --label bot-maintenance \
               --body "$body")
             existing="${existing##*/}"
           else
             gh pr edit "$existing" --repo "$GITHUB_REPOSITORY" --add-label task:ready >/dev/null
+            gh pr edit "$existing" --repo "$GITHUB_REPOSITORY" --add-label bot-maintenance >/dev/null
             gh pr edit "$existing" --repo "$GITHUB_REPOSITORY" --body "$body" >/dev/null
           fi
           gh pr merge "$existing" --repo "$GITHUB_REPOSITORY" --auto --squash
