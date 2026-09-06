@@ -30,6 +30,34 @@ rm -rf "$timing_fixture"
 trap - EXIT
 
 # record-pest-timing.sh must parse colourised Pest footers (#614).
+
+python3 -m py_compile scripts/ci/upsert-pr-ci-summary-comment.py
+
+# #670: one PR comment for timing + coverage delta; two upserts replace, not stack.
+upsert_fixture=$(mktemp -d)
+trap 'rm -rf "$upsert_fixture"' EXIT
+mkdir -p "$upsert_fixture/timing"
+printf '%s\n' '{"job":"Unit","suite":"Unit","wall_seconds":1.25,"tests":2,"assertions":4}' > "$upsert_fixture/timing/a.json"
+cp tests/ci/fixtures/coverage-ratchet/high-a.xml "$upsert_fixture/a.xml"
+cp tests/ci/fixtures/coverage-ratchet/high-b.xml "$upsert_fixture/b.xml"
+printf '%s\n' '{"line_rate":80.0,"coveredstatements":80,"statements":100,"tolerance_pp":0.05}' > "$upsert_fixture/baseline.json"
+dry=$(python3 scripts/ci/upsert-pr-ci-summary-comment.py \
+  --timing-dir "$upsert_fixture/timing" \
+  --baseline "$upsert_fixture/baseline.json" \
+  --dry-run \
+  "$upsert_fixture/a.xml" "$upsert_fixture/b.xml")
+grep -q '<!-- belimbing-ci-run-summary -->' <<< "$dry"
+grep -q '| Unit | Unit | 1.250 | 2 | 4 |' <<< "$dry"
+grep -q '## Coverage delta' <<< "$dry"
+grep -q 'Measured' <<< "$dry"
+python3 scripts/ci/upsert-pr-ci-summary-comment.py \
+  --timing-dir "$upsert_fixture/timing" \
+  --baseline "$upsert_fixture/baseline.json" \
+  --memory-fixture \
+  "$upsert_fixture/a.xml" "$upsert_fixture/b.xml"
+rm -rf "$upsert_fixture"
+trap - EXIT
+
 ansi_fixture=$(mktemp -d)
 trap 'rm -rf "$ansi_fixture"' EXIT
 mkdir -p "$ansi_fixture/vendor/bin" "$ansi_fixture/scripts/ci"
@@ -562,6 +590,8 @@ assert baseline_path.is_file(), 'missing platform-coverage-baseline.json'
 assert 'platform-coverage-ratchet.py check' in workflow
 assert 'platform-coverage-ratchet.py update' in workflow
 assert 'Raise platform coverage baseline on main' in workflow
+assert 'Upsert PR timing and coverage comment' in workflow
+assert 'upsert-pr-ci-summary-comment.py' in workflow
 assert 'ci/raise-coverage-baseline' in workflow
 assert 'gh pr create' in workflow
 assert 'gh pr merge' in workflow

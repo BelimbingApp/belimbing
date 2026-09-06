@@ -67,6 +67,22 @@ test("all expected reports are uploaded and downloaded by exact artifact name", 
         .toBeLessThan(gateSteps().indexOf(step(gateSteps(), "SonarCloud Scan")));
 });
 
+
+test("PR runs upsert one timing+coverage comment after the coverage check", () => {
+    const upsert = step(gateSteps(), "Upsert PR timing and coverage comment");
+    expect(upsert.if).toBe("github.event_name == 'pull_request'");
+    expect(upsert.env.GH_TOKEN).toContain("github.token");
+    expect(upsert.env.PR_NUMBER).toContain("github.event.pull_request.number");
+    expect(upsert.run).toContain("scripts/ci/upsert-pr-ci-summary-comment.py");
+    expect(upsert.run).toContain("--timing-dir timing");
+    expect(upsert.run).toContain("--baseline tests/ci/platform-coverage-baseline.json");
+    expect(upsert.run).toContain("coverage-modules.xml");
+    expect(gateSteps().indexOf(step(gateSteps(), "Check platform coverage baseline")))
+        .toBeLessThan(gateSteps().indexOf(upsert));
+    expect(gateSteps().indexOf(upsert))
+        .toBeLessThan(gateSteps().indexOf(step(gateSteps(), "SonarCloud Scan")));
+});
+
 test("the required ci check always runs and requires successful suites before analysis", () => {
     expect(workflow.jobs.ci.needs).toEqual(["suites"]);
     expect(workflow.jobs.ci.if).toBe("always()");
