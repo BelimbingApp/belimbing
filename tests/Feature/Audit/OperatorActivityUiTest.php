@@ -135,3 +135,102 @@ it('allows an operator through the HTTP route', function (): void {
         ->assertOk()
         ->assertSee('Audit Activity');
 });
+
+it('filters by search, exact operation, actor name, actor id, and date bounds', function (): void {
+    $user = createAdminUser();
+    $other = User::factory()->create(['company_id' => $user->company_id, 'name' => 'Filter Actor Zeta']);
+
+    operatorActivityInsert([
+        'actor_id' => $user->id,
+        'event' => 'http.request',
+        'url' => 'https://example.test/keep-me',
+        'occurred_at' => '2026-03-10 12:00:00',
+    ]);
+    operatorActivityInsert([
+        'actor_id' => $other->id,
+        'event' => 'auth.login',
+        'url' => 'https://example.test/login-zeta',
+        'actor_role' => 'viewer',
+        'occurred_at' => '2026-03-15 12:00:00',
+    ]);
+    operatorActivityInsert([
+        'actor_id' => $other->id,
+        'event' => 'http.request',
+        'url' => 'https://example.test/out-of-range',
+        'occurred_at' => '2026-01-01 12:00:00',
+    ]);
+
+    Livewire::actingAs($user)
+        ->test(OperatorActivity::class)
+        ->set('search', 'login-zeta')
+        ->assertSee('https://example.test/login-zeta')
+        ->assertDontSee('https://example.test/keep-me')
+        ->set('search', '')
+        ->set('filterOperation', 'auth.login')
+        ->assertSee('auth.login')
+        ->assertDontSee('https://example.test/keep-me')
+        ->set('filterOperation', '')
+        ->set('filterActor', 'Zeta')
+        ->assertSee('Filter Actor Zeta')
+        ->assertDontSee('https://example.test/keep-me')
+        ->set('filterActor', (string) $other->id)
+        ->assertSee('https://example.test/login-zeta')
+        ->assertDontSee('https://example.test/keep-me')
+        ->set('filterActor', '')
+        ->set('filterFrom', '2026-03-01')
+        ->set('filterTo', '2026-03-20')
+        ->assertSee('https://example.test/keep-me')
+        ->assertSee('https://example.test/login-zeta')
+        ->assertDontSee('https://example.test/out-of-range');
+});
+
+it('toggles sortable columns and resets pagination when filters change', function (): void {
+    $user = createAdminUser();
+
+    foreach (range(1, 30) as $i) {
+        operatorActivityInsert([
+            'actor_id' => $user->id,
+            'event' => 'http.request',
+            'url' => 'https://example.test/page-row-'.$i,
+            'occurred_at' => now()->subMinutes($i)->toDateTimeString(),
+        ]);
+    }
+
+    Livewire::actingAs($user)
+        ->test(OperatorActivity::class)
+        ->assertSet('sortBy', 'occurred_at')
+        ->assertSet('sortDir', 'desc')
+        ->call('sort', 'occurred_at')
+        ->assertSet('sortDir', 'asc')
+        ->call('sort', 'event')
+        ->assertSet('sortBy', 'event')
+        ->call('sort', 'actor_name')
+        ->assertSet('sortBy', 'actor_name')
+        ->call('gotoPage', 2)
+        ->assertSet('paginators.page', 2)
+        ->set('filterOperation', 'http.request')
+        ->assertSet('paginators.page', 1)
+        ->set('filterActor', (string) $user->id)
+        ->assertSet('paginators.page', 1)
+        ->set('filterFrom', '2020-01-01')
+        ->assertSet('paginators.page', 1)
+        ->set('filterTo', '2030-01-01')
+        ->assertSet('paginators.page', 1)
+        ->assertSee('http.request');
+});
+
+it('shows an empty state when filters match nothing', function (): void {
+    $user = createAdminUser();
+
+    operatorActivityInsert([
+        'actor_id' => $user->id,
+        'event' => 'http.request',
+        'url' => 'https://example.test/only-row',
+    ]);
+
+    Livewire::actingAs($user)
+        ->test(OperatorActivity::class)
+        ->set('filterOperation', 'does.not.exist')
+        ->assertSee(__('No audit activity matches the current filters for this tenant.'))
+        ->assertDontSee('https://example.test/only-row');
+});
