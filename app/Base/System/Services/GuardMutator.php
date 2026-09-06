@@ -58,6 +58,114 @@ final class GuardMutator
     }
 
     /**
+     * Refuse before any mutation when a matcher is missing or ambiguous.
+     */
+    public function assertUniqueMatch(string $sourcePath, string $lineOrPattern): void
+    {
+        $absoluteSource = $this->assertReadableFile($sourcePath, 'source');
+        $original = $this->readFile($absoluteSource);
+        $this->removeExactlyOneMatch($original, $lineOrPattern);
+    }
+
+    /**
+     * Validate every entry, then mutate/restore each in sequence.
+     *
+     * @param  list<array<string, mixed>>  $entries
+     * @return array{
+     *     results: list<array{
+     *         file: string,
+     *         matcher: string,
+     *         removed_line: string,
+     *         removed_line_number: int,
+     *         before: array{passed: int|null, failed: int|null, assertions: int|null, exit_code: int},
+     *         after: array{passed: int|null, failed: int|null, assertions: int|null, exit_code: int},
+     *         restored: bool,
+     *         markdown: string
+     *     }>,
+     *     markdown: string
+     * }
+     */
+    public function runBatch(array $entries): array
+    {
+        if ($entries === []) {
+            throw new GuardMutationException('Batch requires at least one {file, pattern, test} entry.');
+        }
+
+        $normalized = [];
+        foreach ($entries as $index => $entry) {
+            $normalized[] = $this->normalizeBatchEntry($entry, $index + 1);
+        }
+
+        foreach ($normalized as $entry) {
+            $this->assertReadableFile($entry['test'], 'test');
+            $this->assertUniqueMatch($entry['file'], $entry['pattern']);
+        }
+
+        $results = [];
+        foreach ($normalized as $entry) {
+            $results[] = $this->run($entry['file'], $entry['pattern'], $entry['test']);
+        }
+
+        return [
+            'results' => $results,
+            'markdown' => $this->formatBatchMarkdown($results),
+        ];
+    }
+
+    /**
+     * @return array{file: string, pattern: string, test: string}
+     */
+    private function normalizeBatchEntry(mixed $entry, int $position): array
+    {
+        $label = 'batch entry '.$position;
+        if (! is_array($entry)) {
+            throw new GuardMutationException("{$label} must be an object with file, pattern, and test.");
+        }
+
+        $normalized = [];
+        foreach (['file', 'pattern', 'test'] as $key) {
+            $value = $entry[$key] ?? null;
+            if (! is_string($value) || trim($value) === '') {
+                throw new GuardMutationException("{$label} is missing a non-empty \"{$key}\" string.");
+            }
+            $normalized[$key] = $value;
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param  list<array{
+     *     file: string,
+     *     matcher: string,
+     *     removed_line: string,
+     *     removed_line_number: int,
+     *     before: array{passed: int|null, failed: int|null, assertions: int|null, exit_code: int},
+     *     after: array{passed: int|null, failed: int|null, assertions: int|null, exit_code: int},
+     *     restored: bool
+     * }>  $results
+     */
+    private function formatBatchMarkdown(array $results): string
+    {
+        $lines = [
+            '**Mutation evidence (batch)**',
+            '',
+            '| Mutation | Before | After | Restored |',
+            '| --- | --- | --- | --- |',
+        ];
+
+        foreach ($results as $result) {
+            $mutation = '`'.$this->displayPath($result['file']).'` / `'.$result['matcher'].'` (line '.$result['removed_line_number'].')';
+            $lines[] = '| '.$mutation
+                .' | '.$this->formatCounts($result['before'])
+                .' | '.$this->formatCounts($result['after'])
+                .' | '.($result['restored'] ? 'yes' : 'no').' |';
+        }
+
+        return implode("\n", $lines)."\n";
+    }
+
+    /**
      * @return array{passed: int|null, failed: int|null, assertions: int|null, exit_code: int, output: string}
      */
     private function mutateRunRestore(string $absoluteSource, string $original, string $mutated, string $absoluteTest): array
