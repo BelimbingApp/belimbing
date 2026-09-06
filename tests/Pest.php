@@ -12,6 +12,7 @@ use App\Base\Media\Models\MediaAsset;
 use App\Base\Media\PhotoCleanup\Contracts\ImageProviderCredentialStore;
 use App\Base\Media\PhotoCleanup\PhotoRoomConfiguration;
 use App\Base\Media\Services\MediaAssetStore;
+use App\Base\Tenancy\Contracts\CarriesTenant;
 use App\Base\Tenancy\Contracts\TenantContext;
 use App\Base\Tenancy\Models\Tenant;
 use App\Core\Company\Models\Company;
@@ -30,6 +31,12 @@ use Tests\TestCase;
 pest()->extend(TestCase::class)
     ->use(RefreshDatabase::class)
     ->in('Feature', '../app/Core/*/Tests/Feature', '../app/Domains/*/Tests/Feature', '../app/Domains/*/*/Tests/Feature', '../app/Extensions/*/*/Tests/Feature');
+
+/** Assert the explicit tenant a queued job carries in its serialized command payload. */
+function assertJobCarriesTenant(CarriesTenant $job, int $tenantId): void
+{
+    expect($job->tenantId())->toBe($tenantId);
+}
 
 /**
  * Seed configured system roles and their capabilities for feature tests.
