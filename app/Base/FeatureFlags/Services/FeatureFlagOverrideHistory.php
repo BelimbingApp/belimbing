@@ -8,7 +8,6 @@ use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Tenancy\Contracts\TenantContext;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Collection;
 
 /**
  * Tenant-scoped override mutation history for the operator feature-flags page.
@@ -41,16 +40,34 @@ final class FeatureFlagOverrideHistory
     public function forTenant(int $tenantId, int $perFlag = self::PER_FLAG_LIMIT): array
     {
         $perFlag = max(1, $perFlag);
+        /** @var array<string, list<array{flag: string, actor: string, tenant_id: int, old_enabled: ?bool, new_enabled: ?bool, event: string, occurred_at: ?string}>> $grouped */
+        $grouped = [];
 
-        return $this->mutationsQuery()
+        /** @var list<AuditMutation> $mutations */
+        $mutations = $this->mutationsQuery()
             ->where('base_audit_mutations.tenant_id', $tenantId)
             ->orderByDesc('base_audit_mutations.occurred_at')
             ->orderByDesc('base_audit_mutations.id')
             ->get()
-            ->groupBy(fn (AuditMutation $mutation): string => (string) $mutation->subject_id)
-            ->map(fn (Collection $rows): array => $rows->take($perFlag)->map($this->entry(...))->values()->all())
-            ->sortKeys()
             ->all();
+
+        foreach ($mutations as $mutation) {
+            $flag = (string) $mutation->subject_id;
+            if ($flag === '') {
+                continue;
+            }
+            if (! isset($grouped[$flag])) {
+                $grouped[$flag] = [];
+            }
+            if (count($grouped[$flag]) >= $perFlag) {
+                continue;
+            }
+            $grouped[$flag][] = $this->entry($mutation);
+        }
+
+        ksort($grouped);
+
+        return $grouped;
     }
 
     private function mutationsQuery(): Builder
