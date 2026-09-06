@@ -36,7 +36,7 @@ PHP);
     return [$web, $api];
 }
 
-it('prints a stable JSON inventory of every route in a mounted domain module', function (): void {
+it('prints a stable inventory of every route in a mounted domain module', function (): void {
     [$web, $api] = writeDomainRouteInventoryFixture();
 
     try {
@@ -44,6 +44,30 @@ it('prints a stable JSON inventory of every route in a mounted domain module', f
             'web' => [$web],
             'api' => [$api],
         ]);
+
+        $this->artisan('blb:domain-routes')
+            ->expectsTable(
+                ['Domain', 'Module', 'Methods', 'URI', 'Name', 'Middleware'],
+                [
+                    [
+                        'ZzRouteInventory',
+                        'Fixture',
+                        'POST',
+                        'api/zz-route-inventory/employees',
+                        'zz-route-inventory.employee.store',
+                        'api, throttle:api',
+                    ],
+                    [
+                        'ZzRouteInventory',
+                        'Fixture',
+                        'GET|HEAD',
+                        'zz-route-inventory/employees/{employee}',
+                        'zz-route-inventory.employee.show',
+                        'web, auth, verified',
+                    ],
+                ],
+            )
+            ->assertSuccessful();
 
         $this->artisan('blb:domain-routes', ['--json' => true])
             ->expectsOutput(json_encode([
