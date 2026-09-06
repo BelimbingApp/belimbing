@@ -1,0 +1,54 @@
+name: land-bot-maintenance
+
+on:
+  workflow_run:
+    workflows: [tests, linter, security, AI Team mechanisms, independent review, composed-smoke]
+    types: [completed]
+
+permissions:
+  contents: read
+  pull-requests: read
+  checks: read
+
+concurrency:
+  group: land-bot-maintenance-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    outputs:
+      accepted: ${{ steps.bot_policy.outputs.accepted }}
+      matrix: ${{ steps.bot_policy.outputs.matrix }}
+    steps:
+      # workflow_run executes the trusted default-branch workflow. Never check
+      # out or execute candidate PR code, and never download its artifacts.
+      - uses: actions/checkout@v7 # NOSONAR — GitHub-maintained action
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - id: bot_policy
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: python3 scripts/ci/land-bot-maintenance.py discover --repo "$GITHUB_REPOSITORY" --sha "$HEAD_SHA"
+
+  land-bot-maintenance:
+    needs: policy
+    if: needs.policy.outputs.accepted == 'true'
+    strategy:
+      matrix: ${{ fromJSON(needs.policy.outputs.matrix) }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7 # NOSONAR — GitHub-maintained action
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Land only on a fresh policy and required-check pass
+        env:
+          GH_TOKEN: ${{ secrets.COVERAGE_BASELINE_RAISE_TOKEN }}
+          PR_NUMBER: ${{ matrix.pr }}
+          HEAD_SHA: ${{ matrix.sha }}
+        run: |
+          test -n "$GH_TOKEN"
+          python3 scripts/ci/land-bot-maintenance.py land --repo "$GITHUB_REPOSITORY" --pr "$PR_NUMBER" --sha "$HEAD_SHA"
