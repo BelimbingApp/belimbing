@@ -7,7 +7,4 @@
  *
  * @return array<string, string>
  */
-return [
-    // Composed People tree hit until the Attendance fix lands (BelimbingApp/blb-people#249).
-    'app/Domains/People/Attendance/Livewire/RosterEmployeeHistory.php' => 'Temporary: request()->query(employee_id) into Employee::find; tracked as BelimbingApp/blb-people#249',
-];
+return [];
