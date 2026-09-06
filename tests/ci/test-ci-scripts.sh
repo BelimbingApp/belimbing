@@ -347,11 +347,10 @@ assert 'continue-on-error:' not in job_block(future_job, 'notify-people-connecto
 )
 PY
 
-# Blocked-By sweep must use a fine-grained cross-repo token so qualified
-# BelimbingApp/blb-people and blb-people-connector blockers can resolve (#606).
+# Blocked-By sweep mints a GitHub App installation token so qualified
+# BelimbingApp/blb-people and blb-people-connector blockers can resolve (#621).
 # Default github.token cannot read other repositories; keep the job's
-# permissions block for checkout and document intent, but wire GITHUB_TOKEN
-# for the sweep step to AI_TEAM_BLOCKED_BY_SWEEP_TOKEN.
+# permissions block for checkout, and never wire a shared user PAT.
 python3 - <<'PY'
 from pathlib import Path
 import re
@@ -371,17 +370,22 @@ sweep = job_block(workflow, 'sweep')
 required = (
     'permissions:\n  contents: read',
     'permissions:\n      contents: read\n      issues: write',
-    'AI_TEAM_BLOCKED_BY_SWEEP_TOKEN: ${{ secrets.AI_TEAM_BLOCKED_BY_SWEEP_TOKEN }}',
-    'GITHUB_TOKEN: ${{ secrets.AI_TEAM_BLOCKED_BY_SWEEP_TOKEN }}',
+    'AI_TEAM_GITHUB_APP_ID: ${{ secrets.AI_TEAM_GITHUB_APP_ID }}',
+    'AI_TEAM_GITHUB_APP_PRIVATE_KEY: ${{ secrets.AI_TEAM_GITHUB_APP_PRIVATE_KEY }}',
+    'uses: actions/create-github-app-token@v2',
+    'GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}',
     'GITHUB_REPOSITORY: ${{ github.repository }}',
     'run: python3 docs/ai-team/scripts/blocked_by_sweep.py',
-    'if [[ -z "$AI_TEAM_BLOCKED_BY_SWEEP_TOKEN" ]]; then',
+    'if [[ -z "$AI_TEAM_GITHUB_APP_ID" || -z "$AI_TEAM_GITHUB_APP_PRIVATE_KEY" ]]; then',
 )
 for contract in required:
     assert contract in workflow, f'missing blocked-by sweep contract: {contract!r}'
 
 assert 'GITHUB_TOKEN: ${{ github.token }}' not in sweep, (
-    'sweep step must not use default github.token; cross-repo blockers need AI_TEAM_BLOCKED_BY_SWEEP_TOKEN'
+    'sweep step must not use default github.token; mint an App installation token (#621)'
+)
+assert 'AI_TEAM_BLOCKED_BY_SWEEP_TOKEN' not in workflow, (
+    'retired user PAT secret must not remain in the sweep workflow'
 )
 assert 'pull_request:' not in workflow, 'blocked-by sweep must stay schedule/dispatch only'
 PY
