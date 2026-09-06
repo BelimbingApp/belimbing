@@ -22,7 +22,7 @@ keep the refusal visible and ask the steward to reconcile it at the source.
 
 ## GitHub API rate-limit playbook
 
-On 2026-09-06, the shared account exhausted its GraphQL primary quota. For example, [Connector #191](https://github.com/BelimbingApp/blb-people-connector/pull/191) had an exact-head acceptance and green checks, but the landing script could not read the PR. The underlying error was `API rate limit already exceeded for user ID`; the script's shorter `cannot read PR` message was not a review rejection or an operational halt. The direct GraphQL response reported `remaining: 0` and reset at `2026-09-06T01:58:05Z` (09:58:05 Asia/Kuala_Lumpur). That is historical evidence, not a reusable reset schedule. A REST rate-limit summary looked unused during the same incident, so it did not establish that GraphQL reads could proceed.
+On 2026-09-06, the shared account exhausted its GraphQL primary quota. For example, [Connector #191](https://github.com/BelimbingApp/blb-people-connector/pull/191) had an exact-head acceptance and green checks, but the landing script could not read the PR. The underlying error was `API rate limit already exceeded for user ID`; the script's shorter `cannot read PR` message was not a review rejection or an operational halt. The direct GraphQL response reported `remaining: 0` and reset at `2026-09-06T01:58:05Z` (09:58:05 Asia/Kuala_Lumpur). That is historical evidence, not a reusable reset schedule. The incident query selected both `.resources.core` and `.resources.graphql`: the latter reported 5,000 remaining while the direct GraphQL response reported zero. This was a measured disagreement, not a comparison with the REST core bucket; do not infer the cause from the differing counters.
 
 ### Identify the exhausted API
 
@@ -38,13 +38,21 @@ The following command paths were checked with GitHub CLI **2.74.1**. High-level 
 | `gh api repos/BelimbingApp/belimbing/pulls/611` | REST | Read-only trace used `GET /repos/BelimbingApp/belimbing/pulls/611`. |
 | `gh api graphql` | GraphQL | Read-only `rateLimit` trace used `POST /graphql`. The [CLI manual](https://cli.github.com/manual/gh_api) defines the endpoint selection; `gh api` is not inherently REST. |
 
-Use the failed response's rate-limit headers when available. If they were lost by a wrapper, make one small diagnostic query with the same host and authentication context:
+Use the failed response's rate-limit headers when available. If they were lost by a wrapper, the first diagnostic is the REST summary, which GitHub documents as not counting against the REST API limit:
+
+```bash
+gh api rate_limit --jq '.resources.graphql'
+```
+
+Read the `graphql` resource, not `core`: they describe separate limits. Its `reset` is UTC epoch seconds. The [REST endpoint documentation](https://docs.github.com/en/rest/rate-limit/rate-limit) defines both the resource categories and the endpoint's exemption. A healthy core counter is never evidence of GraphQL capacity. This command was verified read-only; do not burn quota to manufacture an outage.
+
+If that summary is unavailable or disagrees with an actual GraphQL failure, preserve the evidence and check that host and authentication context match. Do not reinterpret the failure as spare capacity. Only when the reset cannot be established from the response or REST summary, try one minimal GraphQL fallback:
 
 ```bash
 gh api graphql -f query='query { rateLimit { remaining resetAt used } }'
 ```
 
-Use its `resetAt` for an exhausted primary quota. Do not repeatedly ask for quota or run a checks watch while waiting. For a secondary-limit response, honor `retry-after`; if absent, GitHub directs a wait of at least one minute and increasing backoff on repeated failures. These are distinct conditions: the incident's zero remaining points demonstrated primary exhaustion, regardless of a helper comment calling it secondary. See [GitHub's rate-limit guidance](https://docs.github.com/en/graphql/overview/rate-limits-and-query-limits-for-the-graphql-api).
+The fallback itself may fail; a failure is not proof of any remaining quota. Once a zero counter and reset time are known, wait until that time rather than probing again. GraphQL `resetAt` is an ISO timestamp; REST `reset` is epoch seconds. Do not repeatedly ask for quota or run a checks watch while waiting. For a secondary-limit response, honor `retry-after`; if absent, GitHub directs a wait of at least one minute and increasing backoff on repeated failures. These are distinct conditions: the incident's zero remaining points demonstrated primary exhaustion, regardless of a helper comment calling it secondary. See [GitHub's rate-limit guidance](https://docs.github.com/en/graphql/overview/rate-limits-and-query-limits-for-the-graphql-api).
 
 ### Continue safely and resume once
 
