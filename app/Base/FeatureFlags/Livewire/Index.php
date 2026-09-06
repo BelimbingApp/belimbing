@@ -66,16 +66,18 @@ class Index extends Component
         $needle = strtolower(trim($this->search));
         $allDeclaredRows = $declarations->forCurrentTenant();
         $hasDeclarationConflicts = collect($allDeclaredRows)->contains('conflict', true);
-        $declaredRows = collect($allDeclaredRows)
-            ->when($needle !== '', fn ($collection) => $collection->filter(
+        $declaredRows = collect($allDeclaredRows);
+        if ($needle !== '') {
+            $declaredRows = $declaredRows->filter(
                 fn (array $row): bool => str_contains(strtolower($row['flag']), $needle)
                     || collect($row['declarations'])->contains(
                         fn (array $declaration): bool => str_contains(strtolower($declaration['module']), $needle)
                             || str_contains(strtolower($declaration['description']), $needle),
                     ),
-            ))
-            ->values()
-            ->all();
+            );
+        }
+
+        $declaredRows = $declaredRows->values()->all();
         $rows = collect($declaredRows)
             ->reject(fn (array $row): bool => $row['conflict'])
             ->map(function (array $row): array {
