@@ -4,6 +4,8 @@ set -euo pipefail
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 bash -n scripts/ci/changed-authorable-php.sh scripts/ci/extension-conformance.sh scripts/ci/mount-guard.sh
+python3 -m py_compile scripts/ci/dependency-audit.py
+python3 -m json.tool docs/ci/dependency-audit-policy.json >/dev/null
 python3 -m json.tool scripts/ci/domain-repos.json >/dev/null
 
 # Database feature tests prove the behaviour most exposed to dialect, schema,
