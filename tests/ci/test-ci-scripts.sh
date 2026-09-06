@@ -3,6 +3,7 @@ set -euo pipefail
 
 root=$(git rev-parse --show-toplevel)
 cd "$root"
+python3 tests/ci/test-domain-pins.py
 bash -n scripts/ci/changed-authorable-php.sh scripts/ci/extension-conformance.sh scripts/ci/mount-guard.sh scripts/ci/phpstan-baseline-gate.sh scripts/ci/record-pest-timing.sh
 python3 -m py_compile scripts/ci/aggregate-pest-timing.py
 
@@ -411,7 +412,80 @@ if command -v php >/dev/null; then
         echo 'domain-ci accepted an invalid repository slug' >&2
         exit 1
     fi
-    php scripts/ci/validate-php-syntax.php scripts/ci/domain-ci.php scripts/ci/compose-domain.php scripts/ci/filter-domain-coverage-clover.php scripts/ci/validate-extension-manifest.php
+    php scripts/ci/validate-php-syntax.php scripts/ci/domain-ci.php scripts/ci/compose-domain.php scripts/ci/filter-domain-coverage-clover.php scripts/ci/validate-extension-manifest.php scripts/ci/composed-smoke.php
+
+    # The composed-application smoke test (#600) judges a boot against a
+    # checked-in surface; without a network only its migration scan and the
+    # surface/descriptor pin agreement can be proven here. The workflow
+    # composed-smoke.yml runs the full boot on every PR.
+    php scripts/ci/composed-smoke.php --scan-only --root=tests/Fixtures/ci/composed/clean 2>/dev/null
+    if php scripts/ci/composed-smoke.php --scan-only --root=tests/Fixtures/ci/composed/duplicate >/dev/null 2>&1; then
+        echo 'composed-smoke accepted a migration name shipped by two modules' >&2; exit 1
+    fi
+    python3 - <<'PY'
+import json
+surface = json.load(open('scripts/ci/composed-surface.json'))
+descriptor = json.load(open('scripts/ci/domain-repos.json'))
+for domain, pin in surface['pins'].items():
+    assert descriptor['domains'][domain]['ref'] == pin, f'composed-surface.json pins {domain} at {pin}, descriptor at {descriptor["domains"][domain]["ref"]}'
+assert surface['domain_route_count'] == len(surface['route_names']) > 0 and surface['route_names'] == sorted(set(surface['route_names'])), 'composed-surface.json route names must be unique and sorted'
+PY
+
+    # Every surface guard, driven against a throwaway platform root whose two
+    # Domain mounts are one-commit git repositories, with --routes-json standing in
+    # for the boot (documented injectable harness for #600 review). Each mutation must turn the smoke red on its own.
+    smoke_root=$(mktemp -d)
+    trap 'rm -rf "$smoke_root"' EXIT
+    mkdir -p "$smoke_root/app/Domains" "$smoke_root/scripts/ci"
+    declare -A smoke_sha
+    for mount in People PeopleConnector; do
+        git -C "$smoke_root" init -q "app/Domains/$mount"
+        git -C "$smoke_root/app/Domains/$mount" -c user.name=smoke -c user.email=smoke@example.test commit -q --allow-empty -m "$mount"
+        smoke_sha[$mount]=$(git -C "$smoke_root/app/Domains/$mount" rev-parse HEAD)
+    done
+    smoke_descriptor() {
+        python3 - "$smoke_root/scripts/ci/domain-repos.json" "$1" "$2" <<'PY'
+import json, sys
+json.dump({"domains": {
+    "people": {"repo": "BelimbingApp/blb-people", "path": "app/Domains/People", "ref": sys.argv[2]},
+    "people-connector": {"repo": "BelimbingApp/blb-people-connector", "path": "app/Domains/PeopleConnector", "ref": sys.argv[3]},
+}}, open(sys.argv[1], "w"))
+PY
+    }
+    smoke_surface() {
+        python3 - "$smoke_root/scripts/ci/composed-surface.json" "$1" "$2" "$3" "$4" <<'PY'
+import json, sys
+json.dump({"pins": {"people": sys.argv[2], "people-connector": sys.argv[3]}, "domain_route_count": int(sys.argv[4]), "route_names": sys.argv[5].split(",")}, open(sys.argv[1], "w"))
+PY
+    }
+    # Two Domain routes, one platform route and one unnamed route: only the Domain routes count.
+    printf '[{"name":"people.index","uri":"people"},{"name":"admin.integration.index","uri":"admin/integration"},{"name":"admin.system.info.index","uri":"admin/system/info"},{"name":null,"uri":"livewire/update"}]' > "$smoke_root/routes.json"
+    smoke() {
+        php scripts/ci/composed-smoke.php --root="$smoke_root" --routes-json="$smoke_root/routes.json" \
+            --registry="$smoke_root/scripts/ci/domain-repos.json" --surface="$smoke_root/scripts/ci/composed-surface.json" "$@"
+    }
+    smoke_descriptor "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}"
+    smoke_surface "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}" 2 'admin.integration.index,people.index'
+    smoke 2>/dev/null
+    smoke_surface "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}" 2 'admin.integration.index,people.index,people.missing'
+    if smoke >/dev/null 2>&1; then
+        echo 'composed-smoke accepted a table missing an expected route name' >&2; exit 1
+    fi
+    smoke_surface "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}" 3 'admin.integration.index,people.index'
+    if smoke >/dev/null 2>&1; then
+        echo 'composed-smoke accepted a domain route count that does not match the surface' >&2; exit 1
+    fi
+    smoke_surface "${smoke_sha[People]}" 0123456789abcdef0123456789abcdef01234567 2 'admin.integration.index,people.index'
+    if smoke >/dev/null 2>&1; then
+        echo 'composed-smoke accepted a surface whose pins disagree with the descriptor' >&2; exit 1
+    fi
+    smoke_descriptor 0123456789abcdef0123456789abcdef01234567 "${smoke_sha[PeopleConnector]}"
+    smoke_surface 0123456789abcdef0123456789abcdef01234567 "${smoke_sha[PeopleConnector]}" 2 'admin.integration.index,people.index'
+    if smoke >/dev/null 2>&1; then
+        echo 'composed-smoke accepted a mount whose HEAD is not the pinned ref' >&2; exit 1
+    fi
+    rm -rf "$smoke_root"
+    trap - EXIT
     php scripts/ci/validate-extension-manifest.php tests/Fixtures/ci/extensions/conventional/Example/composer.json
     if php scripts/ci/validate-extension-manifest.php tests/Fixtures/ci/extensions/invalid/Example/composer.json >/dev/null 2>&1; then
         echo 'invalid Extension manifest was accepted' >&2; exit 1

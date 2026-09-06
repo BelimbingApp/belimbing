@@ -17,6 +17,18 @@ const step = (name: string) => {
     return found;
 };
 
+test("composed route middleware audit gates SQLite before Domain Pest", () => {
+    const name = "Audit composed Domain route middleware";
+    const audit = step(name);
+    expect(audit.run).toBe("php artisan blb:domain-routes --audit");
+    expect(audit.if).toBeUndefined();
+    expect(audit["continue-on-error"]).toBeUndefined();
+    const names = sqliteSteps().map((entry: any) => entry.name);
+    expect(names.indexOf("Run Pint")).toBeLessThan(names.indexOf(name));
+    expect(names.indexOf(name)).toBeLessThan(names.indexOf("Run Tests"));
+    expect(workflow.jobs["postgres-mirror"].steps.map((entry: any) => entry.name)).not.toContain(name);
+});
+
 test("composed feature flag ownership runs after Pint and before Domain Pest", () => {
     const name = "Check composed feature flag ownership";
     const scan = step(name);

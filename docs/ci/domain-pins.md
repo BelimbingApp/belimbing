@@ -51,6 +51,16 @@ used by a run: inspect the caller's `platform-ref` and materialization record.
    disjoint branches merely because the other PR landed; follow the
    [adopter overlap rule](../ai-team-adopter.md).
 
+## Validate upstream pins
+
+`python3 scripts/ci/validate-domain-pins.py` checks every Domain in the descriptor
+against GitHub. The quality job supplies `GITHUB_TOKEN`. Missing/inaccessible
+commits, invalid descriptors, and API failures refuse the check; API unavailability
+is not evidence that a pin is valid. A pin more than 50 commits behind `main`
+prints a warning without failing. The count is the comparison's commits unique
+to main, not a count inferred from local history. The validator never advances
+pins. Follow the reviewed pin-update flow above to address a warning.
+
 ## Composition failures and the missing-check exception
 
 [PR #570](https://github.com/BelimbingApp/belimbing/pull/570) refuses duplicate
