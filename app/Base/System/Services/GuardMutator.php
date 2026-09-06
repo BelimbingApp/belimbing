@@ -70,7 +70,7 @@ final class GuardMutator
     /**
      * Validate every entry, then mutate/restore each in sequence.
      *
-     * @param  list<array{file: string, pattern: string, test: string}>  $entries
+     * @param  list<array<string, mixed>>  $entries
      * @return array{
      *     results: list<array{
      *         file: string,
@@ -91,19 +91,18 @@ final class GuardMutator
             throw new GuardMutationException('Batch requires at least one {file, pattern, test} entry.');
         }
 
+        $normalized = [];
         foreach ($entries as $index => $entry) {
-            $label = 'batch entry '.($index + 1);
-            foreach (['file', 'pattern', 'test'] as $key) {
-                if (! is_array($entry) || ! isset($entry[$key]) || ! is_string($entry[$key]) || trim($entry[$key]) === '') {
-                    throw new GuardMutationException("{$label} is missing a non-empty \"{$key}\" string.");
-                }
-            }
+            $normalized[] = $this->normalizeBatchEntry($entry, $index + 1);
+        }
+
+        foreach ($normalized as $entry) {
             $this->assertReadableFile($entry['test'], 'test');
             $this->assertUniqueMatch($entry['file'], $entry['pattern']);
         }
 
         $results = [];
-        foreach ($entries as $entry) {
+        foreach ($normalized as $entry) {
             $results[] = $this->run($entry['file'], $entry['pattern'], $entry['test']);
         }
 
@@ -111,6 +110,28 @@ final class GuardMutator
             'results' => $results,
             'markdown' => $this->formatBatchMarkdown($results),
         ];
+    }
+
+    /**
+     * @return array{file: string, pattern: string, test: string}
+     */
+    private function normalizeBatchEntry(mixed $entry, int $position): array
+    {
+        $label = 'batch entry '.$position;
+        if (! is_array($entry)) {
+            throw new GuardMutationException("{$label} must be an object with file, pattern, and test.");
+        }
+
+        $normalized = [];
+        foreach (['file', 'pattern', 'test'] as $key) {
+            $value = $entry[$key] ?? null;
+            if (! is_string($value) || trim($value) === '') {
+                throw new GuardMutationException("{$label} is missing a non-empty \"{$key}\" string.");
+            }
+            $normalized[$key] = $value;
+        }
+
+        return $normalized;
     }
 
     /**
