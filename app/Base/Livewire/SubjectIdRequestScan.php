@@ -34,10 +34,39 @@ final class SubjectIdRequestScan
     ];
 
     /** @var list<string> */
+    private const REQUEST_READERS = [
+        'input',
+        'query',
+        'get',
+        'post',
+        'integer',
+        'string',
+        'float',
+        'boolean',
+        'route',
+    ];
+
+    /** @var list<string> */
     private const SEAM_MARKERS = [
         'ResolvesWorkforceSubjects',
         'ReadsWorkforceDirectory',
         'WorkforceSubject',
+    ];
+
+    /** @var list<string> */
+    private const QUERY_MARKERS = [
+        '::query(',
+        '::find(',
+        '::findOrFail(',
+        '::where(',
+        '::whereKey(',
+        '::firstWhere(',
+        '->where(',
+        '->whereKey(',
+        '->find(',
+        '->findOrFail(',
+        'DB::table(',
+        'DB::select(',
     ];
 
     /**
@@ -51,17 +80,6 @@ final class SubjectIdRequestScan
         }
 
         $allowlist = $this->allowlist();
-        $paramAlternation = implode('|', array_map(
-            static fn (string $name): string => preg_quote($name, '/'),
-            self::SUBJECT_PARAM_NAMES,
-        ));
-
-        // request()->input('employee_id') / $request->query("stableId") /
-        // request()->route('employee_entity_id') / ->parameter('subject_id')
-        $requestRead = '/(?:\$request|request\(\))\s*(?:->\s*(?:input|query|get|post|integer|string|float|boolean|route)\s*\(\s*[\'"](?:'.$paramAlternation.')[\'"]|\s*->\s*route\s*\(\s*\)\s*->\s*parameter\s*\(\s*[\'"](?:'.$paramAlternation.')[\'"])/';
-
-        $queryUse = '/(?:::\s*(?:query|find|findOrFail|where|whereKey|firstWhere)\s*\(|->\s*(?:where|whereKey|find|findOrFail)\s*\(|DB\s*::\s*(?:table|select)\s*\()/';
-
         $violations = [];
         $basePath = str_replace('\\', '/', base_path()).'/';
 
@@ -74,21 +92,14 @@ final class SubjectIdRequestScan
             }
 
             $contents = $file->getContents();
-            if (preg_match($requestRead, $contents, $match) !== 1) {
-                continue;
-            }
-
-            if ($this->usesSubjectSeam($contents)) {
-                continue;
-            }
-
-            if (preg_match($queryUse, $contents) !== 1) {
+            $evidence = $this->subjectRequestReadEvidence($contents);
+            if ($evidence === null || $this->usesSubjectSeam($contents) || ! $this->usesQuery($contents)) {
                 continue;
             }
 
             $violations[] = [
                 'path' => $relative,
-                'evidence' => trim($match[0]),
+                'evidence' => $evidence,
             ];
         }
 
@@ -100,15 +111,48 @@ final class SubjectIdRequestScan
      */
     public function allowlist(): array
     {
-        /** @var array<string, string> $entries */
-        $entries = require __DIR__.'/Config/subject_id_request_allowlist.php';
+        // Config files that return arrays use require (not require_once) per AGENTS.md.
+        return require __DIR__.'/Config/subject_id_request_allowlist.php'; // NOSONAR
+    }
 
-        return $entries;
+    private function subjectRequestReadEvidence(string $contents): ?string
+    {
+        foreach (self::SUBJECT_PARAM_NAMES as $name) {
+            foreach (["'".$name."'", '"'.$name.'"'] as $literal) {
+                foreach (self::REQUEST_READERS as $reader) {
+                    $needle = '->'.$reader.'('.$literal;
+                    if (str_contains($contents, 'request()') && str_contains($contents, $needle)) {
+                        return 'request()'.$needle;
+                    }
+                    if (str_contains($contents, '$request') && str_contains($contents, $needle)) {
+                        return '$request'.$needle;
+                    }
+                }
+
+                $parameterNeedle = '->parameter('.$literal;
+                if (str_contains($contents, '->route()') && str_contains($contents, $parameterNeedle)) {
+                    return '->route()'.$parameterNeedle;
+                }
+            }
+        }
+
+        return null;
     }
 
     private function usesSubjectSeam(string $contents): bool
     {
         foreach (self::SEAM_MARKERS as $marker) {
+            if (str_contains($contents, $marker)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function usesQuery(string $contents): bool
+    {
+        foreach (self::QUERY_MARKERS as $marker) {
             if (str_contains($contents, $marker)) {
                 return true;
             }
