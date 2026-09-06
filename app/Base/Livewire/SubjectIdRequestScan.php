@@ -119,6 +119,13 @@ final class SubjectIdRequestScan
     {
         foreach (self::SUBJECT_PARAM_NAMES as $name) {
             foreach (["'".$name."'", '"'.$name.'"'] as $literal) {
+                // Laravel's request() helper also accepts the key as its first
+                // argument: request('employee_id') never touches ->input().
+                $directHelper = 'request('.$literal;
+                if (str_contains($contents, $directHelper)) {
+                    return $directHelper;
+                }
+
                 foreach (self::REQUEST_READERS as $reader) {
                     $needle = '->'.$reader.'('.$literal;
                     if (str_contains($contents, 'request()') && str_contains($contents, $needle)) {
@@ -133,6 +140,27 @@ final class SubjectIdRequestScan
                 if (str_contains($contents, '->route()') && str_contains($contents, $parameterNeedle)) {
                     return '->route()'.$parameterNeedle;
                 }
+            }
+        }
+
+        return $this->mountSubjectParamEvidence($contents);
+    }
+
+    /**
+     * Livewire route/query bindings arrive as mount() parameters. A subject-
+     * shaped mount argument that later reaches a query is the same seam miss
+     * as reading request()->input() — lexical only.
+     */
+    private function mountSubjectParamEvidence(string $contents): ?string
+    {
+        if (! preg_match('/function\s+mount\s*\(([^)]*)\)/', $contents, $matches)) {
+            return null;
+        }
+
+        $params = $matches[1];
+        foreach (self::SUBJECT_PARAM_NAMES as $name) {
+            if (preg_match('/\$'.preg_quote($name, '/').'\b/', $params) === 1) {
+                return 'mount(...$'.$name.'...)';
             }
         }
 
