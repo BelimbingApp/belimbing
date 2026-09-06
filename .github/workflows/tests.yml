@@ -201,7 +201,8 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     environment: Testing
-    # contents + pull-requests: open an auto-merge PR to raise the baseline (#629).
+    # contents + pull-requests: open an auto-merge PR to raise the baseline (#629)
+    # and upsert the timing/coverage summary comment on PRs (#670).
     # Protect Main refuses direct pushes; a PR is the only legal raise path.
     # Workflow-level contents:read still covers every other job.
     permissions:
@@ -227,6 +228,9 @@ jobs:
 
       - name: Publish per-run timing summary
         run: python3 scripts/ci/aggregate-pest-timing.py timing >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Enforce Pest timing baseline
+        run: python3 scripts/ci/pest-timing-ratchet.py timing
 
       - name: Download Unit coverage
         uses: actions/download-artifact@v8
@@ -260,10 +264,26 @@ jobs:
             coverage-unit.xml coverage-feature-a.xml coverage-feature-b.xml coverage-modules.xml \
             --baseline tests/ci/platform-coverage-baseline.json
 
+      - name: Upsert PR timing and coverage comment
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          python3 scripts/ci/upsert-pr-ci-summary-comment.py \
+            --timing-dir timing \
+            --baseline tests/ci/platform-coverage-baseline.json \
+            coverage-unit.xml coverage-feature-a.xml coverage-feature-b.xml coverage-modules.xml
+
+      # Org policy refuses GITHUB_TOKEN createPullRequest (#686). Push stays on
+      # github.token; PR open/label/auto-merge use COVERAGE_BASELINE_RAISE_TOKEN.
+      # paths-ignore on push keeps the merge from re-entering this workflow so
+      # composed required check names stay green on main.
       - name: Raise platform coverage baseline on main
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
+          COVERAGE_BASELINE_RAISE_TOKEN: ${{ secrets.COVERAGE_BASELINE_RAISE_TOKEN }}
         run: |
           reports=(coverage-unit.xml coverage-feature-a.xml coverage-feature-b.xml coverage-modules.xml)
           python3 scripts/ci/platform-coverage-ratchet.py update \
@@ -272,6 +292,10 @@ jobs:
           if git diff --quiet -- tests/ci/platform-coverage-baseline.json; then
             echo 'Coverage baseline unchanged.'
             exit 0
+          fi
+          if [[ -z "${COVERAGE_BASELINE_RAISE_TOKEN:-}" ]]; then
+            echo '::error::COVERAGE_BASELINE_RAISE_TOKEN is required to open the baseline raise PR (org disables Actions PR creation with GITHUB_TOKEN).'
+            exit 1
           fi
           # Protect Main requires a pull_request; do not push to main. Raise via a
           # dedicated branch/PR with auto-merge, in a disposable worktree so this
@@ -288,11 +312,22 @@ jobs:
           git -C "$worktree" commit -m 'ci: raise platform coverage baseline'
           git -C "$worktree" push --force-with-lease origin "HEAD:refs/heads/$branch"
           git worktree remove "$worktree"
+          export GH_TOKEN="$COVERAGE_BASELINE_RAISE_TOKEN"
           existing=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$branch" --base main --state open --json number --jq '.[0].number // empty')
+          body=$(printf '%s\n' \
+            'AI-Team-Lane-Issue: none' \
+            '' \
+            'Automated raise of `tests/ci/platform-coverage-baseline.json` after main measured a higher line rate (#629 / #686).' \
+            'The file is the only change; push `paths-ignore` keeps the merge commit from re-entering this workflow so composed required checks stay green on main.')
           if [[ -z "$existing" ]]; then
             existing=$(gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
               --title 'ci: raise platform coverage baseline' \
-              --body "$(printf '%s\n' 'Automated raise of `tests/ci/platform-coverage-baseline.json` after main measured a higher line rate (#629).' 'The file is the only change; `paths-ignore` keeps the merge commit from re-entering this workflow.')")
+              --label task:ready \
+              --body "$body")
+            existing="${existing##*/}"
+          else
+            gh pr edit "$existing" --repo "$GITHUB_REPOSITORY" --add-label task:ready >/dev/null
+            gh pr edit "$existing" --repo "$GITHUB_REPOSITORY" --body "$body" >/dev/null
           fi
           gh pr merge "$existing" --repo "$GITHUB_REPOSITORY" --auto --squash
           echo "Opened/updated baseline raise PR #$existing with auto-merge."
