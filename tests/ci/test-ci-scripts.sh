@@ -55,7 +55,90 @@ CHECK
 rm -rf "$ansi_fixture"
 trap - EXIT
 
+python3 -m py_compile scripts/ci/dependency-audit.py
+python3 -m json.tool docs/ci/dependency-audit-policy.json >/dev/null
 python3 -m json.tool scripts/ci/domain-repos.json >/dev/null
+
+# Feature shards must stay disjoint and cover every first-level Feature
+# directory so CI cannot silently drop a folder when a new one lands (#576).
+python3 -m json.tool scripts/ci/platform-feature-shards.json >/dev/null
+python3 scripts/ci/platform-feature-shards.py --validate-only >/dev/null
+grep -q 'platform-feature-shards.py' .github/workflows/tests.yml
+
+# Feature shard membership must fail closed, not merely parse (#576).
+shard_root="$(mktemp -d)"
+mkdir -p "$shard_root/tests/Feature/Alpha" "$shard_root/tests/Feature/Beta" "$shard_root/tests/Feature/Gamma"
+touch "$shard_root/tests/Feature/Alpha/AlphaTest.php" "$shard_root/tests/Feature/Beta/BetaTest.php" "$shard_root/tests/Feature/Gamma/GammaTest.php"
+shard_file="$shard_root/shards.json"
+
+printf '{"shards":{"a":["Alpha","Beta"],"b":["Gamma"]}}' > "$shard_file"
+if ! python3 scripts/ci/platform-feature-shards.py --root "$shard_root" --shards-file "$shard_file" --validate-only >/dev/null; then
+    echo 'Feature shard validator rejected a complete, disjoint layout' >&2; exit 1
+fi
+
+printf '{"shards":{"a":["Alpha"],"b":["Beta"]}}' > "$shard_file"
+if python3 scripts/ci/platform-feature-shards.py --root "$shard_root" --shards-file "$shard_file" --validate-only >/dev/null 2>&1; then
+    echo 'Feature shard validator accepted an unsharded directory' >&2; exit 1
+fi
+
+printf '{"shards":{"a":["Alpha","Beta"],"b":["Beta","Gamma"]}}' > "$shard_file"
+if python3 scripts/ci/platform-feature-shards.py --root "$shard_root" --shards-file "$shard_file" --validate-only >/dev/null 2>&1; then
+    echo 'Feature shard validator accepted overlapping shards' >&2; exit 1
+fi
+
+printf '{"shards":{"a":["Alpha","Beta"],"b":["Gamma"]}}' > "$shard_file"
+touch "$shard_root/tests/Feature/LooseTest.php"
+if python3 scripts/ci/platform-feature-shards.py --root "$shard_root" --shards-file "$shard_file" --validate-only >/dev/null 2>&1; then
+    echo 'Feature shard validator accepted a loose Feature test file' >&2; exit 1
+fi
+rm -rf "$shard_root"
+
+# Dependency audit policy (#617): expired allowlist entries fail closed; a
+# non-expired policy with empty audit reports passes. Live composer/bun are
+# skipped — fixtures only.
+dependency_audit=scripts/ci/dependency-audit.py
+empty_composer=tests/ci/fixtures/dependency-audit/empty-composer.json
+empty_bun=tests/ci/fixtures/dependency-audit/empty-bun.json
+if python3 "$dependency_audit" \
+    --policy tests/ci/fixtures/dependency-audit/policy-expired.json \
+    --composer-report "$empty_composer" \
+    --bun-report "$empty_bun" \
+    --today 2026-09-06 \
+    --skip-live >/dev/null; then
+    echo 'dependency-audit accepted an expired allowlist entry' >&2
+    exit 1
+fi
+python3 "$dependency_audit" \
+    --policy tests/ci/fixtures/dependency-audit/policy-ok.json \
+    --composer-report "$empty_composer" \
+    --bun-report "$empty_bun" \
+    --today 2026-09-06 \
+    --skip-live >/dev/null
+# A reported advisory at or above min_severity fails; an unexpired allowlist
+# entry for its CVE clears it; a finding below the threshold is ignored.
+if python3 "$dependency_audit" \
+    --policy tests/ci/fixtures/dependency-audit/policy-ok.json \
+    --composer-report tests/ci/fixtures/dependency-audit/composer-high.json \
+    --bun-report "$empty_bun" \
+    --today 2026-09-06 \
+    --skip-live >/dev/null 2>&1; then
+    echo 'dependency-audit passed with a high advisory and no allowlist' >&2
+    exit 1
+fi
+python3 "$dependency_audit" \
+    --policy tests/ci/fixtures/dependency-audit/policy-allow-high.json \
+    --composer-report tests/ci/fixtures/dependency-audit/composer-high.json \
+    --bun-report "$empty_bun" \
+    --today 2026-09-06 \
+    --skip-live >/dev/null
+python3 "$dependency_audit" \
+    --policy tests/ci/fixtures/dependency-audit/policy-high-threshold.json \
+    --composer-report tests/ci/fixtures/dependency-audit/composer-low.json \
+    --bun-report "$empty_bun" \
+    --today 2026-09-06 \
+    --skip-live >/dev/null
+grep -q 'dependency-audit.py' .github/workflows/security.yml
+grep -q 'docs/ci/dependency-audit-policy.json' docs/security-advisories.md
 
 # Database feature tests prove the behaviour most exposed to dialect, schema,
 # and constraint differences. Their PostgreSQL coverage is discovered, not
@@ -302,7 +385,7 @@ if command -v php >/dev/null; then
         echo 'domain-ci accepted an invalid repository slug' >&2
         exit 1
     fi
-    php scripts/ci/validate-php-syntax.php scripts/ci/domain-ci.php scripts/ci/compose-domain.php scripts/ci/validate-extension-manifest.php
+    php scripts/ci/validate-php-syntax.php scripts/ci/domain-ci.php scripts/ci/compose-domain.php scripts/ci/filter-domain-coverage-clover.php scripts/ci/validate-extension-manifest.php
     php scripts/ci/validate-extension-manifest.php tests/Fixtures/ci/extensions/conventional/Example/composer.json
     if php scripts/ci/validate-extension-manifest.php tests/Fixtures/ci/extensions/invalid/Example/composer.json >/dev/null 2>&1; then
         echo 'invalid Extension manifest was accepted' >&2; exit 1

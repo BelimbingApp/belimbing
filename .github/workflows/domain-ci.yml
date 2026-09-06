@@ -220,6 +220,42 @@ jobs:
       - name: Run Tests
         run: ./vendor/bin/pest "$DOMAIN_PATH" --coverage-clover=coverage.xml
 
+      - name: Ratchet Livewire action debt
+        run: |
+          domain_name="${DOMAIN_PATH##*/}"
+          domain_id="$DOMAIN_ID"
+          if [ -z "$domain_id" ]; then
+            domain_id=$(jq -r --arg path "$DOMAIN_PATH" '
+              .domains | to_entries[] | select(.value.path == $path) | .key
+            ' scripts/ci/domain-repos.json)
+          fi
+          if [ -z "$domain_id" ] || [ "$domain_id" = "null" ]; then
+            echo "::error::Cannot resolve domain-id for Livewire action baseline (DOMAIN_PATH=$DOMAIN_PATH)"
+            exit 1
+          fi
+          baseline="tests/ci/livewire-actions-baselines/${domain_id}.json"
+          if [ ! -f "$baseline" ]; then
+            echo "::error::Missing Livewire action baseline $baseline for $domain_id"
+            exit 1
+          fi
+          php artisan blb:livewire-actions --domain="$domain_name" --check-baseline="$baseline"
+
+      # Domains are nested checkouts ignored by the platform .gitignore
+      # (/app/Domains/*). Sonar's SCM exclusion would otherwise index zero
+      # files and silently drop coverage — including Skills/Training after
+      # they relocated from the connector key to People (#584).
+      - name: Prove domain sources are present for Sonar
+        run: |
+          test -n "$DOMAIN_PATH"
+          test -d "$DOMAIN_PATH"
+          if ! find "$DOMAIN_PATH" -type f -name '*.php' -print -quit | grep -q .; then
+            echo "::error::DOMAIN_PATH $DOMAIN_PATH has no PHP sources for Sonar"
+            exit 1
+          fi
+
+      - name: Restrict coverage clover to the domain under test
+        run: php scripts/ci/filter-domain-coverage-clover.php --domain-path="$DOMAIN_PATH" --coverage=coverage.xml
+
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v8 # NOSONAR — official SonarSource scanner action; tag pinning is acceptable for internal projects
         env:
@@ -233,6 +269,8 @@ jobs:
             -Dsonar.tests=${{ env.DOMAIN_PATH }}
             -Dsonar.test.inclusions=${{ env.DOMAIN_PATH }}/**/Tests/**
             -Dsonar.php.coverage.reportPaths=coverage.xml
+            -Dsonar.coverage.inclusions=${{ env.DOMAIN_PATH }}/**
+            -Dsonar.scm.exclusions.disabled=true
             -Dsonar.cpd.exclusions=${{ env.DOMAIN_PATH }}/**/Tests/**,${{ env.DOMAIN_PATH }}/**/Database/Migrations/**,${{ env.DOMAIN_PATH }}/**/Config/**,${{ env.DOMAIN_PATH }}/**/Routes/**
 
   postgres-mirror:

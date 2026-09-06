@@ -2,12 +2,14 @@
 
 namespace App\Base\Foundation;
 
+use App\Base\Foundation\Console\Commands\ModuleCheckCommand;
 use App\Base\Foundation\Console\Commands\WindowsSafeOctaneStartCommand;
 use App\Base\Foundation\Console\Commands\WindowsSafeOctaneStartFrankenPhpCommand;
 use App\Base\Foundation\Contracts\DataOperationRecorder;
 use App\Base\Foundation\Contracts\DomainLifecycleLedger;
 use App\Base\Foundation\Contracts\DomainRuntimeReloader;
 use App\Base\Foundation\Contracts\SemanticActionRecorder;
+use App\Base\Foundation\Services\ModuleCheck;
 use App\Base\Foundation\Services\NullDataOperationRecorder;
 use App\Base\Foundation\Services\NullDomainLifecycleLedger;
 use App\Base\Foundation\Services\NullDomainRuntimeReloader;
@@ -27,6 +29,8 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->bindIf(DomainRuntimeReloader::class, NullDomainRuntimeReloader::class);
         $this->app->bindIf(SemanticActionRecorder::class, NullSemanticActionRecorder::class);
         $this->app->bindIf(DataOperationRecorder::class, NullDataOperationRecorder::class);
+        $this->app->singleton(ModuleCheck::class);
+        $this->commands([ModuleCheckCommand::class]);
 
         // Same extend-the-binding pattern as the Database module's migrate
         // command overrides: Octane registers these classes directly.

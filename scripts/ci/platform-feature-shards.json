@@ -1,0 +1,29 @@
+{
+  "shards": {
+    "a": [
+      "AI",
+      "Auth",
+      "Authz",
+      "Base",
+      "Media",
+      "Menu",
+      "Schedule",
+      "Software",
+      "System",
+      "Workflow"
+    ],
+    "b": [
+      "Address",
+      "Audit",
+      "Company",
+      "Core",
+      "Dashboard",
+      "Database",
+      "Foundation",
+      "Queue",
+      "Routing",
+      "Settings",
+      "User"
+    ]
+  }
+}
