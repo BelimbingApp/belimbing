@@ -13,7 +13,7 @@ class ServiceProvider extends BaseServiceProvider
     public function register(): void
     {
         $this->app->singleton(FeatureFlagRegistry::class);
-        $this->app->singleton(FeatureFlagDeclarationInventory::class);
+        $this->app->scoped(FeatureFlagDeclarationInventory::class);
         $this->app->singleton(FeatureFlags::class);
     }
 
