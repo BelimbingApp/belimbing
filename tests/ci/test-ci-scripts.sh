@@ -120,6 +120,48 @@ if [ "$balanced" != '{"a": ["Alpha"], "b": ["Beta", "Gamma"]}' ]; then
 fi
 rm -rf "$shard_root"
 
+# Feature shard timing refresh from measured Feature-* suite walls (#695).
+timings_refresh_root=$(mktemp -d)
+mkdir -p "$timings_refresh_root/tests/Feature/Alpha" \
+    "$timings_refresh_root/tests/Feature/Beta" \
+    "$timings_refresh_root/timing"
+touch "$timings_refresh_root/tests/Feature/Alpha/ExampleTest.php" \
+    "$timings_refresh_root/tests/Feature/Beta/ExampleTest.php"
+printf '%s\n' '{"shards":{"a":["Alpha"],"b":["Beta"]}}' \
+    > "$timings_refresh_root/shards.json"
+printf '%s\n' '{"source":"fixture","measured_at":"2020-01-01T00:00:00Z","note":"","directories":{"Alpha":{"wall_seconds":1,"test_files":1},"Beta":{"wall_seconds":1,"test_files":1}}}' \
+    > "$timings_refresh_root/summary.json"
+printf '%s\n' '{"job":"Feature-a","suite":"Feature-a","wall_seconds":30,"tests":1,"assertions":1}' \
+    > "$timings_refresh_root/timing/Feature-a__Feature-a.json"
+printf '%s\n' '{"job":"Feature-b","suite":"Feature-b","wall_seconds":20,"tests":1,"assertions":1}' \
+    > "$timings_refresh_root/timing/Feature-b__Feature-b.json"
+python3 scripts/ci/platform-feature-shard-timings.py \
+    --timing-dir "$timings_refresh_root/timing" \
+    --shards-file "$timings_refresh_root/shards.json" \
+    --summary-file "$timings_refresh_root/summary.json" \
+    --root "$timings_refresh_root" \
+    --write >/dev/null
+refreshed=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1]))["directories"]; print(d["Alpha"]["wall_seconds"], d["Beta"]["wall_seconds"])' "$timings_refresh_root/summary.json")
+if [ "$refreshed" != "30.0 20.0" ]; then
+    echo "Feature shard timing refresh did not rewrite directory walls: $refreshed" >&2
+    exit 1
+fi
+mkdir -p "$timings_refresh_root/tests/Feature/Gamma"
+touch "$timings_refresh_root/tests/Feature/Gamma/ExampleTest.php"
+missing_out=$(python3 scripts/ci/platform-feature-shard-timings.py \
+    --timing-dir "$timings_refresh_root/timing" \
+    --shards-file "$timings_refresh_root/shards.json" \
+    --summary-file "$timings_refresh_root/summary.json" \
+    --root "$timings_refresh_root" 2>&1) && {
+    echo 'Feature shard timing refresh accepted a Feature directory with no measurement' >&2
+    exit 1
+}
+printf '%s\n' "$missing_out" | grep -q 'Feature directory has no measurement: Gamma' || {
+    echo "missing-directory refusal did not name Gamma: $missing_out" >&2
+    exit 1
+}
+rm -rf "$timings_refresh_root"
+
 # Dependency audit policy (#617): expired allowlist entries fail closed; a
 # non-expired policy with empty audit reports passes. Live composer/bun are
 # skipped — fixtures only.
