@@ -101,7 +101,7 @@ a cancelled older PR run is not evidence that its tests passed.
 [PR #677](https://github.com/BelimbingApp/belimbing/pull/677) replaced the closed,
 unmerged #624 and added a **Per-run timing summary** to the platform `ci` job's
 GitHub Actions summary. Rows identify Job, Suite, Wall (s), Tests, and Assertions
-for Unit, Feature, and the combined Core/Domain/Extension invocation. The
+for Unit, each Feature shard, and the combined Core/Domain/Extension invocation. The
 [recorder](../../scripts/ci/record-pest-timing.sh) measures each Pest process's
 elapsed time, including its coverage work but excluding job setup. Its test count
 includes reported passed, failed, skipped, and other footer statuses; it is not
@@ -117,10 +117,34 @@ the same composition, suite membership, and run attempt before claiming a gain.
 The aggregate is published after the suite-success check; a failed or cancelled
 run need not have a complete aggregate table.
 
+## Feature shard membership and coverage
+
+[PR #674](https://github.com/BelimbingApp/belimbing/pull/674) replaced the closed,
+unmerged #610. The platform matrix runs `Unit`, `Feature-a`, and `Feature-b`
+concurrently, one Pest process per invocation. Feature remains one logical suite
+in `phpunit.xml`; CI divides its first-level directories using the committed
+[membership map](../../scripts/ci/platform-feature-shards.json). The Unit lane
+also runs the combined Core/Domain/Extension invocation. This does not compose
+optional Domains into the platform checkout or change the Domain caller's tests.
+
+After adding, moving, or removing a Feature directory, update the map and run
+`python3 scripts/ci/platform-feature-shards.py --validate-only`.
+The [validator](../../scripts/ci/platform-feature-shards.py) refuses missing or
+unknown directories, overlap, empty test directories, and loose top-level
+`*Test.php` files. Membership must stay complete and disjoint when balancing work;
+use the per-shard timing rows to measure a proposed split instead of assuming
+equal directory counts mean equal execution time.
+
+Each matrix lane uploads `platform-coverage-<suite>`. The aggregate `ci` job
+requires `coverage-unit.xml`, `coverage-feature-a.xml`, `coverage-feature-b.xml`,
+and `coverage-modules.xml`, then supplies all four paths to Sonar. `ci` remains
+the aggregate check; a failed, skipped, or cancelled matrix lane does not become
+a successful aggregate. Preserve the complete report set when changing shards.
+The PostgreSQL mirror remains a separate job with its own driver-sensitive set.
+
 ## Pending CI composition work (not yet on main)
 
 These follow-ups belong next to the pin and composition docs once they land; do not treat open PRs as
 established procedure:
 
-- Feature suite sharding across parallel matrix lanes: [issue #576](https://github.com/BelimbingApp/belimbing/issues/576) / [PR #674](https://github.com/BelimbingApp/belimbing/pull/674), replacing closed, unmerged [PR #610](https://github.com/BelimbingApp/belimbing/pull/610). Current main runs Unit and Feature concurrently; it does not yet split Feature into shards.
 - Composed-application smoke test at the pinned People and PeopleConnector refs: [issue #600](https://github.com/BelimbingApp/belimbing/issues/600) / [PR #675](https://github.com/BelimbingApp/belimbing/pull/675), replacing closed, unmerged [PR #604](https://github.com/BelimbingApp/belimbing/pull/604).
