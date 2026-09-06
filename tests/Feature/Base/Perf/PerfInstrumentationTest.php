@@ -68,7 +68,14 @@ it('records one json line per web request', function (): void {
         ->and($entry['status'])->toBe(200)
         ->and($entry['ms'])->toBeGreaterThan(0)
         ->and($entry['resp_bytes'])->toBeGreaterThan(0)
-        ->and($entry)->toHaveKeys(['ts', 'route', 'db_ms', 'queries', 'cache_hits', 'cache_misses', 'procs']);
+        ->and($entry)->toHaveKeys(['ts', 'route', 'db_ms', 'queries', 'cache_hits', 'cache_misses', 'procs', 'tenant_resolver'])
+        ->and($entry['tenant_resolver'])->toBeNull();
+});
+
+it('records the tenant resolver in the request performance log', function (): void {
+    $this->actingAs(createAdminUser())->get(route('dashboard'))->assertOk();
+
+    expect(latestPerfEntry($this->perfDir)['tenant_resolver'])->toBe('session');
 });
 
 it('counts queries, cache traffic, and subprocesses while a request window is active', function (): void {

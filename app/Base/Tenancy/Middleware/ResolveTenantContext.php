@@ -3,6 +3,7 @@
 namespace App\Base\Tenancy\Middleware;
 
 use App\Base\Tenancy\Contracts\TenantContext;
+use App\Base\Tenancy\DTO\TenantResolution;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -23,12 +24,18 @@ class ResolveTenantContext
 
     public function handle(Request $request, Closure $next): Response
     {
-        $this->tenantContext->set($this->resolveTenantId($request));
+        $resolution = $this->resolve($request);
+
+        if ($resolution === null) {
+            $this->tenantContext->clear();
+        } else {
+            $this->tenantContext->setResolution($resolution);
+        }
 
         return $next($request);
     }
 
-    private function resolveTenantId(Request $request): ?int
+    private function resolve(Request $request): ?TenantResolution
     {
         $user = $request->user();
 
@@ -42,6 +49,10 @@ class ResolveTenantContext
             return null;
         }
 
-        return $tenantId !== null ? (int) $tenantId : null;
+        // Authentication is session-backed for web requests. Host and header
+        // resolvers do not exist yet; adding them would change behaviour.
+        return $tenantId !== null
+            ? new TenantResolution(TenantResolution::SESSION, (int) $tenantId)
+            : null;
     }
 }

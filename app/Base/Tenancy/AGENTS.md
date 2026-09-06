@@ -19,6 +19,9 @@ own customer sub-tenants (resale).
   on completion so worker processes never leak context between jobs; CLI/scheduler
   tenant work wraps execution in `TenantContext::runForTenant($id, ...)`. Consumers
   fail closed on null — never widen to unscoped access.
+- Successful web resolution carries a `TenantResolution` naming the resolver
+  alongside the tenant ID. The current authenticated-user resolver is recorded
+  as `session`; new host or header resolvers require their own ordered design.
 - Tenant-scoped console commands dispatch jobs through `DispatchesWithTenant`.
   Jobs implement `CarriesTenant`; a job naming a different tenant is refused before
   queueing, while the queue payload hook carries the matching context to the worker.
