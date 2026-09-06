@@ -160,20 +160,23 @@ the aggregate check; a failed, skipped, or cancelled matrix lane does not become
 a successful aggregate. Preserve the complete report set when changing shards.
 The PostgreSQL mirror remains a separate job with its own driver-sensitive set.
 
-## Composed-application smoke
+## Composed smoke on pin advances
 
-The [composed-smoke](../../.github/workflows/composed-smoke.yml) workflow boots the platform with
-People and PeopleConnector materialized at the refs in `scripts/ci/domain-repos.json` and holds the
-result to [`scripts/ci/composed-surface.json`](../../scripts/ci/composed-surface.json)
-([#600](https://github.com/BelimbingApp/belimbing/issues/600) / [PR #712](https://github.com/BelimbingApp/belimbing/pull/712)).
-It runs on every PR and push to `main`. A nightly schedule ([#663](https://github.com/BelimbingApp/belimbing/issues/663))
-re-runs the same assertion and opens or updates one issue titled **Composed boot failed** on refusal;
-`workflow_dispatch` accepts a dry-run input that exercises the issue body path without calling the
-Issues API.
+[PR #712](https://github.com/BelimbingApp/belimbing/pull/712) (issue [#600](https://github.com/BelimbingApp/belimbing/issues/600)) landed
+[`.github/workflows/composed-smoke.yml`](../../.github/workflows/composed-smoke.yml). It boots the
+platform with People and PeopleConnector at the refs in
+[`scripts/ci/domain-repos.json`](../../scripts/ci/domain-repos.json) and holds the result to
+[`scripts/ci/composed-surface.json`](../../scripts/ci/composed-surface.json).
 
-## Pending CI composition work (not yet on main)
+Every pull request to `main` runs that check, including a pin-advance PR that edits the
+descriptor ([issue #627](https://github.com/BelimbingApp/belimbing/issues/627)). The workflow does
+**not** use a `paths:` filter on `pull_request`. A path-filtered workflow that is also a
+branch-protection required check leaves unrelated PRs waiting for a status that never reports.
+Keep the job always reporting; require the `composed-smoke` context in Protect Main when the
+owner wants it blocking. Recover refusals with the
+[composed-app runbook](composed-app-runbook.md).
 
-These follow-ups belong next to the pin and composition docs once they land; do not treat open PRs as
-established procedure:
-
-- Pin-advance PR automatically runs composed smoke as a required check: [issue #627](https://github.com/BelimbingApp/belimbing/issues/627) / open [PR #717](https://github.com/BelimbingApp/belimbing/pull/717).
+A nightly schedule ([#663](https://github.com/BelimbingApp/belimbing/issues/663)) re-runs the same
+assertion against the pins on `main` and opens or updates one issue titled **Composed boot failed**
+on refusal; `workflow_dispatch` accepts a dry-run input that exercises the issue body path without
+calling the Issues API.
