@@ -212,7 +212,24 @@ if command -v php >/dev/null; then
         echo 'domain-ci accepted an invalid repository slug' >&2
         exit 1
     fi
-    php scripts/ci/validate-php-syntax.php scripts/ci/domain-ci.php scripts/ci/compose-domain.php scripts/ci/validate-extension-manifest.php
+    php scripts/ci/validate-php-syntax.php scripts/ci/domain-ci.php scripts/ci/compose-domain.php scripts/ci/validate-extension-manifest.php scripts/ci/composed-smoke.php
+
+    # The composed-application smoke test (#600) judges a boot against a
+    # checked-in surface; without a network only its migration scan and the
+    # surface/descriptor pin agreement can be proven here. The workflow
+    # composed-smoke.yml runs the full boot on every PR.
+    php scripts/ci/composed-smoke.php --scan-only --root=tests/Fixtures/ci/composed/clean 2>/dev/null
+    if php scripts/ci/composed-smoke.php --scan-only --root=tests/Fixtures/ci/composed/duplicate >/dev/null 2>&1; then
+        echo 'composed-smoke accepted a migration name shipped by two modules' >&2; exit 1
+    fi
+    python3 - <<'PY'
+import json
+surface = json.load(open('scripts/ci/composed-surface.json'))
+descriptor = json.load(open('scripts/ci/domain-repos.json'))
+for domain, pin in surface['pins'].items():
+    assert descriptor['domains'][domain]['ref'] == pin, f'composed-surface.json pins {domain} at {pin}, descriptor at {descriptor["domains"][domain]["ref"]}'
+assert surface['route_count'] > 0 and surface['route_names'] == sorted(set(surface['route_names'])), 'composed-surface.json route names must be unique and sorted'
+PY
     php scripts/ci/validate-extension-manifest.php tests/Fixtures/ci/extensions/conventional/Example/composer.json
     if php scripts/ci/validate-extension-manifest.php tests/Fixtures/ci/extensions/invalid/Example/composer.json >/dev/null 2>&1; then
         echo 'invalid Extension manifest was accepted' >&2; exit 1
