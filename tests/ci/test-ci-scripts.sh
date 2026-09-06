@@ -3,7 +3,31 @@ set -euo pipefail
 
 root=$(git rev-parse --show-toplevel)
 cd "$root"
-bash -n scripts/ci/changed-authorable-php.sh scripts/ci/extension-conformance.sh scripts/ci/mount-guard.sh scripts/ci/phpstan-baseline-gate.sh
+bash -n scripts/ci/changed-authorable-php.sh scripts/ci/extension-conformance.sh scripts/ci/mount-guard.sh scripts/ci/phpstan-baseline-gate.sh scripts/ci/record-pest-timing.sh
+python3 -m py_compile scripts/ci/aggregate-pest-timing.py
+
+# Timing aggregator (#614): one table from per-suite JSON, fail-closed on empty.
+timing_fixture=$(mktemp -d)
+trap 'rm -rf "$timing_fixture"' EXIT
+mkdir -p "$timing_fixture"
+printf '%s\n' '{"job":"Feature","suite":"Feature","wall_seconds":12.5,"tests":3,"assertions":9}' > "$timing_fixture/b.json"
+printf '%s\n' '{"job":"Unit","suite":"Unit","wall_seconds":1.25,"tests":2,"assertions":4}' > "$timing_fixture/a.json"
+aggregate_out=$(python3 scripts/ci/aggregate-pest-timing.py "$timing_fixture")
+grep -q '| Unit | Unit | 1.250 | 2 | 4 |' <<< "$aggregate_out"
+grep -q '| Feature | Feature | 12.500 | 3 | 9 |' <<< "$aggregate_out"
+grep -q '| \*\*Σ\*\* |  | \*\*13.750\*\* | \*\*5\*\* | \*\*13\*\* |' <<< "$aggregate_out"
+if python3 scripts/ci/aggregate-pest-timing.py "$timing_fixture/empty" >/dev/null 2>&1; then
+    echo 'aggregate-pest-timing accepted a missing directory' >&2
+    exit 1
+fi
+mkdir -p "$timing_fixture/empty"
+if python3 scripts/ci/aggregate-pest-timing.py "$timing_fixture/empty" >/dev/null 2>&1; then
+    echo 'aggregate-pest-timing accepted an empty timing directory' >&2
+    exit 1
+fi
+rm -rf "$timing_fixture"
+trap - EXIT
+
 python3 -m json.tool scripts/ci/domain-repos.json >/dev/null
 
 # Database feature tests prove the behaviour most exposed to dialect, schema,
