@@ -14,6 +14,18 @@ const step = (name: string) => {
     return found;
 };
 
+test("composed feature flag ownership runs after Pint and before Domain Pest", () => {
+    const name = "Check composed feature flag ownership";
+    const scan = step(name);
+    expect(scan.run).toBe("vendor/bin/phpstan analyse -c phpstan-feature-flags.neon --memory-limit=2G");
+    expect(scan.if).toBeUndefined();
+    expect(scan["continue-on-error"]).toBeUndefined();
+    const names = sqliteSteps().map((entry: any) => entry.name);
+    expect(names.indexOf("Run Pint")).toBeLessThan(names.indexOf(name));
+    expect(names.indexOf(name)).toBeLessThan(names.indexOf("Run Tests"));
+    expect(workflow.jobs["postgres-mirror"].steps.map((entry: any) => entry.name)).not.toContain(name);
+});
+
 test("domain Sonar scans the DOMAIN_PATH under its own project key", () => {
     const scan = step("SonarCloud Scan");
     const args = scan.with.args as string;
