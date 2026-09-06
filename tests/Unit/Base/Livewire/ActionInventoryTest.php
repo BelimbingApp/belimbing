@@ -93,8 +93,10 @@ test('livewire action baseline check fails first when an untested module-owned a
     $baseline = storage_path('framework/testing/livewire-actions-baseline-'.$suffix.'.json');
 
     try {
-        file_put_contents($directory.'/Livewire/Index.php', '<?php namespace App\\Domains\\'.$domain.'\\Example\\Livewire;
-class Index extends \Livewire\Component {
+        // Distinct class files per phase: Reflection cannot see edits to an
+        // already-loaded component class within one PHP process.
+        file_put_contents($directory.'/Livewire/Covered.php', '<?php namespace App\\Domains\\'.$domain.'\\Example\\Livewire;
+class Covered extends \Livewire\Component {
     public function covered'.$suffix.'() {}
     public function render() { return "<div></div>"; }
 }');
@@ -116,9 +118,8 @@ class Index extends \Livewire\Component {
             '--check-baseline' => $baseline,
         ]))->toBe(0);
 
-        file_put_contents($directory.'/Livewire/Index.php', '<?php namespace App\\Domains\\'.$domain.'\\Example\\Livewire;
-class Index extends \Livewire\Component {
-    public function covered'.$suffix.'() {}
+        file_put_contents($directory.'/Livewire/Debt.php', '<?php namespace App\\Domains\\'.$domain.'\\Example\\Livewire;
+class Debt extends \Livewire\Component {
     public function untested'.$suffix.'() {}
     public function render() { return "<div></div>"; }
 }');
