@@ -117,6 +117,15 @@ class Tenants extends Component
         $tenant = Tenant::query()->findOrFail($tenantId);
         $previous = (string) $tenant->status;
 
+        // A no-op is not a change. The page never offers the transition a row
+        // already holds, but a direct Livewire call can still reach here, and
+        // #827 asks for exactly one audit row per change: two suspension
+        // events for one suspension is a wrong answer to "when was this
+        // tenant suspended?" (reviewer finding, opus-5-extra on #831).
+        if ($previous === $status) {
+            return;
+        }
+
         $tenant->status = $status;
         $tenant->save();
 

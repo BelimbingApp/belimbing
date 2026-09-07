@@ -202,3 +202,39 @@ it('locks the suspended tenant out of the web surface on its user next request',
         ->assertRedirect(route('login'))
         ->assertSessionHas('error', __('tenancy.suspended'));
 });
+
+/*
+ * Reviewer findings on #831, both reachable only by a direct Livewire call --
+ * the page correctly hides the transition a row already holds, which is
+ * exactly why nothing was asserting either of them.
+ */
+
+// fable-5.1: with the blade's `@elseif($tenant->isActive())` forced true, a
+// suspended row renders Suspend instead of Reactivate, and clicking it
+// re-suspends an already-suspended tenant. Half the surface #827 asks for --
+// the Reactivate button -- was never rendered by any test.
+it('offers a reactivate action, and no suspend action, on a suspended row', function (): void {
+    $tenant = createTenant(['name' => 'Parked Tenant', 'status' => 'suspended']);
+
+    $this->actingAs(createAdminUser());
+    $html = Livewire::test(Tenants::class)->html();
+
+    expect(tenantOperatorUiActionCount($html, "reactivateTenant({$tenant->id})"))->toBe(1)
+        ->and(tenantOperatorUiActionCount($html, "suspendTenant({$tenant->id})"))->toBe(0);
+});
+
+// opus-5-extra: changeStatus wrote and audited unconditionally, so a repeated
+// suspend recorded a second `tenancy.tenant.suspended` with
+// from_status = to_status = suspended.
+it('records nothing for a repeated suspend of an already-suspended tenant', function (): void {
+    $this->actingAs(createAdminUser());
+    $tenant = createTenant(['name' => 'Twice Suspended']);
+
+    Livewire::test(Tenants::class)->call('suspendTenant', $tenant->id);
+    Livewire::test(Tenants::class)->call('suspendTenant', $tenant->id);
+
+    tenantOperatorUiFlushAudit();
+
+    expect(tenantOperatorUiAuditRows('tenancy.tenant.suspended', $tenant->id))->toBe(1)
+        ->and(Tenant::query()->whereKey($tenant->id)->value('status'))->toBe('suspended');
+});
