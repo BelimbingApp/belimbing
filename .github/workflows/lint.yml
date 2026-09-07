@@ -30,14 +30,27 @@ jobs:
         with:
           php-version: '8.5'
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2 # NOSONAR — well-known community Bun action; tag pinning is acceptable for internal projects
+        with:
+          bun-version: '1.3.10'
+          no-cache: true
+
+      # #780: audit secrets.* references before anything that installs vendor/.
+      - name: Audit workflow secret references
+        run: scripts/ci/token-audit.sh
+
+      # Before test-ci-scripts.sh: extension-conformance hermetics need vendor/bin/pint (#822).
+      - name: Install Dependencies
+        run: |
+          composer install -q --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
+          bun install --frozen-lockfile
+
       - name: Validate Composer metadata
         run: composer validate --strict --no-check-publish
 
       - name: Validate composed-source descriptors
         run: tests/ci/test-ci-scripts.sh
-
-      - name: Audit workflow secret references
-        run: scripts/ci/token-audit.sh
 
       - name: Validate upstream Domain pins
         env:
@@ -55,19 +68,8 @@ jobs:
         if: github.event_name == 'pull_request'
         run: scripts/ci/mount-guard.sh "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}"
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2 # NOSONAR — well-known community Bun action; tag pinning is acceptable for internal projects
-        with:
-          bun-version: '1.3.10'
-          no-cache: true
-
       - name: Verify CI workflow contracts
         run: bun test tests/ci/*.test.ts
-
-      - name: Install Dependencies
-        run: |
-          composer install -q --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
-          bun install --frozen-lockfile
 
       - name: Run Larastan on app/Base
         run: vendor/bin/phpstan analyse --memory-limit=2G
