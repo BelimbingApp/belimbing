@@ -1284,13 +1284,14 @@ python3 - "$compose_fixture" <<'COMPOSE_REG'
 import json, pathlib, sys
 root = pathlib.Path(sys.argv[1])
 tree = root / "tree"
+absent_beta = root / "absent" / "app" / "Domains" / "Beta"
 reg = {
     "domains": {
         "solo": {"repo": "Example/solo", "path": str(tree / "app/Domains/Solo")},
         "needs-beta": {"repo": "Example/needs-beta", "path": str(tree / "app/Domains/NeedsBeta")},
         "needs-gamma": {"repo": "Example/needs-gamma", "path": str(tree / "app/Domains/NeedsGamma")},
-        "beta": {"repo": "Example/beta", "path": str(tree / "app/Domains/Beta")},
-        "alpha": {"repo": "Example/alpha", "path": str(tree / "app/Domains/Alpha")},
+        # Absent on disk so NeedsBeta must emit a clone line.
+        "beta": {"repo": "Example/beta", "path": str(absent_beta)},
     }
 }
 (root / "registry.json").write_text(json.dumps(reg))
@@ -1338,8 +1339,9 @@ if [[ "$need_ec" -ne 0 ]]; then
     cat "$compose_fixture/need.err" >&2
     exit 1
 fi
-if [[ "$need_out" != $'Example/beta\t'"$compose_fixture/tree/app/Domains/Beta" ]]; then
-    echo "compose-domain NeedsBeta TSV mismatch: $(printf %q "$need_out")" >&2
+expected_tsv=$'Example/beta\t'"$compose_fixture/absent/app/Domains/Beta"
+if [[ "$need_out" != "$expected_tsv" ]]; then
+    echo "compose-domain NeedsBeta TSV mismatch: $(printf %q "$need_out") expected $(printf %q "$expected_tsv")" >&2
     exit 1
 fi
 
