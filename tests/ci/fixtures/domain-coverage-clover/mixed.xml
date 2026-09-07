@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<coverage generated="1" clover="3.2.0">
+  <project timestamp="1" name="domain-coverage-clover">
+    <file name="app/Domains/People/Skills/Foo.php">
+      <line num="1" type="stmt" count="1"/>
+    </file>
+    <file name="/home/runner/work/blb-people/blb-people/app/Domains/People/Skills/Bar.php">
+      <line num="1" type="stmt" count="1"/>
+    </file>
+    <file name="app/Domains/PeopleConnector/Services/Sync.php">
+      <line num="1" type="stmt" count="1"/>
+    </file>
+    <file name="app/Base/Tenancy/Tenant.php">
+      <line num="1" type="stmt" count="0"/>
+    </file>
+    <file name="app/Domains/PeopleX/Ghost.php">
+      <line num="1" type="stmt" count="1"/>
+    </file>
+  </project>
+</coverage>
