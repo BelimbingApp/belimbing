@@ -4,12 +4,15 @@ namespace App\Base\Database\Livewire\DataShare;
 
 use App\Base\Database\Enums\DataShareInstanceRole;
 use App\Base\Database\Livewire\Concerns\AuthorizesDataShareOperations;
+use App\Base\Database\Livewire\Concerns\RequiresPlatformOperatorTenant;
 use App\Base\Database\Livewire\DataShare\Concerns\ManagesDataSharePageState;
 use App\Base\Database\Livewire\DataShare\Concerns\ManagesDevelopmentTableMirror;
 use App\Base\Database\Livewire\DataShare\Concerns\ManagesTransferOffers;
+use App\Base\Database\Livewire\DataShare\Concerns\ReadsDataShareHistory;
 use App\Base\Database\Models\DataSharePlan;
 use App\Base\Database\Models\DataShareReceipt;
 use App\Base\Database\Services\DataShare\ColumnRedactor;
+use App\Base\Database\Services\DataShare\DataShareHistoryQuery;
 use App\Base\Database\Services\DataShare\DataShareImportPlanner;
 use App\Base\Database\Services\DataShare\DataShareInstanceIdentityResolver;
 use App\Base\Database\Services\DataShare\DataSharePackageApplier;
@@ -29,6 +32,8 @@ class Index extends Component
     use ManagesDataSharePageState;
     use ManagesDevelopmentTableMirror;
     use ManagesTransferOffers;
+    use ReadsDataShareHistory;
+    use RequiresPlatformOperatorTenant;
 
     /** @var list<array<string, mixed>> */
     public array $scopes = [];
@@ -277,8 +282,10 @@ class Index extends Component
         return $selected;
     }
 
-    public function render(DataShareInstanceIdentityResolver $instances): View
+    public function render(DataShareInstanceIdentityResolver $instances, DataShareHistoryQuery $history): View
     {
+        $historyEvents = $this->historyEvents($history);
+
         return view('livewire.admin.system.data-share.index', [
             'instance' => $instances->current(),
             'canPublish' => $this->capabilityAllows('admin.system.data-share-offer.create'),
@@ -292,6 +299,9 @@ class Index extends Component
             'passwordConfirmationUrl' => Route::has('password.confirm') ? route('password.confirm') : null,
             'diskName' => app(DataShareSettings::class)->disk(),
             'pathPrefix' => app(DataShareSettings::class)->pathPrefix('data_share.path_prefix', 'data-share/diagnostics'),
+            'historyEvents' => $historyEvents,
+            'historyActorNames' => $this->historyActorNames($historyEvents),
+            'historyActionClasses' => array_keys(DataShareHistoryQuery::ACTION_CLASSES),
         ]);
     }
 }

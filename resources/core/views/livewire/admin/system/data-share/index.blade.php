@@ -28,6 +28,7 @@ $dataShareTabs = [
     ['id' => 'share', 'label' => __('Share'), 'icon' => 'heroicon-o-share'],
     ['id' => 'published', 'label' => __('Published'), 'icon' => 'heroicon-o-link'],
     ['id' => 'incoming', 'label' => __('Incoming'), 'icon' => 'heroicon-o-inbox-arrow-down'],
+    ['id' => 'history', 'label' => __('History'), 'icon' => 'heroicon-o-clock'],
     ['id' => 'diagnostics', 'label' => __('Diagnostics'), 'icon' => 'heroicon-o-wrench-screwdriver'],
 ];
 
@@ -640,6 +641,65 @@ if ($instance->role->value === 'development') {
                                     </tr>
                                 @endforeach
                             </x-ui.table>
+                        @endif
+                    </div>
+                </x-ui.tab>
+
+
+                <x-ui.tab id="history">
+                    <div class="space-y-6">
+                        <div class="max-w-3xl">
+                            <h2 class="text-base font-medium tracking-tight text-ink">{{ __('History') }}</h2>
+                            <p class="mt-1 text-sm text-muted">
+                                {{ __('Ledger of Data Share offers, exports, fetches, plans, applies, pruning, and failures for this :role instance. Payload values and bearer secrets are never shown.', ['role' => $instance->role->value]) }}
+                            </p>
+                        </div>
+
+                        <div class="flex flex-wrap items-end gap-3">
+                            <div class="min-w-48">
+                                <x-ui.select id="data-share-history-action" :label="__('Action class')" wire:model.live="historyActionClass">
+                                    <option value="">{{ __('All') }}</option>
+                                    @foreach($historyActionClasses as $class)
+                                        <option value="{{ $class }}">{{ __(ucfirst($class)) }}</option>
+                                    @endforeach
+                                </x-ui.select>
+                            </div>
+                        </div>
+
+                        @if($historyEvents->isEmpty())
+                            <div class="py-8 text-center">
+                                <p class="text-sm font-medium text-ink">{{ __('No history rows yet') }}</p>
+                                <p class="mt-1 text-sm text-muted">{{ __('Publish, fetch, plan, apply, or prune an offer to write the first ledger row.') }}</p>
+                            </div>
+                        @else
+                            <x-ui.table :caption="__('Data Share history ledger')">
+                                <x-slot name="head">
+                                    <tr>
+                                        <x-ui.th>{{ __('When') }}</x-ui.th>
+                                        <x-ui.th>{{ __('Action') }}</x-ui.th>
+                                        <x-ui.th>{{ __('Package / Offer') }}</x-ui.th>
+                                        <x-ui.th>{{ __('Scope') }}</x-ui.th>
+                                        <x-ui.th>{{ __('Actor') }}</x-ui.th>
+                                        <x-ui.th>{{ __('Error') }}</x-ui.th>
+                                    </tr>
+                                </x-slot>
+                                @foreach($historyEvents as $event)
+                                    @php
+                                        $offerId = is_array($event->metadata) ? ($event->metadata['offer_id'] ?? null) : null;
+                                        $packageOrOffer = $event->package_id ?? $offerId;
+                                    @endphp
+                                    <tr wire:key="history-{{ $event->id }}">
+                                        <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm tabular-nums text-muted"><x-ui.datetime :value="$event->created_at" /></td>
+                                        <td class="px-table-cell-x py-table-cell-y font-mono text-xs text-ink">{{ $event->action }}</td>
+                                        <td class="px-table-cell-x py-table-cell-y font-mono text-xs text-ink" title="{{ $packageOrOffer }}">{{ $packageOrOffer ?? '—' }}</td>
+                                        <td class="px-table-cell-x py-table-cell-y font-mono text-xs text-muted">{{ $event->scope_name ?? '—' }}</td>
+                                        <td class="px-table-cell-x py-table-cell-y text-sm text-ink">{{ $event->actor_id ? ($historyActorNames[$event->actor_id] ?? '—') : '—' }}</td>
+                                        <td class="px-table-cell-x py-table-cell-y text-sm text-muted">{{ $event->error_summary ?? '—' }}</td>
+                                    </tr>
+                                @endforeach
+                            </x-ui.table>
+
+                            <x-ui.pagination :paginator="$historyEvents" :perPageOptions="$this->perPageOptions()" :perPage="$perPage" />
                         @endif
                     </div>
                 </x-ui.tab>
