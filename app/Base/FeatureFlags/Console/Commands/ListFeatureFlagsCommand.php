@@ -46,7 +46,7 @@ final class ListFeatureFlagsCommand extends Command
                 $row['default'] === null ? '—' : ($row['default'] ? 'true' : 'false'),
                 $row['enabled'] ? 'true' : 'false',
                 $row['overridden'] ? 'yes' : 'no',
-                ($row['orphaned'] ?? false) ? 'yes' : 'no',
+                $row['orphaned'] ? 'yes' : 'no',
                 $row['description'],
             ], $rows),
         );

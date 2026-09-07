@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Model;
  * @property string $flag
  * @property int $tenant_id
  * @property bool $enabled
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
  *
  * Per-tenant override of a declared feature flag.
  *
