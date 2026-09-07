@@ -193,12 +193,6 @@ parameters:
 			path: app/Base/Audit/Livewire/AuditLog/Concerns/InteractsWithSourceHistory.php
 
 		-
-			message: '#^Call to function method_exists\(\) with \$this\(App\\Base\\Audit\\Livewire\\AuditLog\\Mutations\) and ''resetPage'' will always evaluate to true\.$#'
-			identifier: function.alreadyNarrowedType
-			count: 1
-			path: app/Base/Audit/Livewire/AuditLog/Mutations.php
-
-		-
 			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Audit\\Models\\AuditAction\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
 			identifier: property.phpDocType
 			count: 1
@@ -444,7 +438,6 @@ parameters:
 			count: 1
 			path: app/Base/Audit/Services/AuditTraceTimeline.php
 
-
 		-
 			message: '#^Match arm comparison between ''module'' and ''module'' is always true\.$#'
 			identifier: match.alwaysTrue
@@ -458,81 +451,22 @@ parameters:
 			path: app/Base/Authz/Livewire/Capabilities/Index.php
 
 		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\Role\:\:\$code\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Livewire/Roles/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\Role\:\:\$company_id\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Base/Authz/Livewire/Roles/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\Role\:\:\$is_system\.$#'
-			identifier: property.notFound
-			count: 7
-			path: app/Base/Authz/Livewire/Roles/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\Role\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Livewire/Roles/Show.php
-
-
-
-
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$capability_key\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Livewire/Roles/Show.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Authz/Livewire/Roles/Show.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 2
-			path: app/Base/Authz/Livewire/Roles/Show.php
-
-		-
 			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Authz\\Models\\DecisionLog\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
 			identifier: property.phpDocType
 			count: 1
 			path: app/Base/Authz/Models/DecisionLog.php
 
 		-
-			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Authz\\Models\\Role\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
+			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Authz\\Models\\PrincipalCapability\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
 			identifier: property.phpDocType
 			count: 1
-			path: app/Base/Authz/Models/Role.php
+			path: app/Base/Authz/Models/PrincipalCapability.php
 
 		-
-			message: '#^Strict comparison using \=\=\= between int and null will always evaluate to false\.$#'
-			identifier: identical.alwaysFalse
-			count: 1
-			path: app/Base/Authz/Models/Role.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\RoleCapability\:\:\$role_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Models/RoleCapability.php
-
-		-
-			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Authz\\Models\\RoleCapability\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
+			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Authz\\Models\\PrincipalRole\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
 			identifier: property.phpDocType
 			count: 1
-			path: app/Base/Authz/Models/RoleCapability.php
-
+			path: app/Base/Authz/Models/PrincipalRole.php
 
 		-
 			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
@@ -757,18 +691,6 @@ parameters:
 			path: app/Base/Database/Livewire/DataShare/Settings.php
 
 		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\TableRegistry\:\:\$schema_state\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/DatabaseTables/Index.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\TableRegistry\:\:\$source_declared\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/DatabaseTables/Index.php
-
-		-
 			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:transform\(\) expects callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: App\\Base\\Database\\Models\\TableRegistry, Closure\(App\\Base\\Database\\Models\\TableRegistry\)\: App\\Base\\Database\\Models\\TableRegistry given\.$#'
 			identifier: argument.type
 			count: 1
@@ -785,44 +707,6 @@ parameters:
 			identifier: class.notFound
 			count: 1
 			path: app/Base/Database/Livewire/DatabaseTables/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Core\\AI\\Models\\AiProvider\:\:\$base_url\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/Queries/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Core\\AI\\Models\\AiProvider\:\:\$connection_config\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/Queries/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Core\\AI\\Models\\AiProvider\:\:\$credentials\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/Queries/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Core\\AI\\Models\\AiProvider\:\:\$display_name\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Database/Livewire/Queries/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Core\\AI\\Models\\AiProvider\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Database/Livewire/Queries/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Core\\AI\\Models\\AiProviderModel\:\:\$model_id\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Base/Database/Livewire/Queries/Show.php
-
-
 
 		-
 			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Core\\User\\Models\\User\>\:\:map\(\) contains unresolvable type\.$#'
@@ -855,18 +739,6 @@ parameters:
 			path: app/Base/Database/Livewire/Queries/Show.php
 
 		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\TableRegistry\:\:\$schema_state\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/SchemaIncubation/Index.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\TableRegistry\:\:\$source_declared\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/SchemaIncubation/Index.php
-
-		-
 			message: '#^Offset ''source_declared'' on array\{state\: string, source_declared\: bool\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 3
@@ -895,12 +767,6 @@ parameters:
 			identifier: property.phpDocType
 			count: 1
 			path: app/Base/Database/Models/SeederRegistry.php
-
-		-
-			message: '#^PHPDoc type array\<string\> of property App\\Base\\Database\\Models\\TableRegistry\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
-			identifier: property.phpDocType
-			count: 1
-			path: app/Base/Database/Models/TableRegistry.php
 
 		-
 			message: '#^Strict comparison using \!\=\= between non\-empty\-list\<string\> and array\{\} will always evaluate to true\.$#'
@@ -937,6 +803,72 @@ parameters:
 			identifier: arrayValues.list
 			count: 1
 			path: app/Base/Database/Services/Backup/Encryption/EncryptionModeRegistry.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationRun\:\:\$direction\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationRun\:\:\$is_forced\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationRun\:\:\$local_instance_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationRun\:\:\$operation_type\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationRun\:\:\$remote_instance_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationRun\:\:\$source\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationRun\:\:\$total_rows_affected\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationRun\:\:\$transfer_mode\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationTableSummary\:\:\$rows_deleted\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationTableSummary\:\:\$rows_inserted\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationTableSummary\:\:\$rows_updated\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
 
 		-
 			message: '#^Call to function method_exists\(\) with App\\Core\\User\\Models\\User and ''getCompanyId'' will always evaluate to true\.$#'
@@ -1173,18 +1105,6 @@ parameters:
 			path: app/Base/Database/Services/DataShare/DiagnosticRowCapture.php
 
 		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareMirrorObservation\:\:\$acknowledged_generation\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/Mirror/DataShareMirrorCatalog.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareMirrorObservation\:\:\$observed_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/Mirror/DataShareMirrorCatalog.php
-
-		-
 			message: '#^Offset ''unique'' on array\{name\: string, columns\: list\<string\>, type\: string, unique\: bool, primary\: bool\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
@@ -1412,7 +1332,6 @@ parameters:
 			count: 1
 			path: app/Base/Database/Services/TableInspector.php
 
-
 		-
 			message: '#^Access to an undefined property App\\Base\\FeatureFlags\\Models\\FeatureFlagOverride\:\:\$enabled\.$#'
 			identifier: property.notFound
@@ -1438,22 +1357,10 @@ parameters:
 			path: app/Base/Foundation/Livewire/Concerns/DecodesJsonFields.php
 
 		-
-			message: '#^Call to function method_exists\(\) with \$this\(App\\Base\\Schedule\\Livewire\\Index\) and ''resetPage'' will always evaluate to true\.$#'
-			identifier: function.alreadyNarrowedType
-			count: 1
-			path: app/Base/Foundation/Livewire/Concerns/FiltersByPeriod.php
-
-		-
 			message: '#^Offset 0 on non\-empty\-list\<string\> on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
 			path: app/Base/Foundation/Livewire/Domains.php
-
-		-
-			message: '#^Call to function method_exists\(\) with \$this\(App\\Base\\Foundation\\Livewire\\SearchablePaginatedList\) and ''resetPage'' will always evaluate to true\.$#'
-			identifier: function.alreadyNarrowedType
-			count: 1
-			path: app/Base/Foundation/Livewire/SearchablePaginatedList.php
 
 		-
 			message: '#^Call to function is_array\(\) with array\<mixed\> will always evaluate to true\.$#'
@@ -1504,6 +1411,48 @@ parameters:
 			path: app/Base/Foundation/Services/SourceRepositoryInstaller.php
 
 		-
+			message: '#^Access to an undefined property App\\Base\\Integration\\Models\\OutboundExchange\:\:\$metadata\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Integration/Livewire/OutboundExchanges/Show.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Integration\\Models\\OutboundExchange\:\:\$request_body\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Integration/Livewire/OutboundExchanges/Show.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Integration\\Models\\OutboundExchange\:\:\$request_body_truncated\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Integration/Livewire/OutboundExchanges/Show.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Integration\\Models\\OutboundExchange\:\:\$request_headers\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Integration/Livewire/OutboundExchanges/Show.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Integration\\Models\\OutboundExchange\:\:\$response_body\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Integration/Livewire/OutboundExchanges/Show.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Integration\\Models\\OutboundExchange\:\:\$response_body_truncated\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Integration/Livewire/OutboundExchanges/Show.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Integration\\Models\\OutboundExchange\:\:\$response_headers\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Integration/Livewire/OutboundExchanges/Show.php
+
+		-
 			message: '#^Strict comparison using \=\=\= between string and null will always evaluate to false\.$#'
 			identifier: identical.alwaysFalse
 			count: 2
@@ -1538,6 +1487,12 @@ parameters:
 			identifier: notIdentical.alwaysTrue
 			count: 1
 			path: app/Base/Integration/Services/OAuth2Client.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Integration\\Models\\OutboundExchange\:\:\$updated_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Integration/Services/OutboundExchangePruner.php
 
 		-
 			message: '#^Instanceof between App\\Base\\Integration\\Models\\OutboundExchange and App\\Base\\Integration\\Models\\OutboundExchange will always evaluate to true\.$#'
@@ -1633,12 +1588,6 @@ parameters:
 			message: '#^Call to an undefined method App\\Base\\Schedule\\Contracts\\ScheduleCadenceContributor\:\:tasks\(\)\.$#'
 			identifier: method.notFound
 			count: 1
-			path: app/Base/Schedule/Livewire/Index.php
-
-		-
-			message: '#^Call to function method_exists\(\) with \$this\(App\\Base\\Schedule\\Livewire\\Index\) and ''resetPage'' will always evaluate to true\.$#'
-			identifier: function.alreadyNarrowedType
-			count: 2
 			path: app/Base/Schedule/Livewire/Index.php
 
 		-
@@ -1845,7 +1794,6 @@ parameters:
 			count: 1
 			path: app/Base/Settings/DTO/SettingDefinition.php
 
-
 		-
 			message: '#^PHPDoc type array\<string\> of property App\\Base\\Settings\\Models\\Setting\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
 			identifier: property.phpDocType
@@ -1977,7 +1925,6 @@ parameters:
 			identifier: class.extendsFinalByPhpDoc
 			count: 1
 			path: app/Base/System/Console/Commands/TestCommand.php
-
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>value" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'

@@ -427,8 +427,8 @@ class Show extends Component implements ProvidesLaraPageContext
                     'name' => $dir * strcmp((string) $a->name, (string) $b->name),
                     'email' => $dir * strcmp((string) $a->email, (string) $b->email),
                     'company' => $dir * strcmp(
-                        (string) ($a->company?->name ?? ''),
-                        (string) ($b->company?->name ?? ''),
+                        (string) ($a->company->name ?? ''),
+                        (string) ($b->company->name ?? ''),
                     ),
                     default => $dir * strcmp((string) $a->name, (string) $b->name),
                 };

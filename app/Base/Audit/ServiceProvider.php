@@ -2,6 +2,7 @@
 
 namespace App\Base\Audit;
 
+use App\Base\Audit\Console\Commands\PruneAuditActionsCommand;
 use App\Base\Audit\DTO\RequestContext;
 use App\Base\Audit\Listeners\AuthListener;
 use App\Base\Audit\Listeners\CommandListener;
@@ -24,6 +25,7 @@ use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;
 use Illuminate\Console\Events\CommandFinished;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Support\Facades\Event;
@@ -51,6 +53,17 @@ class ServiceProvider extends BaseServiceProvider
             }
 
             return RequestContext::fromRequest($this->resolveCurrentActor());
+        });
+
+        $this->commands([
+            PruneAuditActionsCommand::class,
+        ]);
+
+        $this->app->booted(function (): void {
+            $this->app->make(Schedule::class)
+                ->command('blb:audit:actions:prune')
+                ->dailyAt('01:50')
+                ->withoutOverlapping();
         });
     }
 
