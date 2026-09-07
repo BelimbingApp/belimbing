@@ -26,6 +26,8 @@ use App\Core\AI\Console\Commands\OperationsSweepCommand;
 use App\Core\AI\Console\Commands\PricingSnapshotRefreshCommand;
 use App\Core\AI\Console\Commands\ReapOrphanRunsCommand;
 use App\Core\AI\Console\Commands\SchedulesTickCommand;
+use App\Core\AI\Console\Commands\SkillsListCommand;
+use App\Core\AI\Console\Commands\SkillsVerifyCommand;
 use App\Core\AI\Console\Commands\SweepStaleTurnsCommand;
 use App\Core\AI\Console\Commands\ToolStatsCommand;
 use App\Core\AI\Contracts\AgentTaskContextContributor;
@@ -305,6 +307,8 @@ class ServiceProvider extends BaseServiceProvider
                 LifecycleExecuteCommand::class,
                 PricingSnapshotRefreshCommand::class,
                 CodexAuthListenCommand::class,
+                SkillsListCommand::class,
+                SkillsVerifyCommand::class,
             ]);
         }
 

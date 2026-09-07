@@ -235,30 +235,6 @@ parameters:
 			path: app/Base/Authz/Livewire/Capabilities/Index.php
 
 		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\Role\:\:\$code\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Livewire/Roles/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\Role\:\:\$company_id\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Base/Authz/Livewire/Roles/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\Role\:\:\$is_system\.$#'
-			identifier: property.notFound
-			count: 7
-			path: app/Base/Authz/Livewire/Roles/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\Role\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Livewire/Roles/Show.php
-
-		-
 			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$company_id\.$#'
 			identifier: property.notFound
 			count: 1
@@ -280,24 +256,6 @@ parameters:
 			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$pivot_id\.$#'
 			identifier: property.notFound
 			count: 1
-			path: app/Base/Authz/Livewire/Roles/Show.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$capability_key\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Livewire/Roles/Show.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Authz/Livewire/Roles/Show.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 2
 			path: app/Base/Authz/Livewire/Roles/Show.php
 
 		-
@@ -347,30 +305,6 @@ parameters:
 			identifier: property.phpDocType
 			count: 1
 			path: app/Base/Authz/Models/PrincipalRole.php
-
-		-
-			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Authz\\Models\\Role\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
-			identifier: property.phpDocType
-			count: 1
-			path: app/Base/Authz/Models/Role.php
-
-		-
-			message: '#^Strict comparison using \=\=\= between int and null will always evaluate to false\.$#'
-			identifier: identical.alwaysFalse
-			count: 1
-			path: app/Base/Authz/Models/Role.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\RoleCapability\:\:\$role_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Models/RoleCapability.php
-
-		-
-			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Authz\\Models\\RoleCapability\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
-			identifier: property.phpDocType
-			count: 1
-			path: app/Base/Authz/Models/RoleCapability.php
 
 		-
 			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\PrincipalCapability\:\:\$capability_key\.$#'
@@ -613,18 +547,6 @@ parameters:
 			path: app/Base/Database/Livewire/DataShare/Settings.php
 
 		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\TableRegistry\:\:\$schema_state\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/DatabaseTables/Index.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\TableRegistry\:\:\$source_declared\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/DatabaseTables/Index.php
-
-		-
 			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:transform\(\) expects callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: App\\Base\\Database\\Models\\TableRegistry, Closure\(App\\Base\\Database\\Models\\TableRegistry\)\: App\\Base\\Database\\Models\\TableRegistry given\.$#'
 			identifier: argument.type
 			count: 1
@@ -641,42 +563,6 @@ parameters:
 			identifier: class.notFound
 			count: 1
 			path: app/Base/Database/Livewire/DatabaseTables/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Core\\AI\\Models\\AiProvider\:\:\$base_url\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/Queries/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Core\\AI\\Models\\AiProvider\:\:\$connection_config\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/Queries/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Core\\AI\\Models\\AiProvider\:\:\$credentials\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/Queries/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Core\\AI\\Models\\AiProvider\:\:\$display_name\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Database/Livewire/Queries/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Core\\AI\\Models\\AiProvider\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Database/Livewire/Queries/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Core\\AI\\Models\\AiProviderModel\:\:\$model_id\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Base/Database/Livewire/Queries/Show.php
 
 		-
 			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$email\.$#'
@@ -721,18 +607,6 @@ parameters:
 			path: app/Base/Database/Livewire/Queries/Show.php
 
 		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\TableRegistry\:\:\$schema_state\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/SchemaIncubation/Index.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\TableRegistry\:\:\$source_declared\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/SchemaIncubation/Index.php
-
-		-
 			message: '#^Offset ''source_declared'' on array\{state\: string, source_declared\: bool\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 3
@@ -761,12 +635,6 @@ parameters:
 			identifier: property.phpDocType
 			count: 1
 			path: app/Base/Database/Models/SeederRegistry.php
-
-		-
-			message: '#^PHPDoc type array\<string\> of property App\\Base\\Database\\Models\\TableRegistry\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
-			identifier: property.phpDocType
-			count: 1
-			path: app/Base/Database/Models/TableRegistry.php
 
 		-
 			message: '#^Strict comparison using \!\=\= between non\-empty\-list\<string\> and array\{\} will always evaluate to true\.$#'
@@ -1103,18 +971,6 @@ parameters:
 			identifier: arrayValues.list
 			count: 1
 			path: app/Base/Database/Services/DataShare/DiagnosticRowCapture.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareMirrorObservation\:\:\$acknowledged_generation\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/Mirror/DataShareMirrorCatalog.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareMirrorObservation\:\:\$observed_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/Mirror/DataShareMirrorCatalog.php
 
 		-
 			message: '#^Offset ''unique'' on array\{name\: string, columns\: list\<string\>, type\: string, unique\: bool, primary\: bool\} on left side of \?\? always exists and is not nullable\.$#'

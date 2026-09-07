@@ -467,6 +467,58 @@ test('users can be removed from a role from role show page', function (): void {
     expect(PrincipalRole::query()->where('id', $assignment->id)->exists())->toBeFalse();
 });
 
+test('assigned users on role show sort by company name', function (): void {
+    $admin = createRoleTestAdmin();
+    $this->actingAs($admin);
+
+    $tenantId = (int) $admin->company->tenant_id;
+    $companyA = Company::factory()->create([
+        'tenant_id' => $tenantId,
+        'name' => 'Alpha Sort Co',
+    ]);
+    $companyZ = Company::factory()->create([
+        'tenant_id' => $tenantId,
+        'name' => 'Zulu Sort Co',
+    ]);
+
+    $userZ = User::factory()->create([
+        'company_id' => $companyZ->id,
+        'name' => 'Zulu Assignee',
+    ]);
+    $userA = User::factory()->create([
+        'company_id' => $companyA->id,
+        'name' => 'Alpha Assignee',
+    ]);
+
+    $role = Role::query()->where('code', 'core_admin')->whereNull('company_id')->firstOrFail();
+
+    PrincipalRole::query()->create([
+        'company_id' => $companyZ->id,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => $userZ->id,
+        'role_id' => $role->id,
+    ]);
+    PrincipalRole::query()->create([
+        'company_id' => $companyA->id,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => $userA->id,
+        'role_id' => $role->id,
+    ]);
+
+    $component = Livewire::test('admin.roles.show', ['role' => $role])
+        ->call('sortAssignedUsers', 'company');
+
+    expect($component->get('assignedUsersSortBy'))->toBe('company');
+
+    $orderedIds = collect($component->viewData('assignedUsers'))->pluck('id')->all();
+    $ours = array_values(array_filter(
+        $orderedIds,
+        fn (int $id): bool => in_array($id, [$userA->id, $userZ->id], true),
+    ));
+
+    expect($ours)->toBe([$userA->id, $userZ->id]);
+});
+
 test('custom role creation requires an owning company', function (): void {
     $admin = createRoleTestAdmin();
     $this->actingAs($admin);
