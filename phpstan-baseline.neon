@@ -1375,12 +1375,6 @@ parameters:
 			path: app/Base/Foundation/Livewire/Domains.php
 
 		-
-			message: '#^Call to function method_exists\(\) with \$this\(App\\Base\\Foundation\\Livewire\\SearchablePaginatedList\) and ''resetPage'' will always evaluate to true\.$#'
-			identifier: function.alreadyNarrowedType
-			count: 1
-			path: app/Base/Foundation/Livewire/SearchablePaginatedList.php
-
-		-
 			message: '#^Call to function is_array\(\) with array\<mixed\> will always evaluate to true\.$#'
 			identifier: function.alreadyNarrowedType
 			count: 1
