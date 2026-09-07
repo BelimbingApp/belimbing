@@ -1446,4 +1446,164 @@ with tempfile.TemporaryDirectory() as tmpdir:
     assert 'every referenced secret is allowlisted' in plain.stdout, plain.stdout
 PY
 
+
+# compose-domain.php (#843): cross-domain clone TSV, registry refusals, unknown args.
+compose_fixture=$(mktemp -d)
+trap 'rm -rf "$compose_fixture"' EXIT
+compose_src="$root/tests/ci/fixtures/compose-domain"
+cp -a "$compose_src/registry-root/." "$compose_fixture/tree/"
+mkdir -p "$compose_fixture/present/app/Domains"
+# Pre-existing beta mount so the already-present path is omitted from stdout.
+cp -a "$compose_fixture/tree/app/Domains/Beta" "$compose_fixture/present/app/Domains/Beta"
+python3 - "$compose_fixture" <<'COMPOSE_REG'
+import json, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+tree = root / "tree"
+absent_beta = root / "absent" / "app" / "Domains" / "Beta"
+reg = {
+    "domains": {
+        "solo": {"repo": "Example/solo", "path": str(tree / "app/Domains/Solo")},
+        "needs-beta": {"repo": "Example/needs-beta", "path": str(tree / "app/Domains/NeedsBeta")},
+        "needs-gamma": {"repo": "Example/needs-gamma", "path": str(tree / "app/Domains/NeedsGamma")},
+        # Absent on disk so NeedsBeta must emit a clone line.
+        "beta": {"repo": "Example/beta", "path": str(absent_beta)},
+    }
+}
+(root / "registry.json").write_text(json.dumps(reg))
+# Registry whose beta path already exists on disk (present mount).
+reg_present = dict(reg)
+reg_present["domains"] = dict(reg["domains"])
+reg_present["domains"]["beta"] = {
+    "repo": "Example/beta",
+    "path": str(root / "present/app/Domains/Beta"),
+}
+(root / "registry-present.json").write_text(json.dumps(reg_present))
+COMPOSE_REG
+
+compose_run() {
+    local domain="$1" registry="$2"
+    shift 2 || true
+    php "$root/scripts/ci/compose-domain.php" \
+        --domain-path="$compose_fixture/tree/app/Domains/$domain" \
+        --registry="$registry" \
+        "$@"
+}
+
+# Sibling + core only: nothing to clone.
+set +e
+solo_out=$(compose_run Solo "$compose_fixture/registry.json" 2>"$compose_fixture/solo.err")
+solo_ec=$?
+set -e
+if [[ "$solo_ec" -ne 0 || -n "$solo_out" ]]; then
+    echo "compose-domain Solo expected empty stdout exit 0, got ec=$solo_ec out=$(printf %q "$solo_out")" >&2
+    exit 1
+fi
+if ! grep -qF 'no cross-domain dependencies to clone' "$compose_fixture/solo.err"; then
+    echo 'compose-domain Solo missing no-cross-domain stderr' >&2
+    cat "$compose_fixture/solo.err" >&2
+    exit 1
+fi
+
+# Cross-domain requirement prints one TSV line when the registry path is absent.
+set +e
+need_out=$(compose_run NeedsBeta "$compose_fixture/registry.json" 2>"$compose_fixture/need.err")
+need_ec=$?
+set -e
+if [[ "$need_ec" -ne 0 ]]; then
+    echo "compose-domain NeedsBeta expected exit 0, got $need_ec" >&2
+    cat "$compose_fixture/need.err" >&2
+    exit 1
+fi
+expected_tsv=$'Example/beta\t'"$compose_fixture/absent/app/Domains/Beta"
+if [[ "$need_out" != "$expected_tsv" ]]; then
+    echo "compose-domain NeedsBeta TSV mismatch: $(printf %q "$need_out") expected $(printf %q "$expected_tsv")" >&2
+    exit 1
+fi
+
+# Already-present registry path is omitted.
+set +e
+present_out=$(compose_run NeedsBeta "$compose_fixture/registry-present.json" 2>"$compose_fixture/present.err")
+present_ec=$?
+set -e
+if [[ "$present_ec" -ne 0 || -n "$present_out" ]]; then
+    echo "compose-domain present beta expected empty stdout exit 0, got ec=$present_ec out=$(printf %q "$present_out")" >&2
+    exit 1
+fi
+
+# Required module with no registry entry exits 1 naming it.
+set +e
+miss_out=$(compose_run NeedsGamma "$compose_fixture/registry.json" 2>"$compose_fixture/miss.err")
+miss_ec=$?
+set -e
+if [[ "$miss_ec" -ne 1 ]]; then
+    echo "compose-domain NeedsGamma expected exit 1, got $miss_ec" >&2
+    exit 1
+fi
+if ! grep -qF 'gamma/missing' "$compose_fixture/miss.err"; then
+    echo 'compose-domain NeedsGamma stderr did not name gamma/missing' >&2
+    cat "$compose_fixture/miss.err" >&2
+    exit 1
+fi
+
+# Unreadable registry exits 2.
+set +e
+php "$root/scripts/ci/compose-domain.php" \
+    --domain-path="$compose_fixture/tree/app/Domains/Solo" \
+    --registry="$compose_fixture/no-such-registry.json" \
+    >/dev/null 2>"$compose_fixture/noread.err"
+noread_ec=$?
+set -e
+if [[ "$noread_ec" -ne 2 ]] || ! grep -qF 'cannot read registry' "$compose_fixture/noread.err"; then
+    echo 'compose-domain unreadable registry refusal failed' >&2
+    cat "$compose_fixture/noread.err" >&2
+    exit 1
+fi
+
+# Non-JSON registry exits 2.
+printf 'not-json\n' > "$compose_fixture/bad.json"
+set +e
+php "$root/scripts/ci/compose-domain.php" \
+    --domain-path="$compose_fixture/tree/app/Domains/Solo" \
+    --registry="$compose_fixture/bad.json" \
+    >/dev/null 2>"$compose_fixture/bad.err"
+bad_ec=$?
+set -e
+if [[ "$bad_ec" -ne 2 ]] || ! grep -qF 'not valid JSON' "$compose_fixture/bad.err"; then
+    echo 'compose-domain invalid JSON refusal failed' >&2
+    cat "$compose_fixture/bad.err" >&2
+    exit 1
+fi
+
+# Unknown argument exits 2 naming it.
+set +e
+php "$root/scripts/ci/compose-domain.php" \
+    --domain-path="$compose_fixture/tree/app/Domains/Solo" \
+    --registry="$compose_fixture/registry.json" \
+    --bogus \
+    >/dev/null 2>"$compose_fixture/bogus.err"
+bogus_ec=$?
+set -e
+if [[ "$bogus_ec" -ne 2 ]] || ! grep -qF 'unknown argument --bogus' "$compose_fixture/bogus.err"; then
+    echo 'compose-domain unknown argument refusal failed' >&2
+    cat "$compose_fixture/bogus.err" >&2
+    exit 1
+fi
+
+# Workflow argument list (domain-path only) exits 0 against the fixture.
+set +e
+php "$root/scripts/ci/compose-domain.php" \
+    --domain-path="$compose_fixture/tree/app/Domains/Solo" \
+    --registry="$compose_fixture/registry.json" \
+    >/dev/null 2>"$compose_fixture/wf.err"
+wf_ec=$?
+set -e
+if [[ "$wf_ec" -ne 0 ]]; then
+    echo 'compose-domain workflow args failed against Solo fixture' >&2
+    cat "$compose_fixture/wf.err" >&2
+    exit 1
+fi
+
+rm -rf "$compose_fixture"
+trap - EXIT
+
 echo 'CI script checks passed'

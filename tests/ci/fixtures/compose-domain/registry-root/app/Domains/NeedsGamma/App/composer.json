@@ -1,0 +1,10 @@
+{
+  "extra": {
+    "blb": {
+      "module": "needs-gamma/app",
+      "requires-modules": {
+        "gamma/missing": "*"
+      }
+    }
+  }
+}
