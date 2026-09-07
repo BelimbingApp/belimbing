@@ -88,8 +88,26 @@ class AuditBuffer
         $batch = $entries;
         $entries = [];
 
+        $keys = [];
+        foreach ($batch as $entry) {
+            foreach (array_keys($entry) as $key) {
+                $keys[$key] = true;
+            }
+        }
+        $keys = array_keys($keys);
+        sort($keys);
+
+        $normalized = array_map(static function (array $entry) use ($keys): array {
+            $row = [];
+            foreach ($keys as $key) {
+                $row[$key] = $entry[$key] ?? ($key === 'is_retained' ? false : null);
+            }
+
+            return $row;
+        }, $batch);
+
         try {
-            foreach (array_chunk($batch, 500) as $chunk) {
+            foreach (array_chunk($normalized, 500) as $chunk) {
                 $model::query()->insert($chunk);
             }
         } catch (Throwable $exception) {
