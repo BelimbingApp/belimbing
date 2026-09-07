@@ -4,6 +4,7 @@ namespace App\Base\Database\Models;
 
 use App\Base\Database\Enums\DataOperationStatus;
 use App\Base\Database\Enums\DataOperationType;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -13,13 +14,36 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * references this run by id.
  *
  * @property int $id
- * @property string $status
+ * @property DataOperationType $operation_type
+ * @property string $source
+ * @property string $direction
+ * @property bool $is_forced
+ * @property string $transfer_mode
+ * @property string|null $local_instance_id
+ * @property string|null $remote_instance_id
+ * @property string|null $actor_type
+ * @property int|null $actor_id
+ * @property int|null $company_id
+ * @property string|null $actor_role
+ * @property string|null $actor_label
+ * @property string|null $trace_id
+ * @property string|null $schedule_run_ref
+ * @property DataOperationStatus $status
+ * @property CarbonInterface|null $started_at
+ * @property CarbonInterface|null $finished_at
+ * @property int|null $duration_ms
  * @property int $table_count
+ * @property int $total_rows_affected
+ * @property string|null $failure_summary
+ * @property CarbonInterface|null $audit_projection_attempted_at
  */
 class DataOperationRun extends Model
 {
     protected $table = 'base_database_data_operation_runs';
 
+    /**
+     * @var list<string>
+     */
     protected $fillable = [
         'operation_type',
         'source',

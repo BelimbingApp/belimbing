@@ -535,48 +535,6 @@ parameters:
 			path: app/Base/Authz/Models/DecisionLog.php
 
 		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\PrincipalCapability\:\:\$principal_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Models/PrincipalCapability.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\PrincipalCapability\:\:\$principal_type\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Models/PrincipalCapability.php
-
-		-
-			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Authz\\Models\\PrincipalCapability\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
-			identifier: property.phpDocType
-			count: 1
-			path: app/Base/Authz/Models/PrincipalCapability.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\PrincipalRole\:\:\$principal_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Models/PrincipalRole.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\PrincipalRole\:\:\$principal_type\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Models/PrincipalRole.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\PrincipalRole\:\:\$role_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Models/PrincipalRole.php
-
-		-
-			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Authz\\Models\\PrincipalRole\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
-			identifier: property.phpDocType
-			count: 1
-			path: app/Base/Authz/Models/PrincipalRole.php
-
-		-
 			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Authz\\Models\\Role\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
 			identifier: property.phpDocType
 			count: 1
@@ -599,18 +557,6 @@ parameters:
 			identifier: property.phpDocType
 			count: 1
 			path: app/Base/Authz/Models/RoleCapability.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\PrincipalCapability\:\:\$capability_key\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Authz/Services/EffectivePermissions.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\PrincipalCapability\:\:\$is_allowed\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Services/EffectivePermissions.php
 
 		-
 			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$name\.$#'
@@ -1319,72 +1265,6 @@ parameters:
 			identifier: arrayValues.list
 			count: 1
 			path: app/Base/Database/Services/Backup/Encryption/EncryptionModeRegistry.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationRun\:\:\$direction\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationRun\:\:\$is_forced\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationRun\:\:\$local_instance_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationRun\:\:\$operation_type\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationRun\:\:\$remote_instance_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationRun\:\:\$source\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationRun\:\:\$total_rows_affected\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationRun\:\:\$transfer_mode\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationTableSummary\:\:\$rows_deleted\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationTableSummary\:\:\$rows_inserted\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataOperationTableSummary\:\:\$rows_updated\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataOperation/LedgerDataOperationRecorder.php
 
 		-
 			message: '#^Call to function method_exists\(\) with App\\Core\\User\\Models\\User and ''getCompanyId'' will always evaluate to true\.$#'
@@ -2263,48 +2143,6 @@ parameters:
 			path: app/Base/Foundation/Services/SourceRepositoryInstaller.php
 
 		-
-			message: '#^Access to an undefined property App\\Base\\Integration\\Models\\OutboundExchange\:\:\$metadata\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Integration/Livewire/OutboundExchanges/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Integration\\Models\\OutboundExchange\:\:\$request_body\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Integration/Livewire/OutboundExchanges/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Integration\\Models\\OutboundExchange\:\:\$request_body_truncated\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Integration/Livewire/OutboundExchanges/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Integration\\Models\\OutboundExchange\:\:\$request_headers\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Integration/Livewire/OutboundExchanges/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Integration\\Models\\OutboundExchange\:\:\$response_body\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Integration/Livewire/OutboundExchanges/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Integration\\Models\\OutboundExchange\:\:\$response_body_truncated\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Integration/Livewire/OutboundExchanges/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Integration\\Models\\OutboundExchange\:\:\$response_headers\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Integration/Livewire/OutboundExchanges/Show.php
-
-		-
 			message: '#^Strict comparison using \=\=\= between string and null will always evaluate to false\.$#'
 			identifier: identical.alwaysFalse
 			count: 2
@@ -2339,12 +2177,6 @@ parameters:
 			identifier: notIdentical.alwaysTrue
 			count: 1
 			path: app/Base/Integration/Services/OAuth2Client.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Integration\\Models\\OutboundExchange\:\:\$updated_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Integration/Services/OutboundExchangePruner.php
 
 		-
 			message: '#^Instanceof between App\\Base\\Integration\\Models\\OutboundExchange and App\\Base\\Integration\\Models\\OutboundExchange will always evaluate to true\.$#'

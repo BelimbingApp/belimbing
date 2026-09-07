@@ -3,6 +3,7 @@
 namespace App\Base\Database\Models;
 
 use App\Base\Database\Enums\DataOperationRangeKind;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -14,11 +15,32 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $run_id
  * @property string $table_name
  * @property list<string> $actions
+ * @property int|null $rows_source
+ * @property int|null $rows_attempted
+ * @property int|null $rows_inserted
+ * @property int|null $rows_updated
+ * @property int|null $rows_written
+ * @property int|null $rows_deleted
+ * @property int|null $rows_unchanged
+ * @property int|null $rows_rejected
+ * @property int|null $rows_before
+ * @property int|null $rows_after
+ * @property list<string>|null $key_columns
+ * @property DataOperationRangeKind|null $range_kind
+ * @property string|null $first_key
+ * @property string|null $last_key
+ * @property string|null $local_schema_fingerprint
+ * @property string|null $remote_schema_fingerprint
+ * @property string|null $terminal_status
+ * @property CarbonInterface|null $observed_at
  */
 class DataOperationTableSummary extends Model
 {
     protected $table = 'base_database_data_operation_tables';
 
+    /**
+     * @var list<string>
+     */
     protected $fillable = [
         'run_id',
         'table_name',

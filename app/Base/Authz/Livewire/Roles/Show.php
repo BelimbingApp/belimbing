@@ -355,10 +355,12 @@ class Show extends Component implements ProvidesLaraPageContext
                 ->with('company')
                 ->get()
                 ->map(function (User $user) use ($assignedPrincipalRoles) {
-                    $user->pivot_id = $assignedPrincipalRoles
+                    $assignment = $assignedPrincipalRoles
                         ->where('principal_id', $user->id)
-                        ->first()
-                        ?->id;
+                        ->first();
+                    if ($assignment !== null) {
+                        $user->setRelation('assignment', $assignment);
+                    }
 
                     return $user;
                 })

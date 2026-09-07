@@ -188,24 +188,20 @@ final class LedgerDataOperationRecorder implements DataOperationRecorder
                 return; // another finalize already emitted (or is emitting) the action
             }
 
-            $type = $run->operation_type instanceof DataOperationType
-                ? $run->operation_type
-                : DataOperationType::tryFrom((string) $run->operation_type);
-            $status = $run->status instanceof DataOperationStatus
-                ? $run->status
-                : DataOperationStatus::tryFrom((string) $run->status);
+            $type = $run->operation_type;
+            $status = $run->status;
 
             $this->semanticActions->record(
-                event: 'data_operation.'.($type?->value ?? 'unknown'),
+                event: 'data_operation.'.$type->value,
                 summary: $this->summarize($run, $type, $status),
                 source: $run->source,
                 subject: [
                     'name' => 'data_operation',
                     'id' => (int) $run->id,
-                    'identifier' => $type?->value,
+                    'identifier' => $type->value,
                 ],
                 context: [
-                    'operation_type' => $type?->value,
+                    'operation_type' => $type->value,
                     'direction' => $run->direction,
                     'is_forced' => (bool) $run->is_forced,
                     'transfer_mode' => $run->transfer_mode,
@@ -223,12 +219,12 @@ final class LedgerDataOperationRecorder implements DataOperationRecorder
         }
     }
 
-    private function summarize(DataOperationRun $run, ?DataOperationType $type, ?DataOperationStatus $status): string
+    private function summarize(DataOperationRun $run, DataOperationType $type, DataOperationStatus $status): string
     {
         return sprintf(
             '%s %s: %d table(s)',
-            $type?->label() ?? 'Data operation',
-            $status?->value ?? 'completed',
+            $type->label(),
+            $status->value,
             (int) $run->table_count,
         );
     }
