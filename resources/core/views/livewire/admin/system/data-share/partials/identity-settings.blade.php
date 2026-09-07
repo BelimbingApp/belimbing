@@ -2,7 +2,7 @@
 
 @php($outstanding = $this->outstandingIdentityWork)
 @if (($outstanding['offers'] ?? 0) > 0 || ($outstanding['unapplied'] ?? 0) > 0)
-    <div class="mt-5 rounded-md border border-danger/30 bg-danger/5 p-4">
+    <div class="mt-5 rounded-md border border-status-danger-border bg-status-danger-subtle p-4">
         <p class="text-sm text-ink">
             {{ __('Changing instance ID or role while outstanding transfer work remains will orphan published offers and unapplied packages.') }}
         </p>
@@ -16,7 +16,7 @@
             <span>{{ __('I understand — change identity anyway') }}</span>
         </label>
         @error('confirmIdentityChange')
-            <p class="mt-2 text-sm text-danger">{{ $message }}</p>
+            <p class="mt-2 text-sm text-status-danger">{{ $message }}</p>
         @enderror
     </div>
 @endif

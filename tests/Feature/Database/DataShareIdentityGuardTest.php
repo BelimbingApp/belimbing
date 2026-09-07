@@ -13,6 +13,7 @@ use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\Support\SettingsFieldValue;
 use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\User\Models\User;
+use Illuminate\View\ViewException;
 use Livewire\Livewire;
 
 beforeEach(function (): void {
@@ -202,7 +203,7 @@ it('does not let a wire-set confirmIdentityChange bypass the capability check', 
         ->assertForbidden();
 
     expect(fn () => Livewire::actingAs($stranger)->test(DataShareSettings::class))
-        ->toThrow(\Illuminate\View\ViewException::class);
+        ->toThrow(ViewException::class);
 
     expect(app(SettingsService::class)->get('data_share.instance.id'))->toBe('identity-source-dev')
         ->and(DataShareEvent::query()->where('action', 'identity_changed')->exists())->toBeFalse();
