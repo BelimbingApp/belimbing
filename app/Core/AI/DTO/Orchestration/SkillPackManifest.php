@@ -58,6 +58,17 @@ final readonly class SkillPackManifest
     }
 
     /**
+     * Path of the first bundled reference, or '' when the pack bundles none.
+     *
+     * For filesystem packs this is the `SKILL.md` the manifest was built from,
+     * which is the only handle an operator has on where the pack came from.
+     */
+    public function primaryReferencePath(): string
+    {
+        return $this->references[0]->path ?? '';
+    }
+
+    /**
      * Whether the pack is currently available for resolution.
      */
     public function isAvailable(): bool

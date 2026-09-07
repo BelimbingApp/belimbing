@@ -339,7 +339,7 @@ Providerless modules participate in dependency resolution. Rebuild cached config
 | Audit, dashboard, and other contributions | The documented `Config/{surface}.php` under supported Module roots | Owning Base discovery service |
 | Livewire components | `Livewire/` below supported Base components and Modules | `App\Base\Livewire\ComponentDiscoveryService` |
 | Views | Not implicitly namespace-registered; the owning provider calls `loadViewsFrom()` | Module provider |
-| Agent skills | project `.agents/skills`, Core Modules, Domain Modules, Extension sources, and Extension Modules | `App\Core\AI\Services\Orchestration\FilesystemSkillPackLoader` |
+| Agent skills | project `.agents/skills`, Core Modules, Domain Modules, Extension sources, and Extension Modules; the first root to declare an id keeps it and later roots are shadowed, which `blb:ai:skills:list` reports | `App\Core\AI\Services\Orchestration\FilesystemSkillPackLoader` |
 | Tailwind and Blade refresh | `resources/core/views`, plus installed `app/Core/*/Views`, `app/Domains/*/*/Views`, and `app/Extensions/*/*/Views` | Tailwind/Vite configuration |
 | Tests | root `tests/`; Domain-level and Domain-Module `Tests/`; Extension-Module `Tests/` | PHPUnit and Pest configuration |
 | Module manifests | Module-root `composer.json` containing `extra.blb` | `App\Base\Foundation\ModuleManifest\ModuleManifestReader` |
