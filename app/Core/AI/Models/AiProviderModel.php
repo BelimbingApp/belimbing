@@ -1,9 +1,22 @@
 <?php
+
 namespace App\Core\AI\Models;
 
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property int $id
+ * @property int $ai_provider_id
+ * @property string $model_id
+ * @property bool $is_active
+ * @property bool $is_default
+ * @property array<string, mixed>|null $cost_override
+ * @property array<string, mixed>|null $execution_controls
+ * @property CarbonInterface|null $created_at
+ * @property CarbonInterface|null $updated_at
+ */
 class AiProviderModel extends Model
 {
     /**
