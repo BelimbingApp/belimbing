@@ -1223,12 +1223,11 @@ authorable_script="$root/scripts/ci/changed-authorable-php.sh"
     # Touch both existing migrations, add one, add an ordinary class, delete a
     # class, and add a non-PHP file. Each is a different arm of the rule.
     #
-    # The deletion is excluded twice over: --diff-filter=ACMR never lists it,
-    # and [[ -f "$path" ]] would drop it if it did. Measured: removing either
-    # one alone leaves this block green, and removing both turns it red. They
-    # are a redundant pair on purpose, so no single-guard mutation can pin
-    # them individually -- do not "simplify" one away on the strength of a
-    # green run.
+    # Deletion exclusion is two guards: --diff-filter=ACMR (pinned by the
+    # head-tree case below — ACMRD alone stays green because -f still drops
+    # Old.php) and [[ -f "$path" ]] (pinned by the base-tree case that follows —
+    # deleting -f alone turns that case red while the head-tree case stays
+    # green). Do not drop either on the strength of one green run.
     printf '<?php // a changed\n' > app/Base/X/Database/Migrations/2026_01_01_000000_a.php
     printf '<?php // b changed\n' > database/migrations/2026_01_01_000000_b.php
     printf '<?php // s changed\n' > app/Base/X/Services/S.php
@@ -1240,9 +1239,9 @@ authorable_script="$root/scripts/ci/changed-authorable-php.sh"
     git commit -qm head
     authorable_head=$(git rev-parse HEAD)
 
-    # git orders paths lexically, so the expected sequence is fixed. Compared
-    # whole rather than grepped: a missing line and an extra line are both
-    # failures, and a grep for what should be present cannot see an extra.
+    # Head-tree case: working tree matches head (lint.yml checkout). git orders
+    # paths lexically, so the expected sequence is fixed. Compared whole rather
+    # than grepped: a missing line and an extra line are both failures.
     authorable_expected=$(printf '%s\n' \
         'app/Base/X/Database/Migrations/2026_02_01_000000_c.php' \
         'app/Base/X/Livewire/L.php' \
@@ -1265,6 +1264,29 @@ authorable_script="$root/scripts/ci/changed-authorable-php.sh"
         echo "changed-authorable-php.sh emitted $authorable_nuls NUL separators, expected 3" >&2
         exit 1
     fi
+
+    # Base-tree case (#857): checkout at base so paths the diff lists but the
+    # tree lacks (the added migration and Livewire class) are absent on disk.
+    # [[ -f "$path" ]] must drop them; without it the script prints the full
+    # head set against a base tree and Pint would lint ghosts. lint.yml relies
+    # on checkout-at-head; this pins the -f guard alone.
+    git checkout -q "$authorable_base"
+    authorable_base_expected=$(printf '%s\n' 'app/Base/X/Services/S.php')
+    authorable_base_actual=$(bash "$authorable_script" "$authorable_base" "$authorable_head" 2>"$authorable_fixture/base.err" | tr '\0' '\n')
+    if [[ -s "$authorable_fixture/base.err" ]]; then
+        echo 'changed-authorable-php.sh wrote stderr on a base-tree checkout' >&2
+        cat "$authorable_fixture/base.err" >&2
+        exit 1
+    fi
+    if [[ "$authorable_base_actual" != "$authorable_base_expected" ]]; then
+        echo 'changed-authorable-php.sh did not drop missing paths on a base-tree checkout' >&2
+        echo "expected:" >&2
+        printf '%s\n' "$authorable_base_expected" >&2
+        echo "actual:" >&2
+        printf '%s\n' "$authorable_base_actual" >&2
+        exit 1
+    fi
+    git checkout -q "$authorable_head"
 
     # No base ref: the ${1:?} guard refuses rather than diffing against nothing.
     if bash "$authorable_script" >/dev/null 2>"$authorable_fixture/usage.txt"; then
