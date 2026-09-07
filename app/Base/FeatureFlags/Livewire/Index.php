@@ -5,11 +5,13 @@ namespace App\Base\FeatureFlags\Livewire;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
+use App\Base\FeatureFlags\Exceptions\FeatureFlagStillDeclaredException;
 use App\Base\FeatureFlags\Exceptions\UndeclaredFeatureFlagException;
 use App\Base\FeatureFlags\Services\FeatureFlagDeclarationInventory;
 use App\Base\FeatureFlags\Services\FeatureFlagOverrideHistory;
 use App\Base\FeatureFlags\Services\FeatureFlags;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
+use App\Base\Tenancy\Contracts\TenantContext;
 use Illuminate\Contracts\View\View;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -61,6 +63,18 @@ class Index extends Component
         });
     }
 
+    public function purge(string $flag, FeatureFlags $flags): void
+    {
+        $this->runIfCapable('admin.system.feature-flags.manage', function () use ($flag, $flags): void {
+            try {
+                $flags->purgeOrphanedOverride($flag);
+                $this->notifySuccess(__('Orphaned override for :flag removed.', ['flag' => $flag]));
+            } catch (FeatureFlagStillDeclaredException|UndeclaredFeatureFlagException $e) {
+                $this->notifyError($e->getMessage());
+            }
+        });
+    }
+
     public function render(FeatureFlagDeclarationInventory $declarations, FeatureFlagOverrideHistory $history): View
     {
         $needle = strtolower(trim($this->search));
@@ -94,9 +108,18 @@ class Index extends Component
             })
             ->all();
 
+        $orphanedRows = collect($declarations->orphanedOverridesForCurrentTenant());
+        if ($needle !== '') {
+            $orphanedRows = $orphanedRows->filter(
+                fn (array $row): bool => str_contains(strtolower($row['flag']), $needle),
+            );
+        }
+
         return view('livewire.admin.system.feature-flags.index', [
             'rows' => $rows,
             'declaredRows' => $declaredRows,
+            'orphanedRows' => $orphanedRows->values()->all(),
+            'tenantId' => app(TenantContext::class)->requireTenantId(),
             'hasDeclarationConflicts' => $hasDeclarationConflicts,
             'canManage' => ! $hasDeclarationConflicts && $this->actorCanManage(),
             'overrideHistory' => $history->forCurrentTenant(),
