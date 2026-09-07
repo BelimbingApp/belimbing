@@ -8,7 +8,7 @@ use App\Base\Tenancy\Exceptions\TenantJobMismatchException;
 use Illuminate\Foundation\Bus\PendingDispatch;
 
 /** Dispatches tenant-aware jobs only for the command's bound tenant. */
-// @phpstan-ignore trait.unused (The tenant-scoped command lands separately in #732.)
+// @phpstan-ignore trait.unused (Domain commands adopt it as they move onto TenantScopedCommand, #710.)
 trait DispatchesWithTenant
 {
     protected function dispatchWithTenant(CarriesTenant $job): PendingDispatch
