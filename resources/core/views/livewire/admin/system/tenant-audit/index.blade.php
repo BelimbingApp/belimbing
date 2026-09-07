@@ -93,5 +93,34 @@
                 </div>
             @endif
         </x-ui.card>
+
+        <x-ui.card>
+            <h2 class="mb-3 text-sm font-semibold text-ink">{{ __('Recent tenant-context misses') }}</h2>
+            <p class="mb-3 text-sm text-muted">{{ __('Last :count RequireTenantContext refusals with the route name and the resolver that returned null. The HTTP 404 is unchanged.', ['count' => 50]) }}</p>
+
+            <x-ui.table container="flush" :caption="__('Recent tenant-context misses')">
+                <x-slot name="head">
+                    <tr>
+                        <th scope="col" class="px-table-cell-x py-table-cell-y text-left text-xs font-medium text-muted uppercase tracking-wider">{{ __('When') }}</th>
+                        <th scope="col" class="px-table-cell-x py-table-cell-y text-left text-xs font-medium text-muted uppercase tracking-wider">{{ __('Route') }}</th>
+                        <th scope="col" class="px-table-cell-x py-table-cell-y text-left text-xs font-medium text-muted uppercase tracking-wider">{{ __('Resolver') }}</th>
+                    </tr>
+                </x-slot>
+
+                @forelse ($missRows as $miss)
+                    <tr wire:key="tenant-audit-miss-{{ $miss['at'] }}-{{ $loop->index }}" data-tenant-miss="1">
+                        <td class="px-table-cell-x py-table-cell-y whitespace-nowrap font-mono text-xs text-muted">{{ $miss['at'] }}</td>
+                        <td class="px-table-cell-x py-table-cell-y font-mono text-xs text-ink">{{ $miss['route'] ?? __('(unnamed)') }}</td>
+                        <td class="px-table-cell-x py-table-cell-y text-sm text-ink">{{ $miss['resolver'] }}</td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="3" class="px-table-cell-x py-8 text-center text-sm text-muted">
+                            {{ __('No tenant-context misses recorded yet.') }}
+                        </td>
+                    </tr>
+                @endforelse
+            </x-ui.table>
+        </x-ui.card>
     </div>
 </div>

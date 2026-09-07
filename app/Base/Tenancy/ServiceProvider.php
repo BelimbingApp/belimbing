@@ -5,10 +5,12 @@ namespace App\Base\Tenancy;
 use App\Base\Menu\Services\MenuConditionRegistry;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Tenancy\Console\Commands\DomainCommandsCommand;
+use App\Base\Tenancy\Console\Commands\TenantMissesCommand;
 use App\Base\Tenancy\Contracts\TenantContext;
 use App\Base\Tenancy\Models\Tenant;
 use App\Base\Tenancy\Services\ApplicationTenantContext;
 use App\Base\Tenancy\Services\PlatformOperatorTenantAccess;
+use App\Base\Tenancy\Services\TenantContextMissRecorder;
 use Illuminate\Queue\Events\JobExceptionOccurred;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
@@ -31,7 +33,8 @@ class ServiceProvider extends BaseServiceProvider
     {
         $this->mergeConfigFrom(__DIR__.'/Config/domain_commands.php', 'domain_commands');
         $this->app->scoped(TenantContext::class, ApplicationTenantContext::class);
-        $this->commands([DomainCommandsCommand::class]);
+        $this->app->singleton(TenantContextMissRecorder::class);
+        $this->commands([DomainCommandsCommand::class, TenantMissesCommand::class]);
     }
 
     /**
