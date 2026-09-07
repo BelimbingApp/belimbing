@@ -223,6 +223,9 @@ jobs:
       - name: Audit composed Domain route middleware
         run: php artisan blb:domain-routes --audit
 
+      - name: Audit composed Domain command tenant scope
+        run: php artisan blb:domain-commands --audit
+
       # Platform tests.yml only sees an empty Domains tree; the real hit surface
       # is composed here. Fixture cases stay in SubjectIdRequestScanTest.
       # Run before the Domain Pest suite so ambient suite failures cannot skip
