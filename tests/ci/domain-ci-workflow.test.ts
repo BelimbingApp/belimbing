@@ -29,6 +29,18 @@ test("composed route middleware audit gates SQLite before Domain Pest", () => {
     expect(workflow.jobs["postgres-mirror"].steps.map((entry: any) => entry.name)).not.toContain(name);
 });
 
+test("composed command tenant-scope audit gates SQLite after the route audit and before Domain Pest", () => {
+    const name = "Audit composed Domain command tenant scope";
+    const audit = step(name);
+    expect(audit.run).toBe("php artisan blb:domain-commands --audit");
+    expect(audit.if).toBeUndefined();
+    expect(audit["continue-on-error"]).toBeUndefined();
+    const names = sqliteSteps().map((entry: any) => entry.name);
+    expect(names.indexOf("Audit composed Domain route middleware")).toBeLessThan(names.indexOf(name));
+    expect(names.indexOf(name)).toBeLessThan(names.indexOf("Run Tests"));
+    expect(workflow.jobs["postgres-mirror"].steps.map((entry: any) => entry.name)).not.toContain(name);
+});
+
 test("composed feature flag ownership runs after Pint and before Domain Pest", () => {
     const name = "Check composed feature flag ownership";
     const scan = step(name);

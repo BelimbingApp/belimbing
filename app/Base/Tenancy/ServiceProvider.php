@@ -4,6 +4,7 @@ namespace App\Base\Tenancy;
 
 use App\Base\Menu\Services\MenuConditionRegistry;
 use App\Base\Settings\Contracts\SettingsService;
+use App\Base\Tenancy\Console\Commands\DomainCommandsCommand;
 use App\Base\Tenancy\Console\Commands\TenantMissesCommand;
 use App\Base\Tenancy\Contracts\TenantContext;
 use App\Base\Tenancy\Models\Tenant;
@@ -30,9 +31,10 @@ class ServiceProvider extends BaseServiceProvider
      */
     public function register(): void
     {
+        $this->mergeConfigFrom(__DIR__.'/Config/domain_commands.php', 'domain_commands');
         $this->app->scoped(TenantContext::class, ApplicationTenantContext::class);
         $this->app->singleton(TenantContextMissRecorder::class);
-        $this->commands([TenantMissesCommand::class]);
+        $this->commands([DomainCommandsCommand::class, TenantMissesCommand::class]);
     }
 
     /**
