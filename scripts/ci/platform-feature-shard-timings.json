@@ -43,6 +43,10 @@
       "wall_seconds": 33.157,
       "test_files": 23
     },
+    "Docs": {
+      "wall_seconds": 1.0,
+      "test_files": 1
+    },
     "Foundation": {
       "wall_seconds": 9.305,
       "test_files": 14

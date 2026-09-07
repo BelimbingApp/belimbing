@@ -2,8 +2,8 @@
   "generated_from": "platform-feature-shard-timings.json",
   "balance": "longest-processing-time",
   "estimated_wall_seconds": {
-    "a": 123.021,
-    "b": 123.635
+    "a": 123.994,
+    "b": 123.662
   },
   "shards": {
     "a": [
@@ -12,8 +12,9 @@
       "Auth",
       "Base",
       "Dashboard",
-      "Media",
+      "Docs",
       "Menu",
+      "Routing",
       "Schedule",
       "System",
       "User"
@@ -25,8 +26,8 @@
       "Core",
       "Database",
       "Foundation",
+      "Media",
       "Queue",
-      "Routing",
       "Settings",
       "Software",
       "Workflow"
