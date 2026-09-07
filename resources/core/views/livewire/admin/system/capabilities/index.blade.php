@@ -30,15 +30,15 @@
     @else
         <x-ui.card>
             <x-ui.table container="flush" :caption="__('Declared capabilities, their modules, granting roles and holders in this tenant')">
-                <x-slot:head>
+                <x-slot name="head">
                     <tr>
                         <x-ui.th>{{ __('Capability') }}</x-ui.th>
                         <x-ui.th>{{ __('Declared by') }}</x-ui.th>
                         <x-ui.th>{{ __('Granting roles') }}</x-ui.th>
                         <x-ui.th>{{ __('Holders in this tenant') }}</x-ui.th>
                     </tr>
-                </x-slot:head>
-                <x-slot:body>
+                </x-slot>
+                <x-slot name="body">
                     @foreach ($rows as $row)
                         <tr wire:key="cap-{{ $row->capability }}">
                             <td class="px-table-cell-x py-table-cell-y text-sm text-ink">
@@ -66,7 +66,7 @@
                             </td>
                         </tr>
                     @endforeach
-                </x-slot:body>
+                </x-slot>
             </x-ui.table>
 
             <div class="mt-4">{{ $rows->links() }}</div>
