@@ -5,7 +5,10 @@ namespace App\Base\System\Livewire\Capabilities;
 use App\Base\Authz\Capability\CapabilityInventory;
 use App\Base\Authz\Capability\CapabilityInventoryRow;
 use Illuminate\Contracts\View\View;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Request;
 use Livewire\Component;
+use Livewire\WithPagination;
 
 /**
  * Every declared capability, its owning module, the roles that grant it and
@@ -18,15 +21,35 @@ use Livewire\Component;
  */
 final class Index extends Component
 {
+    use WithPagination;
+
+    /**
+     * The installation declares a few hundred capabilities, which is more than
+     * a page should ship at once: rendering them all put this over the 150 KB
+     * page-weight budget, and a table nobody can read is not a diagnostic.
+     */
+    private const PER_PAGE = 50;
+
     public const VIEW_CAPABILITY = CapabilityInventory::VIEW;
 
     public string $search = '';
 
     public bool $problemsOnly = false;
 
+    public function updatedSearch(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedProblemsOnly(): void
+    {
+        $this->resetPage();
+    }
+
     public function render(CapabilityInventory $inventory): View
     {
-        $rows = $inventory->rows();
+        $all = $inventory->rows();
+        $rows = $all;
         $needle = trim(mb_strtolower($this->search));
 
         if ($needle !== '') {
@@ -44,10 +67,21 @@ final class Index extends Component
             ));
         }
 
+        $page = max(1, (int) $this->getPage());
+        $paginator = new LengthAwarePaginator(
+            array_slice($rows, ($page - 1) * self::PER_PAGE, self::PER_PAGE),
+            count($rows),
+            self::PER_PAGE,
+            $page,
+            ['path' => Request::url(), 'pageName' => 'page'],
+        );
+
         return view('livewire.admin.system.capabilities.index', [
-            'rows' => $rows,
+            'rows' => $paginator,
+            // Counted over the whole inventory, not the page: an operator must
+            // see that something is rejected even while filtered elsewhere.
             'rejectedCount' => count(array_filter(
-                $inventory->rows(),
+                $all,
                 static fn (CapabilityInventoryRow $row): bool => $row->rejectedReason !== null,
             )),
         ]);

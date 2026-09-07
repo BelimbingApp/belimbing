@@ -23,7 +23,7 @@
         </x-ui.button>
     </div>
 
-    @if ($rows === [])
+    @if ($rows->isEmpty())
         <x-ui.alert variant="info">{{ __('No capability matches that filter.') }}</x-ui.alert>
     @else
         <x-ui.card>
@@ -66,6 +66,8 @@
                     @endforeach
                 </x-slot:body>
             </x-ui.table>
+
+            <div class="mt-4">{{ $rows->links() }}</div>
         </x-ui.card>
     @endif
 </div>

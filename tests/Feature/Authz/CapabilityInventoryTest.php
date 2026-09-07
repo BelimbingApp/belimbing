@@ -148,9 +148,10 @@ it('shows a rejected capability as not applicable rather than as a holder count'
     $f['role']->capabilities()->create(['capability_key' => 'admin.system.capabilities.view']);
     $operator = inventoryHolder($f, $f['company']);
 
-    test()->actingAs($operator)
-        ->get(route('admin.system.capabilities.index'))
-        ->assertOk()
+    // The list is paginated, so reaching a rejected row is a filter away —
+    // which is how an operator would find it too.
+    Livewire::actingAs($operator)->test(CapabilitiesIndex::class)
+        ->set('problemsOnly', true)
         ->assertSee('unknown verb [hod]')
         ->assertSee('Not applicable');
 
@@ -164,7 +165,9 @@ it('narrows to problems and to a search term', function (): void {
 
     // Problems-only keeps the rejected key and drops a healthy one.
     Livewire::actingAs($operator)->test(CapabilitiesIndex::class)
+        ->set('search', 'admin.user.view')
         ->assertSee('admin.user.view')
+        ->set('search', '')
         ->set('problemsOnly', true)
         ->assertSee('people.organisation.audience.hod')
         ->assertDontSee('admin.user.view');

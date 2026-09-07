@@ -2,12 +2,10 @@
 
 namespace App\Base\Authz\Capability;
 
-use App\Base\Authz\Models\PrincipalRole;
-use App\Base\Authz\Models\Role;
 use App\Base\Foundation\ApplicationTopology;
 use App\Base\Foundation\Services\DomainState;
 use App\Base\Tenancy\Contracts\TenantContext;
-use App\Core\Company\Models\Company;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Every declared capability, with who granted it and whether it exists.
@@ -138,6 +136,10 @@ final class CapabilityInventory
     /**
      * Every role grant, keyed by capability.
      *
+     * Read through the query builder rather than the models: these tables have
+     * no typed properties, so model access is both slower here and unprovable
+     * to static analysis.
+     *
      * Not filtered to the declared set: rowsFrom() iterates the declarations,
      * so a grant for an undeclared key is never looked up. A filter here would
      * read like a guard and could not change what the page shows.
@@ -148,10 +150,16 @@ final class CapabilityInventory
     {
         $grants = [];
 
-        foreach (Role::query()->with('capabilities')->get() as $role) {
-            foreach ($role->capabilities as $grant) {
-                $grants[strtolower((string) $grant->capability_key)][] = (string) $role->code;
-            }
+        $rows = DB::table('base_authz_role_capabilities')
+            ->join('base_authz_roles', 'base_authz_roles.id', '=', 'base_authz_role_capabilities.role_id')
+            ->select('base_authz_role_capabilities.capability_key', 'base_authz_roles.code')
+            ->get();
+
+        foreach ($rows as $row) {
+            // Cast to an array rather than reading properties off stdClass:
+            // static analysis cannot prove a query-builder row's shape.
+            $values = (array) $row;
+            $grants[strtolower((string) $values['capability_key'])][] = (string) $values['code'];
         }
 
         return $grants;
@@ -169,31 +177,26 @@ final class CapabilityInventory
      */
     private function holderCounts(array $roleCodes): array
     {
-        if ($roleCodes === []) {
-            return [];
-        }
-
         $tenantId = $this->tenants->currentTenantId();
 
-        if ($tenantId === null) {
+        if ($roleCodes === [] || $tenantId === null) {
             return [];
         }
 
-        $companies = Company::query()->where('tenant_id', $tenantId)->pluck('id');
-        $roles = Role::query()->whereIn('code', $roleCodes)->pluck('code', 'id');
-
-        if ($roles->isEmpty() || $companies->isEmpty()) {
-            return [];
-        }
+        $rows = DB::table('base_authz_principal_roles')
+            ->join('base_authz_roles', 'base_authz_roles.id', '=', 'base_authz_principal_roles.role_id')
+            ->join('companies', 'companies.id', '=', 'base_authz_principal_roles.company_id')
+            ->where('companies.tenant_id', $tenantId)
+            ->whereIn('base_authz_roles.code', $roleCodes)
+            ->select('base_authz_roles.code', DB::raw('count(*) as holder_count'))
+            ->groupBy('base_authz_roles.code')
+            ->get();
 
         $counts = [];
 
-        foreach (PrincipalRole::query()
-            ->whereIn('role_id', $roles->keys())
-            ->whereIn('company_id', $companies)
-            ->get() as $assignment) {
-            $code = (string) $roles[$assignment->role_id];
-            $counts[$code] = ($counts[$code] ?? 0) + 1;
+        foreach ($rows as $row) {
+            $values = (array) $row;
+            $counts[(string) $values['code']] = (int) $values['holder_count'];
         }
 
         return $counts;
