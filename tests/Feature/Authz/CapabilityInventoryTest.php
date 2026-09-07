@@ -88,13 +88,17 @@ it('names the module that declared each capability', function (): void {
 it('marks a capability the catalog rejected, with the reason, and reports no holder count', function (): void {
     inventoryFixture();
 
-    // people.organisation.audience.hod is declared by the People module and
-    // dropped for an unknown verb, so it is denied to everybody at runtime.
-    $row = inventoryRow('people.organisation.audience.hod');
+    // Built from an explicit map rather than from whichever module happens to
+    // ship a broken key: this repository's CI composes no domains, so a test
+    // that leaned on People's rejected capabilities would pass here and fail
+    // there for reasons unrelated to the rule it is checking.
+    $rows = app(CapabilityInventory::class)->rowsFrom(
+        declarations: ['people.organisation.audience.hod' => ['Domains/People/Organisation']],
+        rejected: ['people.organisation.audience.hod' => 'unknown verb [hod]'],
+    );
 
-    expect($row)->not->toBeNull()
-        ->and($row->rejectedReason)->toContain('unknown verb')
-        ->and($row->holders)->toBeNull();
+    expect($rows[0]->rejectedReason)->toBe('unknown verb [hod]')
+        ->and($rows[0]->holders)->toBeNull();
 });
 
 it('lists only the roles that grant a capability', function (): void {
@@ -140,41 +144,49 @@ it('renders the page for a holder and refuses a user without the capability', fu
     test()->actingAs($stranger)->get(route('admin.system.capabilities.index'))->assertForbidden();
 });
 
-it('shows a rejected capability as not applicable rather than as a holder count', function (): void {
+it('renders a rejected capability as not applicable rather than as a count', function (): void {
     $f = inventoryFixture();
-    // Grant the rejected key to a role somebody holds: the page must still say
-    // nobody can use it, because the registry does not have it.
-    $f['role']->capabilities()->create(['capability_key' => 'people.organisation.audience.hod']);
     $f['role']->capabilities()->create(['capability_key' => 'admin.system.capabilities.view']);
     $operator = inventoryHolder($f, $f['company']);
 
-    // The list is paginated, so reaching a rejected row is a filter away —
-    // which is how an operator would find it too.
+    $rejected = collect(app(CapabilityInventory::class)->rows())
+        ->first(static fn (object $row): bool => $row->rejectedReason !== null);
+
+    // Composed installations have rejected keys (blb-people#285); this
+    // repository's CI composes no domains and legitimately has none. Skip
+    // rather than assert something that is only true in one of the two.
+    if ($rejected === null) {
+        test()->markTestSkipped('No module in this composition declares a rejected capability.');
+    }
+
     Livewire::actingAs($operator)->test(CapabilitiesIndex::class)
         ->set('problemsOnly', true)
-        ->assertSee('unknown verb [hod]')
+        ->assertSee($rejected->rejectedReason)
         ->assertSee('Not applicable');
-
-    expect(inventoryRow('people.organisation.audience.hod')->holders)->toBeNull();
 });
 
-it('narrows to problems and to a search term', function (): void {
+it('narrows to a search term', function (): void {
     $f = inventoryFixture();
     $f['role']->capabilities()->create(['capability_key' => 'admin.system.capabilities.view']);
     $operator = inventoryHolder($f, $f['company']);
 
-    // Problems-only keeps the rejected key and drops a healthy one.
+    // admin.* capabilities are declared by Base and Core, so this holds
+    // whether or not any domain is composed.
     Livewire::actingAs($operator)->test(CapabilitiesIndex::class)
         ->set('search', 'admin.user.view')
         ->assertSee('admin.user.view')
-        ->set('search', '')
-        ->set('problemsOnly', true)
-        ->assertSee('people.organisation.audience.hod')
-        ->assertDontSee('admin.user.view');
+        ->assertDontSee('admin.company.view');
+});
 
-    // Search narrows by capability or by module.
+it('narrows to problems only', function (): void {
+    $f = inventoryFixture();
+    $f['role']->capabilities()->create(['capability_key' => 'admin.system.capabilities.view']);
+    $operator = inventoryHolder($f, $f['company']);
+
     Livewire::actingAs($operator)->test(CapabilitiesIndex::class)
-        ->set('search', 'admin.user.')
+        ->set('search', 'admin.user.view')
         ->assertSee('admin.user.view')
-        ->assertDontSee('people.organisation.audience.hod');
+        ->set('problemsOnly', true)
+        // A healthy capability is not a problem, whatever else is composed.
+        ->assertDontSee('admin.user.view');
 });
