@@ -7,6 +7,8 @@ use App\Base\Database\Livewire\Concerns\AuthorizesDataShareOperations;
 use App\Base\Database\Livewire\DataShare\Concerns\ManagesSupabaseMirrorSetup;
 use App\Base\Database\Livewire\DataShare\Concerns\TestsAndPreparesMirrorConnection;
 use App\Base\Database\Livewire\DataShare\Concerns\ValidatesDataShareSettings;
+use App\Base\Database\Services\DataShare\DataShareEventRecorder;
+use App\Base\Database\Services\DataShare\DataShareIdentityGuard;
 use App\Base\Database\Services\DataShare\DataShareInstanceIdentityResolver;
 use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorManager;
 use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorProviderInitializer;
@@ -24,6 +26,9 @@ class Settings extends SettingsForm
     use ManagesSupabaseMirrorSetup;
     use TestsAndPreparesMirrorConnection;
     use ValidatesDataShareSettings;
+
+    /** Operator confirmation when identity change would orphan outstanding work (#896). */
+    public bool $confirmIdentityChange = false;
 
     public function mount(SettingsService $settings): void
     {
@@ -122,14 +127,97 @@ class Settings extends SettingsForm
         $this->validatePrivateDisk();
         $this->validateDistinctPaths();
         $this->validateRelatedLimits();
+        $this->guardIdentityChange($settings);
+
+        $identityChange = $this->pendingIdentityChange($settings);
 
         parent::save($settings);
+        $this->confirmIdentityChange = false;
         $this->originalMirrorProvider = $this->selectedMirrorProvider();
+
+        if ($identityChange !== null) {
+            app(DataShareEventRecorder::class)->record('identity_changed', metadata: $identityChange);
+        }
 
         if ($this->originalMirrorProvider !== 'supabase') {
             app(SupabaseMirrorSetupService::class)->forgetProjectMetadata();
             $this->resetSupabaseDiscovery();
         }
+    }
+
+    /**
+     * @return array{offers: int, unapplied: int}
+     */
+    public function getOutstandingIdentityWorkProperty(): array
+    {
+        return app(DataShareIdentityGuard::class)->outstanding();
+    }
+
+    /**
+     * @return array{from: array{id: string, role: string}, to: array{id: string, role: string}, offers: int, unapplied: int}|null
+     */
+    private function pendingIdentityChange(SettingsService $settings): ?array
+    {
+        $idKey = $this->formKey('data_share.instance.id');
+        $roleKey = $this->formKey('data_share.instance.role');
+        $fromId = (string) ($settings->get('data_share.instance.id') ?? '');
+        $fromRole = (string) ($settings->get('data_share.instance.role') ?? '');
+        $toId = trim((string) ($this->values[$idKey] ?? ''));
+        $toRole = trim((string) ($this->values[$roleKey] ?? ''));
+
+        $idChanged = $toId !== '' && $toId !== $fromId;
+        $roleChanged = $toRole !== '' && $toRole !== $fromRole;
+
+        if (! $idChanged && ! $roleChanged) {
+            return null;
+        }
+
+        $outstanding = app(DataShareIdentityGuard::class)->outstanding();
+
+        return [
+            'from' => ['id' => $fromId, 'role' => $fromRole],
+            'to' => [
+                'id' => $idChanged ? $toId : $fromId,
+                'role' => $roleChanged ? $toRole : $fromRole,
+            ],
+            'offers' => $outstanding['offers'],
+            'unapplied' => $outstanding['unapplied'],
+        ];
+    }
+
+    private function guardIdentityChange(SettingsService $settings): void
+    {
+        $change = $this->pendingIdentityChange($settings);
+        if ($change === null) {
+            return;
+        }
+
+        $offers = $change['offers'];
+        $unapplied = $change['unapplied'];
+
+        if (($offers > 0 || $unapplied > 0) && ! $this->confirmIdentityChange) {
+            $message = $this->outstandingIdentityMessage($offers, $unapplied);
+            $this->notify($message, 'danger');
+
+            throw ValidationException::withMessages([
+                'confirmIdentityChange' => $message,
+            ]);
+        }
+    }
+
+    private function outstandingIdentityMessage(int $offers, int $unapplied): string
+    {
+        $parts = [];
+        if ($offers > 0) {
+            $parts[] = trans_choice(':count offer|:count offers', $offers, ['count' => $offers]);
+        }
+        if ($unapplied > 0) {
+            $parts[] = trans_choice(':count unapplied package|:count unapplied packages', $unapplied, ['count' => $unapplied]);
+        }
+
+        return __('Cannot change instance identity while :outstanding remain. Confirm the change to continue.', [
+            'outstanding' => implode(' and ', $parts),
+        ]);
     }
 
     public function initializeMirrorProvider(DataShareMirrorProviderInitializer $initializer): void
