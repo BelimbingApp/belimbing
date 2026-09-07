@@ -201,7 +201,7 @@ it('filters allowed resources correctly', function (): void {
     expect($allowed[1]->id)->toBe(3);
 });
 
-it('allows agent with valid acting_for_user_id', function (): void {
+it('denies agent when supervisor lacks the capability', function (): void {
     PrincipalCapability::query()->create([
         'company_id' => 10,
         'principal_type' => PrincipalType::AGENT->value,
@@ -217,7 +217,156 @@ it('allows agent with valid acting_for_user_id', function (): void {
         'admin.ai.agent.execute'
     );
 
-    expect($decision->allowed)->toBeTrue();
+    expect($decision->allowed)->toBeFalse()
+        ->and($decision->reasonCode)->toBe(AuthorizationReasonCode::DENIED_DELEGATION_EXCEEDS_SUPERVISOR)
+        ->and($decision->appliedPolicies)->toContain('delegation');
+});
+
+it('allows agent when supervisor and agent both hold the capability', function (): void {
+    PrincipalCapability::query()->create([
+        'company_id' => 10,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => 42,
+        'capability_key' => 'admin.ai.agent.execute',
+        'is_allowed' => true,
+    ]);
+    PrincipalCapability::query()->create([
+        'company_id' => 10,
+        'principal_type' => PrincipalType::AGENT->value,
+        'principal_id' => 100,
+        'capability_key' => 'admin.ai.agent.execute',
+        'is_allowed' => true,
+    ]);
+
+    $service = app(AuthorizationService::class);
+
+    $decision = $service->can(
+        new Actor(PrincipalType::AGENT, 100, 10, actingForUserId: 42),
+        'admin.ai.agent.execute'
+    );
+
+    expect($decision->allowed)->toBeTrue()
+        ->and($decision->appliedPolicies)->toContain('delegation')
+        ->and($decision->appliedPolicies)->toContain('grant');
+});
+
+it('denies agent explicitly even when supervisor is allowed', function (): void {
+    PrincipalCapability::query()->create([
+        'company_id' => 10,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => 42,
+        'capability_key' => 'admin.ai.agent.execute',
+        'is_allowed' => true,
+    ]);
+    PrincipalCapability::query()->create([
+        'company_id' => 10,
+        'principal_type' => PrincipalType::AGENT->value,
+        'principal_id' => 100,
+        'capability_key' => 'admin.ai.agent.execute',
+        'is_allowed' => false,
+    ]);
+
+    $service = app(AuthorizationService::class);
+
+    $decision = $service->can(
+        new Actor(PrincipalType::AGENT, 100, 10, actingForUserId: 42),
+        'admin.ai.agent.execute'
+    );
+
+    expect($decision->allowed)->toBeFalse()
+        ->and($decision->reasonCode)->toBe(AuthorizationReasonCode::DENIED_EXPLICITLY);
+});
+
+it('allows agent when supervisor holds the capability via role', function (): void {
+    $role = Role::query()->where('code', 'core_admin')->whereNull('company_id')->firstOrFail();
+
+    PrincipalRole::query()->create([
+        'company_id' => 10,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => 42,
+        'role_id' => $role->id,
+    ]);
+    PrincipalCapability::query()->create([
+        'company_id' => 10,
+        'principal_type' => PrincipalType::AGENT->value,
+        'principal_id' => 100,
+        'capability_key' => 'admin.ai.agent.execute',
+        'is_allowed' => true,
+    ]);
+
+    $service = app(AuthorizationService::class);
+
+    $decision = $service->can(
+        new Actor(PrincipalType::AGENT, 100, 10, actingForUserId: 42),
+        'admin.ai.agent.execute'
+    );
+
+    expect($decision->allowed)->toBeTrue()
+        ->and($decision->appliedPolicies)->toContain('delegation');
+});
+
+it('denies agent when supervisor role is across a tenant boundary', function (): void {
+    [, $roleCompany] = createTenantWithCompany(['name' => 'Supervisor Role Owner Tenant']);
+    [, $actorCompany] = createTenantWithCompany(['name' => 'Agent Assignment Tenant']);
+    $supervisor = User::factory()->create(['company_id' => $actorCompany->id]);
+    $role = Role::query()->create([
+        'company_id' => $roleCompany->id,
+        'name' => 'Foreign Supervisor Grant All',
+        'code' => 'foreign_supervisor_grant_all',
+        'is_system' => false,
+        'grant_all' => true,
+    ]);
+
+    DB::table('base_authz_principal_roles')->insert([
+        'company_id' => $actorCompany->id,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => $supervisor->id,
+        'role_id' => $role->id,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    PrincipalCapability::query()->create([
+        'company_id' => $actorCompany->id,
+        'principal_type' => PrincipalType::AGENT->value,
+        'principal_id' => 100,
+        'capability_key' => 'admin.ai.agent.execute',
+        'is_allowed' => true,
+    ]);
+
+    $decision = app(AuthorizationService::class)->can(
+        new Actor(
+            PrincipalType::AGENT,
+            100,
+            $actorCompany->id,
+            actingForUserId: (int) $supervisor->id,
+            tenantId: (int) $supervisor->tenant_id,
+        ),
+        'admin.ai.agent.execute',
+    );
+
+    expect($decision->allowed)->toBeFalse()
+        ->and($decision->reasonCode)->toBe(AuthorizationReasonCode::DENIED_DELEGATION_EXCEEDS_SUPERVISOR);
+});
+
+it('leaves non-agent decisions unchanged when supervisor grants would not apply', function (): void {
+    PrincipalCapability::query()->create([
+        'company_id' => 10,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => 55,
+        'capability_key' => 'admin.company.view',
+        'is_allowed' => true,
+    ]);
+
+    $service = app(AuthorizationService::class);
+
+    $decision = $service->can(
+        new Actor(PrincipalType::USER, 55, 10),
+        'admin.company.view'
+    );
+
+    expect($decision->allowed)->toBeTrue()
+        ->and($decision->reasonCode)->toBe(AuthorizationReasonCode::ALLOWED)
+        ->and($decision->appliedPolicies)->toContain('delegation');
 });
 
 it('records applied policy trail in decision', function (): void {
@@ -241,5 +390,6 @@ it('records applied policy trail in decision', function (): void {
     expect($decision->appliedPolicies)->toContain('actor_context');
     expect($decision->appliedPolicies)->toContain('capability_registry');
     expect($decision->appliedPolicies)->toContain('company_scope');
+    expect($decision->appliedPolicies)->toContain('delegation');
     expect($decision->appliedPolicies)->toContain('grant');
 });

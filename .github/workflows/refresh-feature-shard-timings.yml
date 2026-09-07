@@ -22,7 +22,6 @@ jobs:
     permissions:
       actions: read
       contents: write
-      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@v7 # NOSONAR — well-known GitHub-maintained action; tag pinning is acceptable for internal projects
@@ -73,9 +72,12 @@ jobs:
           python3 scripts/ci/platform-feature-shards.py --suite=Unit --write-balanced
           python3 scripts/ci/platform-feature-shards.py --suite=Unit --validate-only
 
+      # Org policy refuses GITHUB_TOKEN createPullRequest (#686 / #853). Push stays on
+      # github.token; PR open/label uses COVERAGE_BASELINE_RAISE_TOKEN.
       - name: Open PR with refreshed timings
         env:
           GH_TOKEN: ${{ github.token }}
+          COVERAGE_BASELINE_RAISE_TOKEN: ${{ secrets.COVERAGE_BASELINE_RAISE_TOKEN }}
         run: |
           set -euo pipefail
           if git diff --quiet -- \
@@ -85,6 +87,10 @@ jobs:
             scripts/ci/platform-unit-shards.json; then
             echo "Unit and Feature shard timings and membership unchanged."
             exit 0
+          fi
+          if [[ -z "${COVERAGE_BASELINE_RAISE_TOKEN:-}" ]]; then
+            echo '::error::COVERAGE_BASELINE_RAISE_TOKEN is required to open the baseline raise PR (org disables Actions PR creation with GITHUB_TOKEN).'
+            exit 1
           fi
           # Protect Main refuses direct pushes; open a PR and never push to main.
           branch="ci/refresh-feature-shard-timings"
@@ -109,6 +115,7 @@ jobs:
           git -C "${worktree}" commit -m "ci: refresh Unit and Feature shard timings from measured lanes"
           git -C "${worktree}" push --force-with-lease origin "HEAD:refs/heads/${branch}"
           git worktree remove "${worktree}"
+          export GH_TOKEN="$COVERAGE_BASELINE_RAISE_TOKEN"
           existing=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "${branch}" --base main \
             --state open --json number --jq '.[0].number')
           body=$(printf '%s\n' \

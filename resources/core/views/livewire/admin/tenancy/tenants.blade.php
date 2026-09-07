@@ -40,6 +40,7 @@
                         action="sort('status')"
                         :label="__('Status')"
                     />
+                    <x-ui.th class="text-right">{{ __('Actions') }}</x-ui.th>
                 </tr>
                 </x-slot>
 
@@ -61,10 +62,35 @@
                                 <x-ui.badge variant="default">{{ ucfirst($tenant->status) }}</x-ui.badge>
                             @endif
                         </td>
+                        <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right">
+                            @can('admin.tenancy.tenant.manage')
+                                @if($tenant->isPlatformOperator())
+                                    {{-- The model refuses to mark this tenant inactive, so the page must not offer it. --}}
+                                    <span class="text-sm text-muted">&mdash;</span>
+                                @elseif($tenant->isActive())
+                                    <x-ui.button
+                                        variant="danger-ghost"
+                                        size="sm"
+                                        wire:click="suspendTenant({{ $tenant->id }})"
+                                        wire:confirm="{{ __('Suspend this tenant? Its users are signed out and its queued jobs stop running.') }}"
+                                    >
+                                        {{ __('Suspend') }}
+                                    </x-ui.button>
+                                @else
+                                    <x-ui.button
+                                        variant="ghost"
+                                        size="sm"
+                                        wire:click="reactivateTenant({{ $tenant->id }})"
+                                    >
+                                        {{ __('Reactivate') }}
+                                    </x-ui.button>
+                                @endif
+                            @endcan
+                        </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="5" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No tenants found.') }}</td>
+                        <td colspan="6" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No tenants found.') }}</td>
                     </tr>
                 @endforelse
             </x-ui.table>

@@ -269,5 +269,10 @@ it('keeps shared-chrome page renders within the query budget', function (): void
 
     // Definition-backed settings preload sparse overrides once per active
     // scope so shared chrome does not pay one query per declared parameter.
-    expect($queries)->toBeLessThanOrEqual(95);
+    //
+    // 96, not 95: ResolveTenantContext reads the resolved tenant's row once
+    // per authenticated request so a suspended tenant is refused on the web
+    // as well as at the console (#812). One row, once — a second read of the
+    // tenant on this path would be the regression this budget is for.
+    expect($queries)->toBeLessThanOrEqual(96);
 });
