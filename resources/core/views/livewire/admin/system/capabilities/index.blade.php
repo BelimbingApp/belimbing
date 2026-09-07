@@ -1,4 +1,6 @@
 <div class="space-y-section-gap">
+    <x-slot name="title">{{ __('Capabilities') }}</x-slot>
+
     <x-ui.page-header
         :title="__('Capabilities')"
         :subtitle="__('Every capability declared by a module, the roles that grant it, and how many principals hold those roles in this tenant.')"
