@@ -252,3 +252,63 @@ it('lets the platform operator toggle all-tenants on mutations and actions', fun
         ->assertSee('https://example.test/operator-foreign-action')
         ->assertSee(__('Audit action log (all tenants)'));
 });
+
+it('keeps mutations tenant-scoped when a non-operator forces allTenants over the wire', function (): void {
+    [$viewer, $tenantAId] = auditTenantScopeForeignFixture();
+
+    auditTenantScopeInsertMutation([
+        'tenant_id' => $tenantAId,
+        'new_values' => json_encode(['name' => 'forced-foreign-mutation-x1']),
+        'trace_id' => 'FORCEDMUTAAAAA',
+    ]);
+
+    // Guard: AuditTenantScope::apply operator check on allTenants. Dropping it
+    // lets a non-operator wire:set leak foreign-tenant rows.
+    Livewire::actingAs($viewer)
+        ->test(Mutations::class)
+        ->set('allTenants', true)
+        ->assertDontSee('forced-foreign-mutation-x1');
+});
+
+it('keeps actions tenant-scoped when a non-operator forces allTenants over the wire', function (): void {
+    [$viewer, $tenantAId] = auditTenantScopeForeignFixture();
+
+    auditTenantScopeInsertAction([
+        'tenant_id' => $tenantAId,
+        'event' => 'auth.login.failed',
+        'url' => 'https://example.test/forced-foreign-action-row',
+        'trace_id' => 'FORCEDACTAAAAA',
+    ]);
+
+    Livewire::actingAs($viewer)
+        ->test(Actions::class)
+        ->set('allTenants', true)
+        ->assertDontSee('https://example.test/forced-foreign-action-row');
+});
+
+it('refuses retain-toggle on a foreign-tenant action when a non-operator forces allTenants', function (): void {
+    [$viewer, $tenantAId] = auditTenantScopeForeignFixture();
+
+    PrincipalCapability::query()->create([
+        'company_id' => $viewer->company_id,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => $viewer->id,
+        'capability_key' => 'admin.audit.log.manage',
+        'is_allowed' => true,
+    ]);
+
+    $foreignId = auditTenantScopeInsertAction([
+        'tenant_id' => $tenantAId,
+        'is_retained' => false,
+        'url' => 'https://example.test/retain-forced-foreign',
+        'trace_id' => 'RETAINFORCED01',
+    ]);
+
+    expect(fn () => Livewire::actingAs($viewer)
+        ->test(Actions::class)
+        ->set('allTenants', true)
+        ->call('toggleRetain', $foreignId))
+        ->toThrow(ModelNotFoundException::class);
+
+    expect(AuditAction::query()->findOrFail($foreignId)->is_retained)->toBeFalse();
+});
