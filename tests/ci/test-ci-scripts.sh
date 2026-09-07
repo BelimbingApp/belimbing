@@ -543,7 +543,7 @@ if command -v php >/dev/null; then
     syntax_fixture=$(mktemp -d)
     printf '<?php\n' > "$syntax_fixture/good.php"
     printf '<?php\n function (\n' > "$syntax_fixture/bad.php"
-    printf '<?php\n' > "$syntax_fixture/also-good.php"
+    printf '<?php\n function (\n' > "$syntax_fixture/also-bad.php"
     if ! php scripts/ci/validate-php-syntax.php "$syntax_fixture/good.php" 2>"$syntax_fixture/good.err"; then
         echo 'validate-php-syntax.php refused a valid PHP file' >&2
         cat "$syntax_fixture/good.err" >&2
@@ -556,7 +556,7 @@ if command -v php >/dev/null; then
         rm -rf "$syntax_fixture"
         exit 1
     fi
-    if php scripts/ci/validate-php-syntax.php "$syntax_fixture/good.php" "$syntax_fixture/bad.php" "$syntax_fixture/also-good.php" 2>"$syntax_fixture/bad.err"; then
+    if php scripts/ci/validate-php-syntax.php "$syntax_fixture/good.php" "$syntax_fixture/bad.php" "$syntax_fixture/also-bad.php" 2>"$syntax_fixture/bad.err"; then
         echo 'validate-php-syntax.php accepted invalid PHP syntax' >&2
         rm -rf "$syntax_fixture"
         exit 1
@@ -567,7 +567,7 @@ if command -v php >/dev/null; then
         rm -rf "$syntax_fixture"
         exit 1
     fi
-    if grep -qF "$syntax_fixture/also-good.php" "$syntax_fixture/bad.err"; then
+    if grep -qF "$syntax_fixture/also-bad.php" "$syntax_fixture/bad.err"; then
         echo 'validate-php-syntax.php continued past the first invalid file' >&2
         cat "$syntax_fixture/bad.err" >&2
         rm -rf "$syntax_fixture"
@@ -580,8 +580,11 @@ if command -v php >/dev/null; then
     # .env; --registry= points at a temp file so loadRegistry never reads the
     # live domain registry. These three exits are the testable contract.
     sonar_fixture=$(mktemp -d)
-    if SONAR_TOKEN=placeholder php scripts/ci/setup-sonar.php --not-a-real-flag 2>"$sonar_fixture/unknown.err"; then
-        echo 'setup-sonar.php accepted an unknown argument' >&2
+    unknown_rc=0
+    SONAR_TOKEN=placeholder php scripts/ci/setup-sonar.php --not-a-real-flag 2>"$sonar_fixture/unknown.err" || unknown_rc=$?
+    if [[ "$unknown_rc" -ne 1 ]]; then
+        echo "setup-sonar.php exited $unknown_rc (expected 1) for an unknown argument; it must stop before any SonarCloud call" >&2
+        cat "$sonar_fixture/unknown.err" >&2
         rm -rf "$sonar_fixture"
         exit 1
     fi
@@ -602,6 +605,12 @@ if command -v php >/dev/null; then
         rm -rf "$sonar_fixture"
         exit 1
     fi
+    if grep -qF 'Invalid registry:' "$sonar_fixture/missing.err"; then
+        echo 'setup-sonar.php fell past the unreadable-registry exit into the invalid-registry guard' >&2
+        cat "$sonar_fixture/missing.err" >&2
+        rm -rf "$sonar_fixture"
+        exit 1
+    fi
     printf '{"foo":1}\n' > "$sonar_fixture/invalid.json"
     if SONAR_TOKEN=placeholder php scripts/ci/setup-sonar.php --registry="$sonar_fixture/invalid.json" 2>"$sonar_fixture/invalid.err"; then
         echo 'setup-sonar.php accepted a registry without domains' >&2
@@ -611,6 +620,18 @@ if command -v php >/dev/null; then
     if ! grep -qF "Invalid registry: $sonar_fixture/invalid.json" "$sonar_fixture/invalid.err"; then
         echo 'setup-sonar.php did not report Invalid registry:' >&2
         cat "$sonar_fixture/invalid.err" >&2
+        rm -rf "$sonar_fixture"
+        exit 1
+    fi
+    printf '{"domains":1}\n' > "$sonar_fixture/scalar.json"
+    if SONAR_TOKEN=placeholder php scripts/ci/setup-sonar.php --registry="$sonar_fixture/scalar.json" 2>"$sonar_fixture/scalar.err"; then
+        echo 'setup-sonar.php accepted a registry with a scalar domains value' >&2
+        rm -rf "$sonar_fixture"
+        exit 1
+    fi
+    if ! grep -qF "Invalid registry: $sonar_fixture/scalar.json" "$sonar_fixture/scalar.err"; then
+        echo 'setup-sonar.php did not report Invalid registry: for a scalar domains' >&2
+        cat "$sonar_fixture/scalar.err" >&2
         rm -rf "$sonar_fixture"
         exit 1
     fi
