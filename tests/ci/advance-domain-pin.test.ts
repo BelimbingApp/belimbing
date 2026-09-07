@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 const root = resolve(import.meta.dir, "../..");
-test("pin advance validates before composing, then pushes a compare URL (no Actions PR create)", () => {
+test("pin advance validates before composing, then opens a bot-maintenance PR with the raise token", () => {
     const workflow = Bun.YAML.parse(readFileSync(join(root, ".github/workflows/advance-domain-pin.yml"), "utf8")) as any;
     expect(Object.keys(workflow.on)).toEqual(["workflow_dispatch"]);
     expect(workflow.on.workflow_dispatch.inputs["domain-id"].required).toBe(true);
@@ -20,21 +20,22 @@ test("pin advance validates before composing, then pushes a compare URL (no Acti
     expect(steps[validate].run).toContain("advance-domain-pin.py");
     expect(readFileSync(join(root, "scripts/ci/advance-domain-pin.py"), "utf8")).toContain("validate-domain-pins.py");
     expect(steps[compose].run).toContain("composed-smoke.php --print-surface");
-    // GITHUB_TOKEN cannot createPullRequest when the org setting is off (#793):
-    // push the branch and print a compare URL instead of failing after a good push.
+    // Org policy refuses GITHUB_TOKEN createPullRequest (#686, #793). The PR
+    // open must use the raise token that tests.yml and land-bot-maintenance
+    // already use; the push stays on github.token.
     expect(workflow.jobs.publish.permissions["pull-requests"]).toBeUndefined();
-    const publish = workflow.jobs.publish.steps.find((step: any) => step.name === "Push pin branch").run;
-    expect(publish).toContain("git push origin");
-    expect(publish).toContain("/compare/main...");
-    expect(publish).toContain("Open the bot-maintenance PR from:");
-    expect(publish).not.toContain("gh pr create");
-    expect(publish).not.toContain("HEAD:main");
-    // `gh pr create --label bot-maintenance` used to apply the label that
-    // ai-team-independent-review.yml reads to grant the bot exemption
-    // ("no bot-maintenance label — ordinary review required"). A human opening
-    // the PR from the compare URL applies it by hand, so the step has to say
-    // so, or the exemption silently stops applying to this path.
-    expect(publish).toContain("Apply the bot-maintenance label");
+    const open = workflow.jobs.publish.steps.find((step: any) => step.name === "Open pin PR");
+    expect(open).toBeDefined();
+    expect(open.env.COVERAGE_BASELINE_RAISE_TOKEN).toBe("${{ secrets.COVERAGE_BASELINE_RAISE_TOKEN }}");
+    expect(open.run).toContain("COVERAGE_BASELINE_RAISE_TOKEN is required");
+    expect(open.run).toContain('export GH_TOKEN="$COVERAGE_BASELINE_RAISE_TOKEN"');
+    expect(open.run).toContain("gh pr create");
+    expect(open.run).toContain("--label bot-maintenance");
+    expect(open.run).toContain("git push origin");
+    expect(open.run).toContain("/compare/main...");
+    expect(open.run).not.toContain("HEAD:main");
+    // Keep the compare URL in the summary as a secondary output; the create is the delivery.
+    expect(open.run).toContain("Apply the bot-maintenance label");
 });
 
 test("pin editor refuses invalid or nonexistent refs without altering the descriptor", () => {
