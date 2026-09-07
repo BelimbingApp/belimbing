@@ -240,7 +240,7 @@ Logging is **deferred and batched**:
 2. A `terminating` callback flushes all buffered entries in a single batch `INSERT` (chunked at 500 rows) after the response is sent.
 3. Log persistence failure is caught and reported via `logger()->error()` without affecting the authorization decision.
 
-The `DecisionLog` model includes `MassPrunable` with a configurable retention period (`authz.decision_log_retention_days`, default 90 days). Run `php artisan model:prune --model=App\\Base\\Authz\\Models\\DecisionLog` to clean old entries.
+The `DecisionLog` model includes `MassPrunable` with a configurable retention period (`authz.decision_log_retention_days`, default 90 days). The scheduled command `blb:authz:decision-logs:prune` runs daily at 01:45 (override with `--days` / `--dry-run`).
 
 ---
 

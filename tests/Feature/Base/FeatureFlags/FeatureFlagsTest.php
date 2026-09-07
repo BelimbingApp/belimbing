@@ -51,6 +51,7 @@ it('resolves the declared default until a tenant override is stored', function (
             'default' => false,
             'enabled' => true,
             'overridden' => true,
+            'orphaned' => false,
         ]);
 });
 
@@ -132,6 +133,7 @@ it('lists declared flags for the current tenant through the artisan command', fu
         'default' => true,
         'enabled' => true,
         'overridden' => false,
+        'orphaned' => false,
     ]);
 });
 

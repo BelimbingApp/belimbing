@@ -139,7 +139,13 @@ Revoke an available offer from **Published** or:
 php artisan blb:db:share:offer-revoke {offer-id}
 ```
 
-Revocation blocks new fetches immediately but does not delete an already verified target receipt. **History** records offer publish/revoke/expiry/download, export, fetch, receipt, planning, apply, pruning, and failures without payload values or secrets.
+Revocation blocks new fetches immediately but does not delete an already verified target receipt. **History** (the Data Share **History** tab and `blb:db:share:history`) records offer publish/revoke/expiry/download, export, fetch, receipt, planning, apply, pruning, and failures without payload values or secrets.
+
+Recorded actions: `offer_published`, `offer_revoked`, `offer_expired`, `offer_exhausted`, `offer_downloaded`, `offer_fetched`, `received`, `planned`, `applied`, `apply_failed`, `package_pruned`, `exported`, `export_failed`, `fetch_failed`, `plan_failed`. Filter the tab or pass `--action=` / `--failures` on the CLI; `--json` emits the same ids the page shows.
+
+```text
+php artisan blb:db:share:history --failures --json
+```
 
 Preview retention before deletion:
 
