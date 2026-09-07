@@ -3,12 +3,12 @@
 namespace App\Base\Audit\Livewire\AuditLog;
 
 use App\Base\Audit\Models\AuditAction;
+use App\Base\Audit\Services\AuditTenantScope;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
-use App\Base\Audit\Services\AuditTenantScope;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
