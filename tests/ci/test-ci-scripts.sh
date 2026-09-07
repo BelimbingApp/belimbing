@@ -4,7 +4,7 @@ set -euo pipefail
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 python3 tests/ci/test-domain-pins.py
-bash -n scripts/ci/changed-authorable-php.sh scripts/ci/extension-conformance.sh scripts/ci/mount-guard.sh scripts/ci/phpstan-baseline-gate.sh scripts/ci/record-pest-timing.sh
+bash -n scripts/ci/changed-authorable-php.sh scripts/ci/extension-conformance.sh scripts/ci/mount-guard.sh scripts/ci/phpstan-baseline-gate.sh scripts/ci/record-pest-timing.sh scripts/ci/token-audit.sh
 python3 -m py_compile scripts/ci/aggregate-pest-timing.py scripts/ci/pest-timing-ratchet.py scripts/ci/refresh-livewire-action-baselines.py
 
 # Timing aggregator (#614): one table from per-suite JSON, fail-closed on empty.
@@ -612,12 +612,165 @@ PY
     if php scripts/ci/validate-extension-manifest.php tests/Fixtures/ci/extensions/invalid/Example/composer.json >/dev/null 2>&1; then
         echo 'invalid Extension manifest was accepted' >&2; exit 1
     fi
+
+    # extension-conformance.sh (#822): hermetic refusals + happy path.
+    ext_root=$(mktemp -d)
+    trap 'rm -rf "$ext_root"' EXIT
+    cp -a tests/Fixtures/ci/extensions/conventional/. "$ext_root/"
+    conf_out=$(scripts/ci/extension-conformance.sh "$ext_root")
+    grep -q 'extension-conformance: passed 1 Module manifest(s)' <<< "$conf_out"
+
+    empty_ext=$(mktemp -d)
+    if scripts/ci/extension-conformance.sh "$empty_ext" >/dev/null 2>&1; then
+        echo 'extension-conformance accepted an empty Extension root' >&2; exit 1
+    fi
+    empty_err=$(scripts/ci/extension-conformance.sh "$empty_ext" 2>&1 || true)
+    grep -q 'no Module composer.json found' <<< "$empty_err"
+    rm -rf "$empty_ext"
+
+    bad_ext=$(mktemp -d)
+    cp -a tests/Fixtures/ci/extensions/invalid/. "$bad_ext/"
+    if scripts/ci/extension-conformance.sh "$bad_ext" >/dev/null 2>&1; then
+        echo 'extension-conformance accepted an invalid Extension manifest' >&2; exit 1
+    fi
+    rm -rf "$bad_ext"
+
+    assets_ext=$(mktemp -d)
+    cp -a tests/Fixtures/ci/extensions/conventional/. "$assets_ext/"
+    mkdir -p "$assets_ext/Example/Assets"
+    printf 'console.log(1)\n' > "$assets_ext/Example/Assets/app.js"
+    if scripts/ci/extension-conformance.sh "$assets_ext" >/dev/null 2>&1; then
+        echo 'extension-conformance accepted owned assets without package.json and bun.lock' >&2; exit 1
+    fi
+    assets_err=$(scripts/ci/extension-conformance.sh "$assets_ext" 2>&1 || true)
+    grep -q 'owned assets require package.json and bun.lock' <<< "$assets_err"
+    rm -rf "$assets_ext"
+
+    # Tracked migrations are excluded from Pint; the same untracked file fails.
+    mig_ext=$(mktemp -d)
+    cp -a tests/Fixtures/ci/extensions/conventional/. "$mig_ext/"
+    mkdir -p "$mig_ext/Example/Database/Migrations"
+    # Deliberately unformatted so Pint --test fails when the file is authorable.
+    cat > "$mig_ext/Example/Database/Migrations/0330_01_01_000000_probe.php" <<'PHP'
+<?php
+return new class {
+public function up(): void
+{
+$x=1;
+}
+};
+PHP
+    git -C "$mig_ext" init -q
+    git -C "$mig_ext" config user.name 'ci'
+    git -C "$mig_ext" config user.email 'ci@example.invalid'
+    git -C "$mig_ext" add Example/composer.json Example/Example.php Example/Database/Migrations/0330_01_01_000000_probe.php
+    git -C "$mig_ext" commit -qm 'tracked migration'
+    scripts/ci/extension-conformance.sh "$mig_ext" >/dev/null
+    # A never-tracked sibling must still face Pint (tracked exclusion is path+git).
+    cat > "$mig_ext/Example/Database/Migrations/0330_01_01_000001_untracked_probe.php" <<'PHP'
+<?php
+return new class {
+public function up(): void
+{
+$x=1;
+}
+};
+PHP
+    if scripts/ci/extension-conformance.sh "$mig_ext" >/dev/null 2>&1; then
+        echo 'extension-conformance accepted an untracked migration that fails Pint' >&2; exit 1
+    fi
+    rm -rf "$mig_ext"
+
+    rm -rf "$ext_root"
+    trap - EXIT
     rendered=$(php scripts/ci/domain-ci.php render --domain-id=people --workflow-ref=0123456789abcdef0123456789abcdef01234567)
     grep -q 'domain-id: people' <<< "$rendered"
     grep -q 'platform-ref: 0123456789abcdef0123456789abcdef01234567' <<< "$rendered"
     if php scripts/ci/domain-ci.php render --domain-id=people --workflow-ref=main >/dev/null 2>&1; then
         echo 'mutable workflow ref was accepted' >&2; exit 1
     fi
+
+    # filter-domain-coverage-clover.php (#842): Domain CI attributes Sonar
+    # coverage only to the mount under test. Sibling domains, platform files,
+    # and a path that merely contains the domain name as a substring must be
+    # stripped; relative and absolute Clover paths under the mount must stay.
+    clover_fixture=$(mktemp -d)
+    trap 'rm -rf "$clover_fixture"' EXIT
+    cp tests/ci/fixtures/domain-coverage-clover/mixed.xml "$clover_fixture/clover.xml"
+    clover_err=$(
+        php scripts/ci/filter-domain-coverage-clover.php \
+            --domain-path=app/Domains/People \
+            --coverage="$clover_fixture/clover.xml" 2>&1 >/dev/null
+    )
+    if ! grep -qF 'kept 2 file(s), removed 3' <<< "$clover_err"; then
+        echo "filter-domain-coverage-clover.php summary mismatch: $clover_err" >&2
+        exit 1
+    fi
+    python3 - "$clover_fixture/clover.xml" <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+
+tree = ET.parse(sys.argv[1])
+root = tree.getroot()
+assert root.tag == 'coverage', root.tag
+project = root.find('project')
+assert project is not None, 'missing <project> root'
+names = sorted(f.get('name') for f in project.findall('file'))
+expected = sorted([
+    'app/Domains/People/Skills/Foo.php',
+    '/home/runner/work/blb-people/blb-people/app/Domains/People/Skills/Bar.php',
+])
+assert names == expected, names
+forbidden = (
+    'app/Domains/PeopleConnector/Services/Sync.php',
+    'app/Base/Tenancy/Tenant.php',
+    'app/Domains/PeopleX/Ghost.php',
+)
+for name in forbidden:
+    assert name not in names, name
+PY
+    clover_usage_status=0
+    clover_usage_err=$(php scripts/ci/filter-domain-coverage-clover.php --domain-path=app/Domains/People 2>&1 >/dev/null) || clover_usage_status=$?
+    if [[ "$clover_usage_status" -ne 2 ]]; then
+        echo "filter-domain-coverage-clover.php missing --coverage exited $clover_usage_status, expected 2" >&2
+        exit 1
+    fi
+    if ! grep -qF 'usage: filter-domain-coverage-clover.php --domain-path=<path> --coverage=<clover.xml>' <<< "$clover_usage_err"; then
+        echo "filter-domain-coverage-clover.php did not print its usage line: $clover_usage_err" >&2
+        exit 1
+    fi
+    clover_missing="$clover_fixture/missing.xml"
+    clover_missing_status=0
+    clover_missing_err=$(
+        php scripts/ci/filter-domain-coverage-clover.php \
+            --domain-path=app/Domains/People \
+            --coverage="$clover_missing" 2>&1 >/dev/null
+    ) || clover_missing_status=$?
+    if [[ "$clover_missing_status" -ne 1 ]]; then
+        echo "filter-domain-coverage-clover.php unreadable path exited $clover_missing_status, expected 1" >&2
+        exit 1
+    fi
+    if ! grep -qF "coverage file not readable: $clover_missing" <<< "$clover_missing_err"; then
+        echo "filter-domain-coverage-clover.php did not name the unreadable path: $clover_missing_err" >&2
+        exit 1
+    fi
+    printf 'not xml\n' > "$clover_fixture/invalid.xml"
+    clover_invalid_status=0
+    clover_invalid_err=$(
+        php scripts/ci/filter-domain-coverage-clover.php \
+            --domain-path=app/Domains/People \
+            --coverage="$clover_fixture/invalid.xml" 2>&1 >/dev/null
+    ) || clover_invalid_status=$?
+    if [[ "$clover_invalid_status" -ne 1 ]]; then
+        echo "filter-domain-coverage-clover.php invalid XML exited $clover_invalid_status, expected 1" >&2
+        exit 1
+    fi
+    if ! grep -qF 'invalid clover XML' <<< "$clover_invalid_err"; then
+        echo "filter-domain-coverage-clover.php did not report invalid clover XML: $clover_invalid_err" >&2
+        exit 1
+    fi
+    rm -rf "$clover_fixture"
+    trap - EXIT
 else
     echo 'SKIP: PHP checks (php is unavailable)' >&2
 fi
@@ -1040,6 +1193,235 @@ with tempfile.TemporaryDirectory() as tmp:
     head = commit_on('mixed', mixed)
     failed = run_policy(head)
     assert failed.returncode == 1, failed.stdout + failed.stderr
+PY
+
+# changed-authorable-php.sh (#823): the subset rule that decides what Pint sees
+# in lint.yml. An existing migration is hash-immutable, so re-linting it can
+# only ever fail CI for a file nobody may edit; a NEWLY added migration is
+# still authorable and must be linted. Both halves lived only in the script.
+# Hermetic: a throwaway repository with two commits, so nothing here reads the
+# platform checkout's own history or working tree.
+authorable_fixture=$(mktemp -d)
+trap 'rm -rf "$authorable_fixture"' EXIT
+authorable_script="$root/scripts/ci/changed-authorable-php.sh"
+(
+    cd "$authorable_fixture"
+    git init -q
+    git config user.name test
+    git config user.email test@example.invalid
+
+    mkdir -p app/Base/X/Database/Migrations database/migrations \
+        app/Base/X/Services app/Base/X/Livewire
+    printf '<?php // a\n' > app/Base/X/Database/Migrations/2026_01_01_000000_a.php
+    printf '<?php // b\n' > database/migrations/2026_01_01_000000_b.php
+    printf '<?php // s\n' > app/Base/X/Services/S.php
+    printf '<?php // old\n' > app/Base/X/Old.php
+    git add -A
+    git commit -qm base
+    authorable_base=$(git rev-parse HEAD)
+
+    # Touch both existing migrations, add one, add an ordinary class, delete a
+    # class, and add a non-PHP file. Each is a different arm of the rule.
+    #
+    # The deletion is excluded twice over: --diff-filter=ACMR never lists it,
+    # and [[ -f "$path" ]] would drop it if it did. Measured: removing either
+    # one alone leaves this block green, and removing both turns it red. They
+    # are a redundant pair on purpose, so no single-guard mutation can pin
+    # them individually -- do not "simplify" one away on the strength of a
+    # green run.
+    printf '<?php // a changed\n' > app/Base/X/Database/Migrations/2026_01_01_000000_a.php
+    printf '<?php // b changed\n' > database/migrations/2026_01_01_000000_b.php
+    printf '<?php // s changed\n' > app/Base/X/Services/S.php
+    printf '<?php // c\n' > app/Base/X/Database/Migrations/2026_02_01_000000_c.php
+    printf '<?php // l\n' > app/Base/X/Livewire/L.php
+    printf 'notes\n' > notes.txt
+    rm app/Base/X/Old.php
+    git add -A
+    git commit -qm head
+    authorable_head=$(git rev-parse HEAD)
+
+    # git orders paths lexically, so the expected sequence is fixed. Compared
+    # whole rather than grepped: a missing line and an extra line are both
+    # failures, and a grep for what should be present cannot see an extra.
+    authorable_expected=$(printf '%s\n' \
+        'app/Base/X/Database/Migrations/2026_02_01_000000_c.php' \
+        'app/Base/X/Livewire/L.php' \
+        'app/Base/X/Services/S.php')
+    authorable_actual=$(bash "$authorable_script" "$authorable_base" "$authorable_head" | tr '\0' '\n')
+
+    if [[ "$authorable_actual" != "$authorable_expected" ]]; then
+        echo 'changed-authorable-php.sh printed the wrong set of files' >&2
+        echo "expected:" >&2
+        printf '%s\n' "$authorable_expected" >&2
+        echo "actual:" >&2
+        printf '%s\n' "$authorable_actual" >&2
+        exit 1
+    fi
+
+    # The output is NUL-separated, which is what lint.yml feeds to xargs -0:
+    # three records means three trailing NULs and no newline of its own.
+    authorable_nuls=$(bash "$authorable_script" "$authorable_base" "$authorable_head" | tr -dc '\0' | wc -c)
+    if [[ "$authorable_nuls" -ne 3 ]]; then
+        echo "changed-authorable-php.sh emitted $authorable_nuls NUL separators, expected 3" >&2
+        exit 1
+    fi
+
+    # No base ref: the ${1:?} guard refuses rather than diffing against nothing.
+    if bash "$authorable_script" >/dev/null 2>"$authorable_fixture/usage.txt"; then
+        echo 'changed-authorable-php.sh accepted a missing base ref' >&2
+        exit 1
+    fi
+    if ! grep -qF 'usage: changed-authorable-php.sh <base> [head]' "$authorable_fixture/usage.txt"; then
+        echo 'changed-authorable-php.sh did not print its usage line' >&2
+        cat "$authorable_fixture/usage.txt" >&2
+        exit 1
+    fi
+
+    # An unresolvable base ref must fail, not silently lint nothing: an empty
+    # file list is exactly what a green "Pint on changed files" step looks like.
+    if bash "$authorable_script" nosuchref >/dev/null 2>&1; then
+        echo 'changed-authorable-php.sh accepted an unknown base ref' >&2
+        exit 1
+    fi
+)
+rm -rf "$authorable_fixture"
+trap - EXIT
+
+# token-audit.sh (#780 / #825): every statically resolvable secrets.* reference
+# must be allowlisted in docs/ci/secrets.json; stale rotation warns; malformed
+# entries fail; computed keys and secrets: inherit warn (or --strict refuse).
+python3 - <<'PY'
+from pathlib import Path
+import json
+import subprocess
+import tempfile
+
+root = Path('.').resolve()
+audit = root / 'scripts/ci/token-audit.sh'
+assert audit.is_file(), 'missing scripts/ci/token-audit.sh'
+assert audit.stat().st_mode & 0o111, 'token-audit.sh must be executable'
+lint_yml = (root / '.github/workflows/lint.yml').read_text(encoding='utf-8')
+assert 'run: scripts/ci/token-audit.sh' in lint_yml, 'quality job must run token-audit.sh'
+
+live = subprocess.run(['bash', str(audit)], cwd=root, capture_output=True, text=True)
+assert live.returncode == 0, live.stdout + live.stderr
+assert 'every referenced secret is allowlisted' in live.stdout, live.stdout
+assert 'not statically verifiable' not in live.stdout, live.stdout
+assert '::warning file=' not in live.stdout, live.stdout
+assert '::warning::' not in live.stdout, live.stdout
+
+
+def run_audit(tmp, workflow, allowlist, today='2026-09-07', strict=False):
+    (tmp / 'wf').mkdir(exist_ok=True)
+    (tmp / 'wf/ci.yml').write_text(workflow, encoding='utf-8')
+    (tmp / 'secrets.json').write_text(json.dumps(allowlist), encoding='utf-8')
+    cmd = ['bash', str(audit), '--workflows', str(tmp / 'wf'),
+           '--allowlist', str(tmp / 'secrets.json'), '--today', today]
+    if strict:
+        cmd.append('--strict')
+    return subprocess.run(cmd, capture_output=True, text=True)
+
+
+def entry(name, **overrides):
+    payload = {'name': name, 'purpose': 'fixture', 'owner': 'kiatng', 'rotated': '2026-09-01'}
+    payload.update(overrides)
+    return payload
+
+
+workflow = (
+    'jobs:\n  a:\n    steps:\n      - env:\n'
+    '          A: ${{ secrets.LISTED_TOKEN }}\n'
+    '          B: ${{ secrets.GITHUB_TOKEN }}\n'
+    '          C: ${{ steps.x.outputs.token || secrets.FIXTURE_UNLISTED_TOKEN }}\n'
+)
+with tempfile.TemporaryDirectory() as tmpdir:
+    tmp = Path(tmpdir)
+    unlisted = run_audit(tmp, workflow, {'secrets': [entry('LISTED_TOKEN')]})
+    assert unlisted.returncode == 1, unlisted.stdout + unlisted.stderr
+    assert 'FIXTURE_UNLISTED_TOKEN' in unlisted.stderr, unlisted.stderr
+    assert 'secret LISTED_TOKEN is referenced' not in unlisted.stderr, unlisted.stderr
+    assert 'GITHUB_TOKEN' not in unlisted.stderr, unlisted.stderr
+
+    listed = run_audit(tmp, workflow, {'secrets': [entry('LISTED_TOKEN'), entry('FIXTURE_UNLISTED_TOKEN')]})
+    assert listed.returncode == 0, listed.stdout + listed.stderr
+    assert '::warning::' not in listed.stdout, listed.stdout
+
+    # A bracketed reference is the same reference: GitHub accepts
+    # ${{ secrets['NAME'] }} exactly as it accepts ${{ secrets.NAME }}.
+    bracketed = run_audit(tmp, (
+        'jobs:\n  a:\n    steps:\n      - env:\n'
+        "          A: ${{ secrets['FIXTURE_UNLISTED_TOKEN'] }}\n"
+    ), {'secrets': [entry('LISTED_TOKEN')]})
+    assert bracketed.returncode == 1, bracketed.stdout + bracketed.stderr
+    assert 'FIXTURE_UNLISTED_TOKEN' in bracketed.stderr, bracketed.stderr
+
+    stale = run_audit(tmp, workflow, {'secrets': [
+        entry('LISTED_TOKEN', rotated='2026-06-01'), entry('FIXTURE_UNLISTED_TOKEN')]})
+    assert stale.returncode == 0, stale.stdout + stale.stderr
+    assert '::warning::secret LISTED_TOKEN was last rotated 2026-06-01 (98 days ago' in stale.stdout, stale.stdout
+
+    fresh = run_audit(tmp, workflow, {'secrets': [
+        entry('LISTED_TOKEN', rotated='2026-06-09'), entry('FIXTURE_UNLISTED_TOKEN')]})
+    assert fresh.returncode == 0 and '::warning::' not in fresh.stdout, fresh.stdout
+
+    no_owner = run_audit(tmp, workflow, {'secrets': [
+        entry('LISTED_TOKEN', owner=''), entry('FIXTURE_UNLISTED_TOKEN')]})
+    assert no_owner.returncode == 1, no_owner.stdout + no_owner.stderr
+    assert 'entry LISTED_TOKEN: missing owner' in no_owner.stderr, no_owner.stderr
+
+    no_date = run_audit(tmp, workflow, {'secrets': [
+        entry('LISTED_TOKEN'), {'name': 'FIXTURE_UNLISTED_TOKEN', 'purpose': 'p', 'owner': 'kiatng'}]})
+    assert no_date.returncode == 1, no_date.stdout + no_date.stderr
+    assert 'entry FIXTURE_UNLISTED_TOKEN: missing rotated' in no_date.stderr, no_date.stderr
+
+    bad_date = run_audit(tmp, workflow, {'secrets': [
+        entry('LISTED_TOKEN', rotated='soon'), entry('FIXTURE_UNLISTED_TOKEN')]})
+    assert bad_date.returncode == 1 and 'not an ISO date' in bad_date.stderr, bad_date.stderr
+
+    (tmp / 'secrets.json').unlink()
+    missing = subprocess.run(
+        ['bash', str(audit), '--workflows', str(tmp / 'wf'), '--allowlist', str(tmp / 'secrets.json')],
+        capture_output=True, text=True)
+    assert missing.returncode == 1 and 'is missing' in missing.stderr, missing.stderr
+
+    # #825: computed keys and secrets: inherit are warned, not silently green.
+    computed_wf = (
+        'jobs:\n  a:\n    steps:\n      - env:\n'
+        "          A: ${{ secrets[format('TOKEN_{0}', github.ref_name)] }}\n"
+        '          B: ${{ secrets.LISTED_TOKEN }}\n'
+    )
+    computed = run_audit(tmp, computed_wf, {'secrets': [entry('LISTED_TOKEN')]})
+    assert computed.returncode == 0, computed.stdout + computed.stderr
+    assert '::warning file=' in computed.stdout and 'computed-key' in computed.stdout, computed.stdout
+    assert '1 reference(s) not statically verifiable' in computed.stdout, computed.stdout
+    assert 'every statically resolvable referenced secret is allowlisted' in computed.stdout, computed.stdout
+    assert 'every referenced secret is allowlisted\n' not in computed.stdout + '\n', computed.stdout
+    computed_strict = run_audit(tmp, computed_wf, {'secrets': [entry('LISTED_TOKEN')]}, strict=True)
+    assert computed_strict.returncode == 1, computed_strict.stdout + computed_strict.stderr
+    assert '--strict refuses' in computed_strict.stderr, computed_strict.stderr
+
+    inherit_wf = (
+        'jobs:\n  a:\n    secrets: inherit\n'
+        '    uses: ./.github/workflows/extension-conformance.yml\n'
+        '  b:\n    steps:\n      - env:\n'
+        '          A: ${{ secrets.LISTED_TOKEN }}\n'
+    )
+    inherit = run_audit(tmp, inherit_wf, {'secrets': [entry('LISTED_TOKEN')]})
+    assert inherit.returncode == 0, inherit.stdout + inherit.stderr
+    assert 'secrets: inherit' in inherit.stdout, inherit.stdout
+    assert '1 reference(s) not statically verifiable' in inherit.stdout, inherit.stdout
+    assert 'every statically resolvable referenced secret is allowlisted' in inherit.stdout, inherit.stdout
+    inherit_strict = run_audit(tmp, inherit_wf, {'secrets': [entry('LISTED_TOKEN')]}, strict=True)
+    assert inherit_strict.returncode == 1, inherit_strict.stdout + inherit_strict.stderr
+
+    plain = run_audit(tmp, (
+        'jobs:\n  a:\n    steps:\n      - env:\n'
+        '          A: ${{ secrets.SONAR_TOKEN }}\n'
+    ), {'secrets': [entry('SONAR_TOKEN')]})
+    assert plain.returncode == 0, plain.stdout + plain.stderr
+    assert '::warning file=' not in plain.stdout, plain.stdout
+    assert 'not statically verifiable' not in plain.stdout, plain.stdout
+    assert 'every referenced secret is allowlisted' in plain.stdout, plain.stdout
 PY
 
 echo 'CI script checks passed'
