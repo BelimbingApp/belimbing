@@ -5,6 +5,14 @@ installation token from a GitHub App on every run. That replaces the shared
 user account / fine-grained PAT that hit GraphQL secondary rate limits under
 team load (#621). Do not store a user PAT for this automation.
 
+## Before the App exists
+
+Both workflows detect the two secrets at run time. While they are absent the
+blocked-by sweep runs on `AI_TEAM_BLOCKED_BY_SWEEP_TOKEN` and the review gate on
+the default `GITHUB_TOKEN`, each with a `::warning::` annotation naming this
+runbook. Nothing breaks on merge; the warning disappears the first run after
+the secrets are set. The sweep still fails closed when neither credential exists.
+
 ## Permissions to grant the App
 
 Install the App on the BelimbingApp organization with access to at least:

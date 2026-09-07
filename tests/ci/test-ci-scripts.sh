@@ -350,7 +350,8 @@ PY
 # Blocked-By sweep mints a GitHub App installation token so qualified
 # BelimbingApp/blb-people and blb-people-connector blockers can resolve (#621).
 # Default github.token cannot read other repositories; keep the job's
-# permissions block for checkout, and never wire a shared user PAT.
+# permissions block for checkout; the shared user PAT is only the fallback
+# until the App secrets exist, and never the primary credential.
 python3 - <<'PY'
 from pathlib import Path
 import re
@@ -373,10 +374,12 @@ required = (
     'AI_TEAM_GITHUB_APP_ID: ${{ secrets.AI_TEAM_GITHUB_APP_ID }}',
     'AI_TEAM_GITHUB_APP_PRIVATE_KEY: ${{ secrets.AI_TEAM_GITHUB_APP_PRIVATE_KEY }}',
     'uses: actions/create-github-app-token@v2',
-    'GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}',
+    "if: steps.credentials.outputs.source == 'app'",
+    'GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.AI_TEAM_BLOCKED_BY_SWEEP_TOKEN }}',
     'GITHUB_REPOSITORY: ${{ github.repository }}',
     'run: python3 docs/ai-team/scripts/blocked_by_sweep.py',
-    'if [[ -z "$AI_TEAM_GITHUB_APP_ID" || -z "$AI_TEAM_GITHUB_APP_PRIVATE_KEY" ]]; then',
+    'if [[ -n "$AI_TEAM_GITHUB_APP_ID" && -n "$AI_TEAM_GITHUB_APP_PRIVATE_KEY" ]]; then',
+    'elif [[ -n "$AI_TEAM_BLOCKED_BY_SWEEP_TOKEN" ]]; then',
 )
 for contract in required:
     assert contract in workflow, f'missing blocked-by sweep contract: {contract!r}'
@@ -384,8 +387,11 @@ for contract in required:
 assert 'GITHUB_TOKEN: ${{ github.token }}' not in sweep, (
     'sweep step must not use default github.token; mint an App installation token (#621)'
 )
-assert 'AI_TEAM_BLOCKED_BY_SWEEP_TOKEN' not in workflow, (
-    'retired user PAT secret must not remain in the sweep workflow'
+assert 'GITHUB_TOKEN: ${{ secrets.AI_TEAM_BLOCKED_BY_SWEEP_TOKEN }}' not in workflow, (
+    'the shared-user PAT may only be the fallback behind the App token, never the primary credential (#621)'
+)
+assert workflow.count('secrets.AI_TEAM_BLOCKED_BY_SWEEP_TOKEN') == 2, (
+    'the PAT secret is read exactly twice: the credential-choice env and the fallback expression'
 )
 assert 'pull_request:' not in workflow, 'blocked-by sweep must stay schedule/dispatch only'
 PY
