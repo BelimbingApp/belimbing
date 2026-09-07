@@ -39,6 +39,9 @@ class Tenant extends Model
      */
     public const LICENSEE_TENANT_ID = 1;
 
+    /** The only tenant status that may be served by any entry point. */
+    public const STATUS_ACTIVE = 'active';
+
     protected $table = 'tenants';
 
     /**
@@ -69,6 +72,18 @@ class Tenant extends Model
                 throw new PlatformOperatorTenantDeletionException((int) $tenant->id);
             }
         });
+
+        // The operator tenant administers every other tenant, so suspending it
+        // would lock the platform out of its own console and web surface. It is
+        // refused here rather than in each caller so no surface can widen it.
+        static::saving(function (Tenant $tenant): void {
+            if ($tenant->isPlatformOperator() && (string) $tenant->status !== self::STATUS_ACTIVE) {
+                throw new PlatformOperatorTenantInvariantViolationException(
+                    'The platform-operator tenant cannot be marked inactive.',
+                    ['tenant_id' => (int) $tenant->id, 'status' => (string) $tenant->status],
+                );
+            }
+        });
     }
 
     public function parent(): BelongsTo
@@ -84,6 +99,19 @@ class Tenant extends Model
     public function isPlatformOperator(): bool
     {
         return $this->is_platform_operator === true;
+    }
+
+    /**
+     * Whether this tenant may be served.
+     *
+     * The single definition of "usable" that every entry point reads — web
+     * resolution, the queue worker and `TenantScopedCommand` — so suspension
+     * cannot mean one thing at the console and another on the web. A
+     * soft-deleted tenant is unusable regardless of the status it kept.
+     */
+    public function isActive(): bool
+    {
+        return (string) $this->status === self::STATUS_ACTIVE && ! $this->trashed();
     }
 
     /**
