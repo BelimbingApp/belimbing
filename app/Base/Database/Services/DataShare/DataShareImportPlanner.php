@@ -24,6 +24,21 @@ class DataShareImportPlanner
 
     public function plan(DataShareReceipt $receipt): DataSharePlan
     {
+        try {
+            return $this->planReceipt($receipt);
+        } catch (Throwable $e) {
+            $this->events->recordFailure('plan_failed', [
+                'package_id' => $receipt->package_id,
+                'scope_name' => $receipt->scope_name,
+                'offer_id' => $receipt->offer_id,
+            ], $e);
+
+            throw $e;
+        }
+    }
+
+    private function planReceipt(DataShareReceipt $receipt): DataSharePlan
+    {
         $verified = $this->verifier->verifyPath($receipt->package_path, DataSharePackageExpectation::fromReceipt($receipt));
 
         if (! hash_equals($receipt->package_sha256, $verified->sha256)) {

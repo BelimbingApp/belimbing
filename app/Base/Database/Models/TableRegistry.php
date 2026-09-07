@@ -17,6 +17,8 @@ use Illuminate\Support\Facades\Schema;
  * @property string|null $module_name Module name (e.g., 'AI')
  * @property string|null $module_path Module path (e.g., 'app/Core/AI')
  * @property string|null $migration_file Migration file that created this table
+ * @property string $schema_state Runtime incubating/stable classifier state (not a column)
+ * @property bool $source_declared Runtime flag: owning migration source declared incubating
  */
 class TableRegistry extends Model
 {
@@ -30,7 +32,7 @@ class TableRegistry extends Model
     /**
      * The attributes that are mass assignable.
      *
-     * @var array<string>
+     * @var list<string>
      */
     protected $fillable = [
         'table_name',

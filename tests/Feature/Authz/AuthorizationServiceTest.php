@@ -305,6 +305,46 @@ it('allows agent when supervisor holds the capability via role', function (): vo
         ->and($decision->appliedPolicies)->toContain('delegation');
 });
 
+it('allows agent when supervisor holds the capability via a custom role in the same tenant', function (): void {
+    [, $company] = createTenantWithCompany(['name' => 'Same Tenant Supervisor Role']);
+    $supervisor = User::factory()->create(['company_id' => $company->id]);
+    $role = Role::query()->create([
+        'company_id' => $company->id,
+        'name' => 'Same Tenant Grant All',
+        'code' => 'same_tenant_supervisor_grant_all',
+        'is_system' => false,
+        'grant_all' => true,
+    ]);
+
+    PrincipalRole::query()->create([
+        'company_id' => $company->id,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => $supervisor->id,
+        'role_id' => $role->id,
+    ]);
+    PrincipalCapability::query()->create([
+        'company_id' => $company->id,
+        'principal_type' => PrincipalType::AGENT->value,
+        'principal_id' => 100,
+        'capability_key' => 'admin.ai.agent.execute',
+        'is_allowed' => true,
+    ]);
+
+    $decision = app(AuthorizationService::class)->can(
+        new Actor(
+            PrincipalType::AGENT,
+            100,
+            $company->id,
+            actingForUserId: (int) $supervisor->id,
+            tenantId: (int) $supervisor->tenant_id,
+        ),
+        'admin.ai.agent.execute',
+    );
+
+    expect($decision->allowed)->toBeTrue()
+        ->and($decision->appliedPolicies)->toContain('delegation');
+});
+
 it('denies agent when supervisor role is across a tenant boundary', function (): void {
     [, $roleCompany] = createTenantWithCompany(['name' => 'Supervisor Role Owner Tenant']);
     [, $actorCompany] = createTenantWithCompany(['name' => 'Agent Assignment Tenant']);

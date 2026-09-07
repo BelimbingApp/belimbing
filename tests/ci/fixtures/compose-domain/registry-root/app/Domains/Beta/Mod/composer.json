@@ -1,0 +1,8 @@
+{
+  "name": "blb/beta-mod",
+  "extra": {
+    "blb": {
+      "module": "beta/mod"
+    }
+  }
+}
