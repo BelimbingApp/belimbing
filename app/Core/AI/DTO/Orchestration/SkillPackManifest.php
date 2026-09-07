@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Core\AI\DTO\Orchestration;
 
 use App\Core\AI\Enums\SkillPackStatus;
