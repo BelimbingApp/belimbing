@@ -654,6 +654,29 @@ PY
     smoke_err=$(smoke 2>&1 || true)
     grep -q 'odd.domain.route' <<< "$smoke_err"
 
+    # --print-surface must still regenerate when pins disagree (advance-domain-pin
+    # intermediate state) but still refuse unmatched Domain Routes names (#871).
+    printf "%s\n" "<?php" "Route::post('webhooks/people-connector/{id}', fn () => null)->name('people-connector.webhook');" \
+        > "$smoke_root/app/Domains/PeopleConnector/Connector/Routes/web.php"
+    printf '[{"name":"people.index","uri":"people"},{"name":"people-connector.webhook","uri":"webhooks/people-connector/1"},{"name":"admin.integration.index","uri":"admin/integration"}]' \
+        > "$smoke_root/routes.json"
+    smoke_descriptor "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}"
+    smoke_surface "${smoke_sha[People]}" 1111111111111111111111111111111111111111 3 'admin.integration.index,people-connector.webhook,people.index'
+    printed=$(smoke --print-surface 2>/dev/null) || {
+        echo 'composed-smoke --print-surface failed while only the surface pin was stale' >&2
+        exit 1
+    }
+    python3 -c 'import json,sys; d=json.load(sys.stdin); assert "pins" in d and "route_names" in d' <<< "$printed"
+
+    printf "%s\n" "<?php" "Route::get('odd', fn () => null)->name('odd.domain.route');" \
+        > "$smoke_root/app/Domains/PeopleConnector/Connector/Routes/web.php"
+    if smoke --print-surface >/dev/null 2>&1; then
+        echo 'composed-smoke --print-surface accepted a Domain Routes name outside DOMAIN_ROUTE_NAME' >&2
+        exit 1
+    fi
+    print_err=$(smoke --print-surface 2>&1 || true)
+    grep -q 'odd.domain.route' <<< "$print_err"
+
     rm -rf "$smoke_root"
     trap - EXIT
     php scripts/ci/validate-extension-manifest.php tests/Fixtures/ci/extensions/conventional/Example/composer.json

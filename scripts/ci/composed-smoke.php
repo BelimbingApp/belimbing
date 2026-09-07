@@ -302,8 +302,11 @@ if ($unmatchedDeclared !== []) {
     $failures[] = 'Domain Routes declare names outside DOMAIN_ROUTE_NAME (add a prefix or rename): '.implode(', ', $unmatchedDeclared);
 }
 
-if ($failures !== [] && $options['print-surface']) {
-    fail(implode("\n", $failures));
+// Pin/count mismatches are why --print-surface exists (advance-domain-pin
+// regenerates while the surface is stale). Only refuse names the filter would
+// otherwise silence — those cannot be fixed by rewriting the surface file.
+if ($unmatchedDeclared !== [] && $options['print-surface']) {
+    fail('Domain Routes declare names outside DOMAIN_ROUTE_NAME (add a prefix or rename): '.implode(', ', $unmatchedDeclared));
 }
 
 if ($options['print-surface']) {
