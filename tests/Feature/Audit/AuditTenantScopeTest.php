@@ -10,7 +10,6 @@ use App\Base\Authz\Models\PrincipalCapability;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
 use App\Base\Tenancy\Contracts\TenantContext;
-use App\Core\Company\Models\Company;
 use App\Core\User\Models\User;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
@@ -110,12 +109,14 @@ it('hides foreign-tenant actions from the actions page', function (): void {
 
     auditTenantScopeInsertAction([
         'tenant_id' => $tenantAId,
+        'event' => 'auth.login.failed',
         'url' => 'https://example.test/foreign-tenant-action-row',
         'trace_id' => 'FOREIGNACTAAAA',
     ]);
     auditTenantScopeInsertAction([
         'tenant_id' => (int) $viewer->tenant_id,
         'actor_id' => $viewer->id,
+        'event' => 'auth.login.failed',
         'url' => 'https://example.test/home-tenant-action-row',
         'trace_id' => 'HOMEACTBBBBBBB',
     ]);
@@ -135,7 +136,7 @@ it('refuses retain-toggle on a foreign-tenant action id', function (): void {
         'principal_type' => PrincipalType::USER->value,
         'principal_id' => $viewer->id,
         'capability_key' => 'admin.audit.log.manage',
-        'effect' => 'allow',
+        'is_allowed' => true,
     ]);
 
     $foreignId = auditTenantScopeInsertAction([
@@ -221,12 +222,14 @@ it('lets the platform operator toggle all-tenants on mutations and actions', fun
     ]);
     auditTenantScopeInsertAction([
         'tenant_id' => (int) $foreignTenant->id,
+        'event' => 'auth.login.failed',
         'url' => 'https://example.test/operator-foreign-action',
         'trace_id' => 'OPALLACTAAAAAA',
     ]);
     auditTenantScopeInsertAction([
         'tenant_id' => (int) $company->tenant_id,
         'actor_id' => $operator->id,
+        'event' => 'auth.login.failed',
         'url' => 'https://example.test/operator-home-action',
         'trace_id' => 'OPHOMEACTBBBBB',
     ]);
