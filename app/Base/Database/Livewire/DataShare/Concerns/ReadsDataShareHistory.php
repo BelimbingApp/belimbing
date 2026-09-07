@@ -5,8 +5,10 @@ namespace App\Base\Database\Livewire\DataShare\Concerns;
 use App\Base\Database\Models\DataShareEvent;
 use App\Base\Database\Services\DataShare\DataShareHistoryQuery;
 use App\Base\Foundation\Livewire\Concerns\SelectsPerPage;
+use App\Base\Tenancy\Services\PlatformOperatorTenantAccess;
 use App\Core\User\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Pagination\LengthAwarePaginator as Paginator;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Url;
 use Livewire\WithPagination;
@@ -29,11 +31,20 @@ trait ReadsDataShareHistory
         return 25;
     }
 
+    protected function historyAvailableToCurrentTenant(): bool
+    {
+        return app(PlatformOperatorTenantAccess::class)->allows();
+    }
+
     /**
      * @return LengthAwarePaginator<int, DataShareEvent>
      */
     protected function historyEvents(DataShareHistoryQuery $history): LengthAwarePaginator
     {
+        if (! $this->historyAvailableToCurrentTenant()) {
+            return new Paginator([], 0, $this->perPage);
+        }
+
         return $history->paginate($this->historyActionClass !== '' ? $this->historyActionClass : null, $this->perPage);
     }
 

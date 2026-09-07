@@ -666,7 +666,12 @@ if ($instance->role->value === 'development') {
                             </div>
                         </div>
 
-                        @if($historyEvents->isEmpty())
+                        @if(! $historyAvailable)
+                            <div class="py-8 text-center">
+                                <p class="text-sm font-medium text-ink">{{ __('History requires the platform-operator tenant') }}</p>
+                                <p class="mt-1 text-sm text-muted">{{ __('Switch to the operator tenant to read the Data Share ledger.') }}</p>
+                            </div>
+                        @elseif($historyEvents->isEmpty())
                             <div class="py-8 text-center">
                                 <p class="text-sm font-medium text-ink">{{ __('No history rows yet') }}</p>
                                 <p class="mt-1 text-sm text-muted">{{ __('Publish, fetch, plan, apply, or prune an offer to write the first ledger row.') }}</p>

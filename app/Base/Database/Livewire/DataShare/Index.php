@@ -4,7 +4,6 @@ namespace App\Base\Database\Livewire\DataShare;
 
 use App\Base\Database\Enums\DataShareInstanceRole;
 use App\Base\Database\Livewire\Concerns\AuthorizesDataShareOperations;
-use App\Base\Database\Livewire\Concerns\RequiresPlatformOperatorTenant;
 use App\Base\Database\Livewire\DataShare\Concerns\ManagesDataSharePageState;
 use App\Base\Database\Livewire\DataShare\Concerns\ManagesDevelopmentTableMirror;
 use App\Base\Database\Livewire\DataShare\Concerns\ManagesTransferOffers;
@@ -33,7 +32,6 @@ class Index extends Component
     use ManagesDevelopmentTableMirror;
     use ManagesTransferOffers;
     use ReadsDataShareHistory;
-    use RequiresPlatformOperatorTenant;
 
     /** @var list<array<string, mixed>> */
     public array $scopes = [];
@@ -302,6 +300,7 @@ class Index extends Component
             'historyEvents' => $historyEvents,
             'historyActorNames' => $this->historyActorNames($historyEvents),
             'historyActionClasses' => array_keys(DataShareHistoryQuery::ACTION_CLASSES),
+            'historyAvailable' => $this->historyAvailableToCurrentTenant(),
         ]);
     }
 }

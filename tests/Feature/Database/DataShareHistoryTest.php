@@ -204,7 +204,8 @@ it('refuses History for a non-operator tenant on the page and CLI', function ():
     $user = createNonOperatorDataShareHistoryAdmin();
 
     Livewire::actingAs($user)->test(DataShareIndex::class)
-        ->assertForbidden();
+        ->assertOk()
+        ->assertSee('History requires the platform-operator tenant');
 
     expect(Artisan::call('blb:db:share:history', ['--json' => true]))->toBe(1)
         ->and(DataShareEvent::query()->count())->toBe(0);
