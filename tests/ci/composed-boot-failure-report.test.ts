@@ -99,11 +99,59 @@ esac
         expect(closeOpenIssue("BelimbingApp/belimbing", title)).toBe(42);
 
         const calls = readFileSync(log, "utf8");
+        expect(calls).toContain(
+            "issue list --repo BelimbingApp/belimbing --state open",
+        );
         expect(calls).toContain("issue edit 42");
         expect(calls).toContain("issue close 42");
         expect(calls).not.toContain("issue create");
         expect(calls).not.toContain("issue edit 41");
         expect(calls).not.toContain("issue close 41");
+    });
+
+    test("findOpenIssue stops at --limit 20: a 21st exact match is invisible", () => {
+        const title = "Domain pins stale";
+        const nearMisses = Array.from({ length: 20 }, (_, i) => ({
+            number: i + 1,
+            title: `${title} — near miss ${i + 1}`,
+        }));
+        const home = installGhStub(`#!/usr/bin/env bash
+set -euo pipefail
+log="$0.log"
+printf '%s\\n' "$*" >> "$log"
+case "$1 $2" in
+  "issue list")
+    cat <<'JSON'
+${JSON.stringify(nearMisses)}
+JSON
+    ;;
+  "issue create")
+    echo "https://github.com/BelimbingApp/belimbing/issues/99"
+    ;;
+  "issue close"|"issue edit")
+    echo "should not close or edit when the exact title is past the limit" >&2
+    exit 2
+    ;;
+  *)
+    echo "unexpected: $*" >&2
+    exit 2
+    ;;
+esac
+`);
+        const log = join(home, "bin", "gh.log");
+
+        // Stub returns only the 20 near-misses gh would hand back under --limit 20;
+        // a hypothetical 21st row with the exact title never reaches findOpenIssue.
+        expect(findOpenIssue("BelimbingApp/belimbing", title)).toBeNull();
+        expect(upsertIssue("BelimbingApp/belimbing", title, "fresh body")).toBe(99);
+
+        const calls = readFileSync(log, "utf8");
+        expect(calls).toContain(
+            "issue list --repo BelimbingApp/belimbing --state open",
+        );
+        expect(calls).toContain("--limit 20");
+        expect(calls).toContain("issue create");
+        expect(calls).not.toContain("issue edit");
     });
 
     test("upsertIssue creates when no exact title is open; closeOpenIssue is a no-op", () => {

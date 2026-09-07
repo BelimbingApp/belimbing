@@ -88,10 +88,8 @@ trait SelectsPerPage
     public function updatedPerPage(mixed $value): void
     {
         $this->perPage = $this->clampedPerPage(is_numeric($value) ? (int) $value : null);
-
-        if (method_exists($this, 'resetPage')) {
-            $this->resetPage();
-        }
+        // SelectsPerPage is documented to compose with WithPagination.
+        $this->resetPage();
     }
 
     /**

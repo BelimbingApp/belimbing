@@ -7,7 +7,7 @@ use App\Base\Tenancy\Contracts\TenantContext;
 use Illuminate\Console\Command;
 
 /**
- * List every declared feature flag and its resolution for the current tenant.
+ * List every declared feature flag and orphaned overrides for the current tenant.
  */
 final class ListFeatureFlagsCommand extends Command
 {
@@ -39,13 +39,14 @@ final class ListFeatureFlagsCommand extends Command
         }
 
         $this->table(
-            ['Flag', 'Module', 'Default', 'Enabled', 'Overridden', 'Description'],
+            ['Flag', 'Module', 'Default', 'Enabled', 'Overridden', 'Orphaned', 'Description'],
             array_map(static fn (array $row): array => [
                 $row['flag'],
-                $row['module'],
-                $row['default'] ? 'true' : 'false',
+                $row['module'] ?? '—',
+                $row['default'] === null ? '—' : ($row['default'] ? 'true' : 'false'),
                 $row['enabled'] ? 'true' : 'false',
                 $row['overridden'] ? 'yes' : 'no',
+                $row['orphaned'] ? 'yes' : 'no',
                 $row['description'],
             ], $rows),
         );

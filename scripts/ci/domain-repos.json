@@ -20,7 +20,7 @@
             "repo": "BelimbingApp/blb-people",
             "path": "app/Domains/People",
             "sonar_project_key": "BelimbingApp_blb-people",
-            "ref": "e99ef4330dc9c5f8d3e554adbd2d0cdebfea205c"
+            "ref": "cc9b7a89defd6c7747d184bd0d760710586bbae9"
         },
         "commerce": {
             "repo": "BelimbingApp/blb-commerce",
@@ -38,7 +38,7 @@
             "repo": "BelimbingApp/blb-people-connector",
             "path": "app/Domains/PeopleConnector",
             "sonar_project_key": "BelimbingApp_blb-people-connector",
-            "ref": "5dd1ab00815dbbb7cfa07b953567367855a3c952"
+            "ref": "c7df58445ec9f2d1e05a18e3d6baecdc8e447471"
         }
     }
 }

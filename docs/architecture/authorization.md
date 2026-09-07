@@ -212,7 +212,8 @@ interface AuthorizationPolicy
 | 1 | `ActorContextPolicy` | `actor_context` | Deny if actor fails validation (invalid ID, missing company, agent without delegation). Abstain on valid. |
 | 2 | `KnownCapabilityPolicy` | `capability_registry` | Deny if capability key is not in the registry. Abstain on known. |
 | 3 | `CompanyScopePolicy` | `company_scope` | Deny if resource company differs from actor company. Abstain when no resource or companies match. |
-| 4 | `GrantPolicy` | `grant` | **Authoritative (final)**. Loads `EffectivePermissions` for the actor and evaluates: explicit deny > explicit allow > role grant > deny. Always returns a decision. |
+| 4 | `DelegationPolicy` | `delegation` | Deny if an Agent's supervisor lacks the capability. Abstain for non-agents and when the supervisor is allowed. |
+| 5 | `GrantPolicy` | `grant` | **Authoritative (final)**. Loads `EffectivePermissions` for the actor and evaluates: explicit deny > explicit allow > role grant > deny. Always returns a decision. |
 
 **Adding new policies:** Create a class implementing `AuthorizationPolicy`, then add it to the pipeline array in `AuthzServiceProvider`. No existing code changes required.
 
@@ -239,7 +240,7 @@ Logging is **deferred and batched**:
 2. A `terminating` callback flushes all buffered entries in a single batch `INSERT` (chunked at 500 rows) after the response is sent.
 3. Log persistence failure is caught and reported via `logger()->error()` without affecting the authorization decision.
 
-The `DecisionLog` model includes `MassPrunable` with a configurable retention period (`authz.decision_log_retention_days`, default 90 days). Run `php artisan model:prune --model=App\\Base\\Authz\\Models\\DecisionLog` to clean old entries.
+The `DecisionLog` model includes `MassPrunable` with a configurable retention period (`authz.decision_log_retention_days`, default 90 days). The scheduled command `blb:authz:decision-logs:prune` runs daily at 01:45 (override with `--days` / `--dry-run`).
 
 ---
 
@@ -440,10 +441,12 @@ Implemented as a composable policy pipeline (not hardcoded):
 
 1. **Actor validity** — `ActorContextPolicy`
 2. **Capability registry** — `KnownCapabilityPolicy`
-3. **Company scope gate** — `CompanyScopePolicy`
-4. **Grant evaluation** — `GrantPolicy` (RBAC + direct grants)
+3. **Tenant scope gate** — `TenantScopePolicy`
+4. **Company scope gate** — `CompanyScopePolicy`
+5. **Delegation gate** — `DelegationPolicy`
+6. **Grant evaluation** — `GrantPolicy` (RBAC + direct grants)
 
-Future policies (resource ownership, workflow state, delegation constraints) can be inserted into the pipeline without modifying existing code.
+Future policies (resource ownership, workflow state) can be inserted into the pipeline without modifying existing code.
 
 ### 9.2 Delegation Rules for Agent
 
@@ -466,7 +469,7 @@ Agents are first-class employees under the same org and AuthZ model as humans. *
 
 **AuthZ contract for Agent:**
 
-1. **Delegation constraint:** Agent effective permissions must be a strict subset of the supervisor’s effective permissions. Delegation cannot create new privileges. A policy (or pipeline stage) enforces this when the actor or resource is a Agent.
+1. **Delegation constraint:** Agent effective permissions must be a strict subset of the supervisor’s effective permissions. Delegation cannot create new privileges. `DelegationPolicy` enforces this when the actor is an Agent (before `GrantPolicy`).
 2. **Explicit deny wins:** Same as Agent and human; explicit deny always overrides role or delegated allow.
 3. **Capability gates for Agent administration:** The Agent spec defines capability keys for managing Agents (e.g. `employee.agent.create`, `employee.agent.update`, `employee.agent.assign_role`, `employee.agent.assign_permission`, `employee.agent.disable`). The final vocabulary is owned by the AuthZ module and declared in `Config/authz.php` (or module configs) when implemented.
 4. **Supervision chain:** Every Agent must have a supervision chain that resolves to a human accountable owner; the supervision graph must be acyclic. AuthZ may need to evaluate “can this supervisor delegate to this subordinate?” using the same engine.

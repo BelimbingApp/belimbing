@@ -193,12 +193,6 @@ parameters:
 			path: app/Base/Audit/Livewire/AuditLog/Concerns/InteractsWithSourceHistory.php
 
 		-
-			message: '#^Call to function method_exists\(\) with \$this\(App\\Base\\Audit\\Livewire\\AuditLog\\Mutations\) and ''resetPage'' will always evaluate to true\.$#'
-			identifier: function.alreadyNarrowedType
-			count: 1
-			path: app/Base/Audit/Livewire/AuditLog/Mutations.php
-
-		-
 			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Audit\\Models\\AuditAction\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
 			identifier: property.phpDocType
 			count: 1
@@ -463,30 +457,6 @@ parameters:
 			path: app/Base/Authz/Livewire/Capabilities/Index.php
 
 		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\Role\:\:\$code\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Livewire/Roles/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\Role\:\:\$company_id\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Base/Authz/Livewire/Roles/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\Role\:\:\$is_system\.$#'
-			identifier: property.notFound
-			count: 7
-			path: app/Base/Authz/Livewire/Roles/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\Role\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Livewire/Roles/Show.php
-
-		-
 			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$company_id\.$#'
 			identifier: property.notFound
 			count: 1
@@ -508,24 +478,6 @@ parameters:
 			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$pivot_id\.$#'
 			identifier: property.notFound
 			count: 1
-			path: app/Base/Authz/Livewire/Roles/Show.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$capability_key\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Livewire/Roles/Show.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Authz/Livewire/Roles/Show.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 2
 			path: app/Base/Authz/Livewire/Roles/Show.php
 
 		-
@@ -575,30 +527,6 @@ parameters:
 			identifier: property.phpDocType
 			count: 1
 			path: app/Base/Authz/Models/PrincipalRole.php
-
-		-
-			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Authz\\Models\\Role\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
-			identifier: property.phpDocType
-			count: 1
-			path: app/Base/Authz/Models/Role.php
-
-		-
-			message: '#^Strict comparison using \=\=\= between int and null will always evaluate to false\.$#'
-			identifier: identical.alwaysFalse
-			count: 1
-			path: app/Base/Authz/Models/Role.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\RoleCapability\:\:\$role_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Models/RoleCapability.php
-
-		-
-			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Authz\\Models\\RoleCapability\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
-			identifier: property.phpDocType
-			count: 1
-			path: app/Base/Authz/Models/RoleCapability.php
 
 		-
 			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\PrincipalCapability\:\:\$capability_key\.$#'
@@ -679,42 +607,6 @@ parameters:
 			path: app/Base/Database/Config/data_share.php
 
 		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$offer_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Console/Commands/FetchDataShareTransferOfferCommand.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$package_id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Database/Console/Commands/FetchDataShareTransferOfferCommand.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$package_sha256\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Console/Commands/FetchDataShareTransferOfferCommand.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$status\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Console/Commands/FetchDataShareTransferOfferCommand.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$package_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Console/Commands/InspectDataSharePackageCommand.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$package_path\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Console/Commands/InspectDataSharePackageCommand.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$seeder_class\.$#'
 			identifier: property.notFound
 			count: 1
@@ -763,36 +655,6 @@ parameters:
 			path: app/Base/Database/Console/Commands/MirrorTablesCommand.php
 
 		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlan\:\:\$plan_hash\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Database/Console/Commands/PlanDataSharePackageCommand.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlan\:\:\$status\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Database/Console/Commands/PlanDataSharePackageCommand.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlan\:\:\$summary\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Database/Console/Commands/PlanDataSharePackageCommand.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$package_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Console/Commands/PlanDataSharePackageCommand.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$package_sha256\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Console/Commands/PlanDataSharePackageCommand.php
-
-		-
 			message: '#^Offset ''dev'' on array\{0\: int, 1\: int, 2\: int, 3\: int, 4\: int, 5\: int, 6\: int, 7\: int, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
@@ -803,78 +665,6 @@ parameters:
 			identifier: nullCoalesce.offset
 			count: 1
 			path: app/Base/Database/Console/Commands/StageBackupCommand.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$expires_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/DTO/DataShare/DataSharePackageExpectation.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$offer_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/DTO/DataShare/DataSharePackageExpectation.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$package_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/DTO/DataShare/DataSharePackageExpectation.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$package_sha256\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/DTO/DataShare/DataSharePackageExpectation.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$scope_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/DTO/DataShare/DataSharePackageExpectation.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$source_instance_id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Database/DTO/DataShare/DataSharePackageExpectation.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$source_role\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/DTO/DataShare/DataSharePackageExpectation.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$bytes\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Database/Http/Controllers/DownloadDataShareTransferOfferController.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$offer_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Http/Controllers/DownloadDataShareTransferOfferController.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$package_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Http/Controllers/DownloadDataShareTransferOfferController.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$package_path\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Base/Database/Http/Controllers/DownloadDataShareTransferOfferController.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$package_sha256\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Http/Controllers/DownloadDataShareTransferOfferController.php
 
 		-
 			message: '#^Strict comparison using \=\=\= between resource\|null and false will always evaluate to false\.$#'
@@ -931,156 +721,6 @@ parameters:
 			path: app/Base/Database/Livewire/DataShare/Concerns/ValidatesDataShareSettings.php
 
 		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlan\:\:\$plan_hash\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Database/Livewire/DataShare/Index.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlan\:\:\$status\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/DataShare/Index.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$expires_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/DataShare/Index.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$metadata\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/DataShare/Index.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$offer_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/DataShare/Index.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$package_id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Database/Livewire/DataShare/Index.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$package_sha256\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Database/Livewire/DataShare/Index.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$received_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/DataShare/Index.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$scope_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/DataShare/Index.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$source_instance_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/DataShare/Index.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$status\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/DataShare/Index.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$bytes\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/DataShare/Index.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$download_count\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/DataShare/Index.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$expires_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/DataShare/Index.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$last_downloaded_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/DataShare/Index.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$max_downloads\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/DataShare/Index.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$offer_id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Database/Livewire/DataShare/Index.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$package_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/DataShare/Index.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$package_sha256\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/DataShare/Index.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$revoked_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/DataShare/Index.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$scope_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/DataShare/Index.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$source_instance_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/DataShare/Index.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$source_role\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/DataShare/Index.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$status\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/DataShare/Index.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$updated_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/DataShare/Index.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
 			count: 1
@@ -1129,18 +769,6 @@ parameters:
 			path: app/Base/Database/Livewire/DataShare/Settings.php
 
 		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\TableRegistry\:\:\$schema_state\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/DatabaseTables/Index.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\TableRegistry\:\:\$source_declared\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/DatabaseTables/Index.php
-
-		-
 			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:transform\(\) expects callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: App\\Base\\Database\\Models\\TableRegistry, Closure\(App\\Base\\Database\\Models\\TableRegistry\)\: App\\Base\\Database\\Models\\TableRegistry given\.$#'
 			identifier: argument.type
 			count: 1
@@ -1157,42 +785,6 @@ parameters:
 			identifier: class.notFound
 			count: 1
 			path: app/Base/Database/Livewire/DatabaseTables/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Core\\AI\\Models\\AiProvider\:\:\$base_url\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/Queries/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Core\\AI\\Models\\AiProvider\:\:\$connection_config\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/Queries/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Core\\AI\\Models\\AiProvider\:\:\$credentials\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/Queries/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Core\\AI\\Models\\AiProvider\:\:\$display_name\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Database/Livewire/Queries/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Core\\AI\\Models\\AiProvider\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Database/Livewire/Queries/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Core\\AI\\Models\\AiProviderModel\:\:\$model_id\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Base/Database/Livewire/Queries/Show.php
 
 		-
 			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$email\.$#'
@@ -1237,18 +829,6 @@ parameters:
 			path: app/Base/Database/Livewire/Queries/Show.php
 
 		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\TableRegistry\:\:\$schema_state\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/SchemaIncubation/Index.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\TableRegistry\:\:\$source_declared\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/SchemaIncubation/Index.php
-
-		-
 			message: '#^Offset ''source_declared'' on array\{state\: string, source_declared\: bool\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 3
@@ -1277,12 +857,6 @@ parameters:
 			identifier: property.phpDocType
 			count: 1
 			path: app/Base/Database/Models/SeederRegistry.php
-
-		-
-			message: '#^PHPDoc type array\<string\> of property App\\Base\\Database\\Models\\TableRegistry\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
-			identifier: property.phpDocType
-			count: 1
-			path: app/Base/Database/Models/TableRegistry.php
 
 		-
 			message: '#^Strict comparison using \!\=\= between non\-empty\-list\<string\> and array\{\} will always evaluate to true\.$#'
@@ -1453,90 +1027,6 @@ parameters:
 			path: app/Base/Database/Services/DataShare/Concerns/ValidatesDiagnosticPackages.php
 
 		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlan\:\:\$plan_hash\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$package_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$scope_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$source_instance_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$target_instance_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$bytes\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$expires_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$offer_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$package_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$package_sha256\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$published_by_actor_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$scope_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$source_instance_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$status\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$package_id\.$#'
 			identifier: property.notFound
 			count: 1
@@ -1561,88 +1051,10 @@ parameters:
 			path: app/Base/Database/Services/DataShare/DataShareEventRecorder.php
 
 		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$package_path\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Database/Services/DataShare/DataShareImportPlanner.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$package_sha256\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Base/Database/Services/DataShare/DataShareImportPlanner.php
-
-		-
 			message: '#^Strict comparison using \=\=\= between resource\|null and false will always evaluate to false\.$#'
 			identifier: identical.alwaysFalse
 			count: 1
 			path: app/Base/Database/Services/DataShare/DataShareImportPlanner.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlan\:\:\$destination_fingerprint\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataSharePackageApplier.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlan\:\:\$plan_hash\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Database/Services/DataShare/DataSharePackageApplier.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlan\:\:\$status\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataSharePackageApplier.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlan\:\:\$summary\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataSharePackageApplier.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlanAction\:\:\$action\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataSharePackageApplier.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlanAction\:\:\$destination_fingerprint\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataSharePackageApplier.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlanAction\:\:\$incoming_fingerprint\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataSharePackageApplier.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlanAction\:\:\$primary_key_hash\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Database/Services/DataShare/DataSharePackageApplier.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlanAction\:\:\$scope_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataSharePackageApplier.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlanAction\:\:\$sequence\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataSharePackageApplier.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataSharePlanAction\:\:\$table_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataSharePackageApplier.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$package_id\.$#'
@@ -1687,36 +1099,6 @@ parameters:
 			path: app/Base/Database/Services/DataShare/DataSharePackageExporter.php
 
 		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$offer_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataSharePackageInbox.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$package_sha256\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataSharePackageInbox.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$scope_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataSharePackageInbox.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$source_instance_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataSharePackageInbox.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$target_instance_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataSharePackageInbox.php
-
-		-
 			message: '#^Strict comparison using \=\=\= between resource\|null and false will always evaluate to false\.$#'
 			identifier: identical.alwaysFalse
 			count: 1
@@ -1759,24 +1141,6 @@ parameters:
 			path: app/Base/Database/Services/DataShare/DataSharePackageReader.php
 
 		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$metadata\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataSharePackageRetention.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$received_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataSharePackageRetention.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareReceipt\:\:\$status\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataSharePackageRetention.php
-
-		-
 			message: '#^Strict comparison using \=\=\= between resource\|null and false will always evaluate to false\.$#'
 			identifier: identical.alwaysFalse
 			count: 2
@@ -1807,102 +1171,6 @@ parameters:
 			path: app/Base/Database/Services/DataShare/DataShareSchemaCompatibility.php
 
 		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$bytes\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$download_count\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$expires_at\.$#'
-			identifier: property.notFound
-			count: 5
-			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$last_downloaded_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$max_downloads\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$metadata\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$offer_id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$package_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$package_sha256\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$scope_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$secret\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$secret_hash\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$source_instance_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$source_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$source_role\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareTransferOffer\:\:\$status\.$#'
-			identifier: property.notFound
-			count: 7
-			path: app/Base/Database/Services/DataShare/DataShareTransferOfferManager.php
-
-		-
 			message: '#^If condition is always false\.$#'
 			identifier: if.alwaysFalse
 			count: 1
@@ -1925,18 +1193,6 @@ parameters:
 			identifier: arrayValues.list
 			count: 1
 			path: app/Base/Database/Services/DataShare/DiagnosticRowCapture.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareMirrorObservation\:\:\$acknowledged_generation\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/Mirror/DataShareMirrorCatalog.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Database\\Models\\DataShareMirrorObservation\:\:\$observed_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Services/DataShare/Mirror/DataShareMirrorCatalog.php
 
 		-
 			message: '#^Offset ''unique'' on array\{name\: string, columns\: list\<string\>, type\: string, unique\: bool, primary\: bool\} on left side of \?\? always exists and is not nullable\.$#'
@@ -2197,22 +1453,10 @@ parameters:
 			path: app/Base/Foundation/Livewire/Concerns/DecodesJsonFields.php
 
 		-
-			message: '#^Call to function method_exists\(\) with \$this\(App\\Base\\Schedule\\Livewire\\Index\) and ''resetPage'' will always evaluate to true\.$#'
-			identifier: function.alreadyNarrowedType
-			count: 1
-			path: app/Base/Foundation/Livewire/Concerns/FiltersByPeriod.php
-
-		-
 			message: '#^Offset 0 on non\-empty\-list\<string\> on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
 			path: app/Base/Foundation/Livewire/Domains.php
-
-		-
-			message: '#^Call to function method_exists\(\) with \$this\(App\\Base\\Foundation\\Livewire\\SearchablePaginatedList\) and ''resetPage'' will always evaluate to true\.$#'
-			identifier: function.alreadyNarrowedType
-			count: 1
-			path: app/Base/Foundation/Livewire/SearchablePaginatedList.php
 
 		-
 			message: '#^Call to function is_array\(\) with array\<mixed\> will always evaluate to true\.$#'
@@ -2440,12 +1684,6 @@ parameters:
 			message: '#^Call to an undefined method App\\Base\\Schedule\\Contracts\\ScheduleCadenceContributor\:\:tasks\(\)\.$#'
 			identifier: method.notFound
 			count: 1
-			path: app/Base/Schedule/Livewire/Index.php
-
-		-
-			message: '#^Call to function method_exists\(\) with \$this\(App\\Base\\Schedule\\Livewire\\Index\) and ''resetPage'' will always evaluate to true\.$#'
-			identifier: function.alreadyNarrowedType
-			count: 2
 			path: app/Base/Schedule/Livewire/Index.php
 
 		-

@@ -2,10 +2,24 @@
 
 namespace App\Base\Database\Models;
 
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property int|null $id
+ * @property int|null $receipt_id
+ * @property string|null $plan_hash
+ * @property string|null $package_sha256
+ * @property string|null $destination_fingerprint
+ * @property array<string, mixed>|null $summary
+ * @property string|null $status
+ * @property CarbonInterface|null $planned_at
+ * @property CarbonInterface|null $applied_at
+ * @property CarbonInterface|null $created_at
+ * @property CarbonInterface|null $updated_at
+ */
 class DataSharePlan extends Model
 {
     protected $table = 'base_database_data_share_plans';

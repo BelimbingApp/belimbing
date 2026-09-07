@@ -50,6 +50,7 @@ return [
         // Recovery staging must remain usable without touching the application
         // database, including when that database is the system being recovered.
         'blb:db:backup:stage',
+        'blb:audit:actions:prune',
     ],
 
     /*
