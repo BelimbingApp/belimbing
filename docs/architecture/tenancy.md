@@ -61,6 +61,17 @@ Rollback is intentionally constrained: after a non-1 operator has been used, the
 
 Consumers fail closed on null: no tenant context must never widen into unscoped access. Octane/FrankenPHP scoped-binding flushes plus explicit queue clearing defend against worker leakage.
 
+### Platform async entry-point inventory
+
+Base and Core declare every queued job and every scheduler-registered Artisan
+command in . Tests
+assert the declared job list matches filesystem discovery and that the declared
+schedule list matches the live  facade, then prove each queued entry
+restores the dispatch-time tenant (and refuses a default when none was stamped)
+and each scheduled command leaves ambient tenant null.
+
+
+
 ### Authorization
 
 `TenantScopePolicy` (Base/Authz) runs in the policy pipeline ahead of `CompanyScopePolicy` and compares actor and resource tenant IDs, denying cross-tenant access with `DENIED_TENANT_SCOPE` regardless of role grants. Resources carrying `company_id` but no `tenant_id` are enriched through the `TenantDirectory` contract (Base/Authz contract; Core/Company binds `CompanyTenantDirectory`), so modules that only carry `company_id` — the pre-tenancy convention — are tenant-isolated without schema changes. When a resource's tenant cannot be resolved, the policy abstains and company scope remains the guard.
