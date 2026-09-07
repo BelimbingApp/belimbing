@@ -61,6 +61,8 @@ own customer sub-tenants (resale).
 
 `createTenant()` and `createTenantWithCompany()` in `tests/Pest.php`; isolation,
 propagation, settings-cascade, and admin-surface suites live in
-`tests/Feature/Base/Tenancy/`.
+`tests/Feature/Base/Tenancy/`. Platform Base/Core queued jobs and scheduled
+commands are inventoried in `Support/PlatformAsyncEntryPointInventory` and
+covered by `PlatformAsyncEntryPointTenantPropagationTest`.
 
 Plan of record: `docs/plans/base-tenancy.md`.
