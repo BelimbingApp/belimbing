@@ -4,7 +4,7 @@ set -euo pipefail
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 python3 tests/ci/test-domain-pins.py
-bash -n scripts/ci/changed-authorable-php.sh scripts/ci/extension-conformance.sh scripts/ci/mount-guard.sh scripts/ci/phpstan-baseline-gate.sh scripts/ci/record-pest-timing.sh
+bash -n scripts/ci/changed-authorable-php.sh scripts/ci/extension-conformance.sh scripts/ci/mount-guard.sh scripts/ci/phpstan-baseline-gate.sh scripts/ci/record-pest-timing.sh scripts/ci/token-audit.sh
 python3 -m py_compile scripts/ci/aggregate-pest-timing.py scripts/ci/pest-timing-ratchet.py scripts/ci/refresh-livewire-action-baselines.py
 
 # Timing aggregator (#614): one table from per-suite JSON, fail-closed on empty.
@@ -1133,5 +1133,142 @@ authorable_script="$root/scripts/ci/changed-authorable-php.sh"
 )
 rm -rf "$authorable_fixture"
 trap - EXIT
+
+# token-audit.sh (#780 / #825): every statically resolvable secrets.* reference
+# must be allowlisted in docs/ci/secrets.json; stale rotation warns; malformed
+# entries fail; computed keys and secrets: inherit warn (or --strict refuse).
+python3 - <<'PY'
+from pathlib import Path
+import json
+import subprocess
+import tempfile
+
+root = Path('.').resolve()
+audit = root / 'scripts/ci/token-audit.sh'
+assert audit.is_file(), 'missing scripts/ci/token-audit.sh'
+assert audit.stat().st_mode & 0o111, 'token-audit.sh must be executable'
+lint_yml = (root / '.github/workflows/lint.yml').read_text(encoding='utf-8')
+assert 'run: scripts/ci/token-audit.sh' in lint_yml, 'quality job must run token-audit.sh'
+
+live = subprocess.run(['bash', str(audit)], cwd=root, capture_output=True, text=True)
+assert live.returncode == 0, live.stdout + live.stderr
+assert 'every referenced secret is allowlisted' in live.stdout, live.stdout
+assert 'not statically verifiable' not in live.stdout, live.stdout
+assert '::warning file=' not in live.stdout, live.stdout
+assert '::warning::' not in live.stdout, live.stdout
+
+
+def run_audit(tmp, workflow, allowlist, today='2026-09-07', strict=False):
+    (tmp / 'wf').mkdir(exist_ok=True)
+    (tmp / 'wf/ci.yml').write_text(workflow, encoding='utf-8')
+    (tmp / 'secrets.json').write_text(json.dumps(allowlist), encoding='utf-8')
+    cmd = ['bash', str(audit), '--workflows', str(tmp / 'wf'),
+           '--allowlist', str(tmp / 'secrets.json'), '--today', today]
+    if strict:
+        cmd.append('--strict')
+    return subprocess.run(cmd, capture_output=True, text=True)
+
+
+def entry(name, **overrides):
+    payload = {'name': name, 'purpose': 'fixture', 'owner': 'kiatng', 'rotated': '2026-09-01'}
+    payload.update(overrides)
+    return payload
+
+
+workflow = (
+    'jobs:\n  a:\n    steps:\n      - env:\n'
+    '          A: ${{ secrets.LISTED_TOKEN }}\n'
+    '          B: ${{ secrets.GITHUB_TOKEN }}\n'
+    '          C: ${{ steps.x.outputs.token || secrets.FIXTURE_UNLISTED_TOKEN }}\n'
+)
+with tempfile.TemporaryDirectory() as tmpdir:
+    tmp = Path(tmpdir)
+    unlisted = run_audit(tmp, workflow, {'secrets': [entry('LISTED_TOKEN')]})
+    assert unlisted.returncode == 1, unlisted.stdout + unlisted.stderr
+    assert 'FIXTURE_UNLISTED_TOKEN' in unlisted.stderr, unlisted.stderr
+    assert 'secret LISTED_TOKEN is referenced' not in unlisted.stderr, unlisted.stderr
+    assert 'GITHUB_TOKEN' not in unlisted.stderr, unlisted.stderr
+
+    listed = run_audit(tmp, workflow, {'secrets': [entry('LISTED_TOKEN'), entry('FIXTURE_UNLISTED_TOKEN')]})
+    assert listed.returncode == 0, listed.stdout + listed.stderr
+    assert '::warning::' not in listed.stdout, listed.stdout
+
+    # A bracketed reference is the same reference: GitHub accepts
+    # ${{ secrets['NAME'] }} exactly as it accepts ${{ secrets.NAME }}.
+    bracketed = run_audit(tmp, (
+        'jobs:\n  a:\n    steps:\n      - env:\n'
+        "          A: ${{ secrets['FIXTURE_UNLISTED_TOKEN'] }}\n"
+    ), {'secrets': [entry('LISTED_TOKEN')]})
+    assert bracketed.returncode == 1, bracketed.stdout + bracketed.stderr
+    assert 'FIXTURE_UNLISTED_TOKEN' in bracketed.stderr, bracketed.stderr
+
+    stale = run_audit(tmp, workflow, {'secrets': [
+        entry('LISTED_TOKEN', rotated='2026-06-01'), entry('FIXTURE_UNLISTED_TOKEN')]})
+    assert stale.returncode == 0, stale.stdout + stale.stderr
+    assert '::warning::secret LISTED_TOKEN was last rotated 2026-06-01 (98 days ago' in stale.stdout, stale.stdout
+
+    fresh = run_audit(tmp, workflow, {'secrets': [
+        entry('LISTED_TOKEN', rotated='2026-06-09'), entry('FIXTURE_UNLISTED_TOKEN')]})
+    assert fresh.returncode == 0 and '::warning::' not in fresh.stdout, fresh.stdout
+
+    no_owner = run_audit(tmp, workflow, {'secrets': [
+        entry('LISTED_TOKEN', owner=''), entry('FIXTURE_UNLISTED_TOKEN')]})
+    assert no_owner.returncode == 1, no_owner.stdout + no_owner.stderr
+    assert 'entry LISTED_TOKEN: missing owner' in no_owner.stderr, no_owner.stderr
+
+    no_date = run_audit(tmp, workflow, {'secrets': [
+        entry('LISTED_TOKEN'), {'name': 'FIXTURE_UNLISTED_TOKEN', 'purpose': 'p', 'owner': 'kiatng'}]})
+    assert no_date.returncode == 1, no_date.stdout + no_date.stderr
+    assert 'entry FIXTURE_UNLISTED_TOKEN: missing rotated' in no_date.stderr, no_date.stderr
+
+    bad_date = run_audit(tmp, workflow, {'secrets': [
+        entry('LISTED_TOKEN', rotated='soon'), entry('FIXTURE_UNLISTED_TOKEN')]})
+    assert bad_date.returncode == 1 and 'not an ISO date' in bad_date.stderr, bad_date.stderr
+
+    (tmp / 'secrets.json').unlink()
+    missing = subprocess.run(
+        ['bash', str(audit), '--workflows', str(tmp / 'wf'), '--allowlist', str(tmp / 'secrets.json')],
+        capture_output=True, text=True)
+    assert missing.returncode == 1 and 'is missing' in missing.stderr, missing.stderr
+
+    # #825: computed keys and secrets: inherit are warned, not silently green.
+    computed_wf = (
+        'jobs:\n  a:\n    steps:\n      - env:\n'
+        "          A: ${{ secrets[format('TOKEN_{0}', github.ref_name)] }}\n"
+        '          B: ${{ secrets.LISTED_TOKEN }}\n'
+    )
+    computed = run_audit(tmp, computed_wf, {'secrets': [entry('LISTED_TOKEN')]})
+    assert computed.returncode == 0, computed.stdout + computed.stderr
+    assert '::warning file=' in computed.stdout and 'computed-key' in computed.stdout, computed.stdout
+    assert '1 reference(s) not statically verifiable' in computed.stdout, computed.stdout
+    assert 'every statically resolvable referenced secret is allowlisted' in computed.stdout, computed.stdout
+    assert 'every referenced secret is allowlisted\n' not in computed.stdout + '\n', computed.stdout
+    computed_strict = run_audit(tmp, computed_wf, {'secrets': [entry('LISTED_TOKEN')]}, strict=True)
+    assert computed_strict.returncode == 1, computed_strict.stdout + computed_strict.stderr
+    assert '--strict refuses' in computed_strict.stderr, computed_strict.stderr
+
+    inherit_wf = (
+        'jobs:\n  a:\n    secrets: inherit\n'
+        '    uses: ./.github/workflows/extension-conformance.yml\n'
+        '  b:\n    steps:\n      - env:\n'
+        '          A: ${{ secrets.LISTED_TOKEN }}\n'
+    )
+    inherit = run_audit(tmp, inherit_wf, {'secrets': [entry('LISTED_TOKEN')]})
+    assert inherit.returncode == 0, inherit.stdout + inherit.stderr
+    assert 'secrets: inherit' in inherit.stdout, inherit.stdout
+    assert '1 reference(s) not statically verifiable' in inherit.stdout, inherit.stdout
+    assert 'every statically resolvable referenced secret is allowlisted' in inherit.stdout, inherit.stdout
+    inherit_strict = run_audit(tmp, inherit_wf, {'secrets': [entry('LISTED_TOKEN')]}, strict=True)
+    assert inherit_strict.returncode == 1, inherit_strict.stdout + inherit_strict.stderr
+
+    plain = run_audit(tmp, (
+        'jobs:\n  a:\n    steps:\n      - env:\n'
+        '          A: ${{ secrets.SONAR_TOKEN }}\n'
+    ), {'secrets': [entry('SONAR_TOKEN')]})
+    assert plain.returncode == 0, plain.stdout + plain.stderr
+    assert '::warning file=' not in plain.stdout, plain.stdout
+    assert 'not statically verifiable' not in plain.stdout, plain.stdout
+    assert 'every referenced secret is allowlisted' in plain.stdout, plain.stdout
+PY
 
 echo 'CI script checks passed'

@@ -36,6 +36,9 @@ jobs:
       - name: Validate composed-source descriptors
         run: tests/ci/test-ci-scripts.sh
 
+      - name: Audit workflow secret references
+        run: scripts/ci/token-audit.sh
+
       - name: Validate upstream Domain pins
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
