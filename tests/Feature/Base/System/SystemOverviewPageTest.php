@@ -1,11 +1,15 @@
 <?php
 
+use App\Base\Authz\Capability\CapabilityInventory;
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalCapability;
 use App\Base\FeatureFlags\Models\FeatureFlagOverride;
 use App\Base\FeatureFlags\Services\FeatureFlagDeclarationInventory;
 use App\Base\FeatureFlags\Services\FeatureFlagRegistry;
 use App\Base\Foundation\ModuleManifest\ModuleManifestReader;
+use App\Base\Menu\Services\MenuConditionRegistry;
+use App\Base\Routing\RouteDiscoveryService;
+use App\Base\Routing\Services\TenantAuditPageData;
 use App\Base\System\Livewire\Overview\Index;
 use App\Base\System\Services\SystemOverviewPageData;
 use App\Base\Tenancy\Contracts\TenantContext;
@@ -17,8 +21,14 @@ use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
 
+const OVERVIEW_AUDIT_FIXTURE = 'app/Domains/ZzOverviewProbe/Fixture';
+
 beforeEach(function (): void {
     setupAuthzRoles();
+});
+
+afterEach(function (): void {
+    File::deleteDirectory(base_path('app/Domains/ZzOverviewProbe'));
 });
 
 /**
@@ -42,6 +52,28 @@ function systemOverviewActor(array $capabilities): User
     app(TenantContext::class)->set((int) $company->tenant_id);
 
     return $user;
+}
+
+function registerOverviewAuditAuthzGapFixture(): void
+{
+    $root = base_path(OVERVIEW_AUDIT_FIXTURE.'/Routes');
+    File::ensureDirectoryExists($root);
+    $web = $root.'/web.php';
+    File::put($web, <<<'PHP'
+<?php
+
+use App\Base\Tenancy\Middleware\RequireTenantContext;
+use Illuminate\Support\Facades\Route;
+
+Route::middleware(RequireTenantContext::class)
+    ->get('zz-overview-probe', fn () => 'ok')
+    ->name('zz-overview-probe');
+PHP);
+
+    config()->set('domain_routes.tenant_context.required_domains', []);
+    config()->set('domain_routes.middleware_audit.allowlist', []);
+    app(RouteDiscoveryService::class)->registerRoutes(['web' => [$web]]);
+    config()->set('domain_routes.tenant_context.required_domains', ['ZzOverviewProbe']);
 }
 
 it('denies the overview page when the actor has none of the operator view capabilities', function (): void {
@@ -71,13 +103,16 @@ it('hides the flags card behind the per-card capability check (mutant: drop the 
     expect($keys)->toContain('tenant-audit')
         ->and($keys)->not->toContain('feature-flags')
         ->and($keys)->not->toContain('declared-flags');
+});
 
-    // The feature-flags view capability is the gate on those two cards. A
-    // mutant that skips AuthorizationService::can for that capability before
-    // appending them would put feature-flags into $keys for this actor.
-    $source = file_get_contents(base_path('app/Base/System/Services/SystemOverviewPageData.php'));
-    expect($source)->toContain('if ($this->authorization->can($actor, self::FEATURE_FLAGS_VIEW)->allowed)')
-        ->and($source)->toContain('if ($this->authorization->can($actor, self::AUDIT_VIEW)->allowed)');
+it('hides the audit and capabilities cards when the actor has only feature-flags.view', function (): void {
+    $user = systemOverviewActor([SystemOverviewPageData::FEATURE_FLAGS_VIEW]);
+
+    Livewire::actingAs($user)
+        ->test(Index::class)
+        ->assertSeeHtml('data-overview-card="feature-flags"')
+        ->assertDontSeeHtml('data-overview-card="tenant-audit"')
+        ->assertDontSeeHtml('data-overview-card="capabilities"');
 });
 
 it('counts overridden flags and declaration collisions through the declaration inventory for the fixture tenant', function (): void {
@@ -85,6 +120,8 @@ it('counts overridden flags and declaration collisions through the declaration i
     $tenantId = app(TenantContext::class)->requireTenantId();
     $root = storage_path('framework/testing/system-overview-flags-'.bin2hex(random_bytes(4)));
 
+    // Asymmetric: two non-conflict flags + one collision so conflict→!conflict
+    // cannot keep declared-flags count at 1.
     File::ensureDirectoryExists($root.'/app/Base/One');
     File::put($root.'/app/Base/One/composer.json', json_encode([
         'name' => 'base/one',
@@ -93,6 +130,7 @@ it('counts overridden flags and declaration collisions through the declaration i
             'version' => '1.0.0',
             'feature-flags' => [
                 'overview.solo' => ['default' => false, 'description' => 'Solo'],
+                'overview.solo-b' => ['default' => false, 'description' => 'Solo B'],
                 'overview.collision' => ['default' => false, 'description' => 'Alpha'],
             ],
         ]],
@@ -134,4 +172,32 @@ it('counts overridden flags and declaration collisions through the declaration i
     } finally {
         File::deleteDirectory($root);
     }
+});
+
+it('audit card count equals the tenant-audit route rows for a fixture with one authz gap', function (): void {
+    $user = systemOverviewActor([SystemOverviewPageData::AUDIT_VIEW]);
+    registerOverviewAuditAuthzGapFixture();
+
+    $expected = count(app(TenantAuditPageData::class)->routeRows());
+    expect($expected)->toBeGreaterThanOrEqual(1);
+
+    $card = collect(app(SystemOverviewPageData::class)->cardsFor($user))->firstWhere('key', 'tenant-audit');
+    expect($card['count'])->toBe($expected);
+});
+
+it('capabilities card count equals the conflicted rows of the capability inventory', function (): void {
+    $user = systemOverviewActor([SystemOverviewPageData::CAPABILITIES_VIEW]);
+    $rows = app(CapabilityInventory::class)->rows();
+    $expected = count(array_filter($rows, fn ($r) => $r->conflicted));
+    expect(count($rows))->toBeGreaterThan($expected);
+
+    $card = collect(app(SystemOverviewPageData::class)->cardsFor($user))->firstWhere('key', 'capabilities');
+    expect($card['count'])->toBe($expected);
+});
+
+it('menu condition admin.system.overview.any follows the operator view capabilities', function (): void {
+    $registry = app(MenuConditionRegistry::class);
+
+    expect($registry->allows('admin.system.overview.any', systemOverviewActor([])))->toBeFalse()
+        ->and($registry->allows('admin.system.overview.any', systemOverviewActor([SystemOverviewPageData::AUDIT_VIEW])))->toBeTrue();
 });
