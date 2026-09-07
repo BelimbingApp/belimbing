@@ -1,5 +1,5 @@
 {
-    "_comment": "Expected Domain surface of the platform composed with every Domain pinned in domain-repos.json. Platform routes are not part of it. Regenerate with scripts/ci/composed-smoke.php --print-surface when a pin advances; the smoke test fails when the pins here and in the descriptor disagree.",
+    "_comment": "Expected Domain surface of the platform composed with every Domain pinned in domain-repos.json. Platform routes are not part of it. Regenerate with scripts/ci/composed-smoke.php --print-surface when a pin advances; the smoke test fails when the pins here and in the descriptor disagree. DOMAIN_ROUTE_NAME owns people.|people-connector.|admin.people-connector.|admin.integration.|commerce.|it.|quality. — people-connector.webhook joins this list once the people-connector pin includes that route (#870); until then the Domains Routes scan refuses any undeclared prefix.",
     "pins": {
         "people": "e99ef4330dc9c5f8d3e554adbd2d0cdebfea205c",
         "commerce": "deac42bc27e912555c4dbfcf773045f3242be8bd",

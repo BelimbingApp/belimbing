@@ -46,13 +46,64 @@ declare(strict_types=1);
  * deliberate missing-name and wrong-count mutations that must turn red.
  * Production runs never pass it.
  */
-/** Route names the pinned Domains own; everything else is platform surface. */
-const DOMAIN_ROUTE_NAME = '/^(people\.|admin\.people-connector\.|admin\.integration\.|commerce\.|it\.|quality\.)/';
+/**
+ * Route names the pinned Domains own; everything else is platform surface.
+ *
+ * `people-connector.` covers the signed webhook and any other non-admin
+ * connector routes (#870). `admin.people-connector.` remains for the operator
+ * UI. A Domain Routes file that declares a name matching none of these is
+ * refused by {@see unmatchedDeclaredDomainRouteNames()} so a new prefix is a
+ * loud failure instead of a silent surface miss.
+ */
+const DOMAIN_ROUTE_NAME = '/^(people\.|people-connector\.|admin\.people-connector\.|admin\.integration\.|commerce\.|it\.|quality\.)/';
 
 function fail(string $message): never
 {
     fwrite(STDERR, "composed-smoke: {$message}\n");
     exit(1);
+}
+
+/**
+ * Every `->name('…')` / `->name("…")` declared under Domain Routes trees.
+ *
+ * @return list<string>
+ */
+function declaredDomainRouteNames(string $root): array
+{
+    $names = [];
+
+    foreach (glob($root.'/app/Domains/*/*/Routes/*.php') ?: [] as $file) {
+        $contents = (string) file_get_contents($file);
+        if (preg_match_all("/->name\\('([^']+)'\\)/", $contents, $single) > 0) {
+            foreach ($single[1] as $name) {
+                $names[] = $name;
+            }
+        }
+        if (preg_match_all('/->name\\("([^"]+)"\\)/', $contents, $double) > 0) {
+            foreach ($double[1] as $name) {
+                $names[] = $name;
+            }
+        }
+    }
+
+    $names = array_values(array_unique($names));
+    sort($names);
+
+    return $names;
+}
+
+/**
+ * Declared Domain route names the prefix filter does not own (#870).
+ *
+ * @param  list<string>  $declared
+ * @return list<string>
+ */
+function unmatchedDeclaredDomainRouteNames(array $declared): array
+{
+    return array_values(array_filter(
+        $declared,
+        static fn (string $name): bool => preg_match(DOMAIN_ROUTE_NAME, $name) !== 1,
+    ));
 }
 
 /** @return array<string, string> */
@@ -243,6 +294,17 @@ if ($options['routes'] !== null) {
 $names = array_values(array_filter(array_map(fn (array $route): ?string => $route['name'] ?? null, $routes)));
 sort($names);
 $domainNames = array_values(array_filter($names, fn (string $name): bool => preg_match(DOMAIN_ROUTE_NAME, $name) === 1));
+
+// A Domain Routes declaration outside DOMAIN_ROUTE_NAME is invisible to the
+// surface count: refuse it here so a new prefix is a decision, not silence (#870).
+$unmatchedDeclared = unmatchedDeclaredDomainRouteNames(declaredDomainRouteNames($root));
+if ($unmatchedDeclared !== []) {
+    $failures[] = 'Domain Routes declare names outside DOMAIN_ROUTE_NAME (add a prefix or rename): '.implode(', ', $unmatchedDeclared);
+}
+
+if ($failures !== [] && $options['print-surface']) {
+    fail(implode("\n", $failures));
+}
 
 if ($options['print-surface']) {
     echo json_encode([

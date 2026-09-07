@@ -606,6 +606,54 @@ PY
     if smoke >/dev/null 2>&1; then
         echo 'composed-smoke accepted a mount whose HEAD is not the pinned ref' >&2; exit 1
     fi
+
+    # #870: DOMAIN_ROUTE_NAME must own people-connector.* (signed webhook) and
+    # refuse a Domain Routes declaration outside the prefix list.
+    smoke_descriptor "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}"
+    mkdir -p "$smoke_root/app/Domains/PeopleConnector/Connector/Routes"
+    printf "%s\n" "<?php" "Route::post('webhooks/people-connector/{id}', fn () => null)->name('people-connector.webhook');" \
+        > "$smoke_root/app/Domains/PeopleConnector/Connector/Routes/web.php"
+    printf '[{"name":"people.index","uri":"people"},{"name":"people-connector.webhook","uri":"webhooks/people-connector/1"},{"name":"admin.integration.index","uri":"admin/integration"}]' \
+        > "$smoke_root/routes.json"
+    smoke_surface "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}" 3 'admin.integration.index,people-connector.webhook,people.index'
+    smoke 2>/dev/null
+
+    # Narrowing the filter by dropping people-connector. must turn red: the
+    # Routes declaration is then unmatched and the live name falls out of the count.
+    narrowed="$smoke_root/composed-smoke-narrowed.php"
+    cp scripts/ci/composed-smoke.php "$narrowed"
+    python3 - "$narrowed" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+text = path.read_text()
+old = "const DOMAIN_ROUTE_NAME = '/^(people\\.|people-connector\\.|admin\\.people-connector\\.|admin\\.integration\\.|commerce\\.|it\\.|quality\\.)/';"
+new = "const DOMAIN_ROUTE_NAME = '/^(people\\.|admin\\.people-connector\\.|admin\\.integration\\.|commerce\\.|it\\.|quality\\.)/';"
+assert old in text, 'DOMAIN_ROUTE_NAME const missing for the #870 mutant'
+path.write_text(text.replace(old, new, 1))
+PY
+    narrowed_err=$(php "$narrowed" --root="$smoke_root" --routes-json="$smoke_root/routes.json" \
+        --registry="$smoke_root/scripts/ci/domain-repos.json" --surface="$smoke_root/scripts/ci/composed-surface.json" \
+        2>&1 || true)
+    if ! grep -q 'people-connector.webhook' <<< "$narrowed_err"; then
+        echo 'composed-smoke accepted people-connector.webhook after DOMAIN_ROUTE_NAME dropped people-connector.' >&2
+        echo "$narrowed_err" >&2
+        exit 1
+    fi
+
+    # An undeclared prefix in Domain Routes is refused even when the route table is empty of it.
+    printf "%s\n" "<?php" "Route::get('odd', fn () => null)->name('odd.domain.route');" \
+        > "$smoke_root/app/Domains/PeopleConnector/Connector/Routes/web.php"
+    printf '[{"name":"people.index","uri":"people"},{"name":"admin.integration.index","uri":"admin/integration"}]' \
+        > "$smoke_root/routes.json"
+    smoke_surface "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}" 2 'admin.integration.index,people.index'
+    if smoke >/dev/null 2>&1; then
+        echo 'composed-smoke accepted a Domain Routes name outside DOMAIN_ROUTE_NAME' >&2
+        exit 1
+    fi
+    smoke_err=$(smoke 2>&1 || true)
+    grep -q 'odd.domain.route' <<< "$smoke_err"
+
     rm -rf "$smoke_root"
     trap - EXIT
     php scripts/ci/validate-extension-manifest.php tests/Fixtures/ci/extensions/conventional/Example/composer.json
