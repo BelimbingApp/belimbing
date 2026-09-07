@@ -29,6 +29,12 @@ test("pin advance validates before composing, then pushes a compare URL (no Acti
     expect(publish).toContain("Open the bot-maintenance PR from:");
     expect(publish).not.toContain("gh pr create");
     expect(publish).not.toContain("HEAD:main");
+    // `gh pr create --label bot-maintenance` used to apply the label that
+    // ai-team-independent-review.yml reads to grant the bot exemption
+    // ("no bot-maintenance label — ordinary review required"). A human opening
+    // the PR from the compare URL applies it by hand, so the step has to say
+    // so, or the exemption silently stops applying to this path.
+    expect(publish).toContain("Apply the bot-maintenance label");
 });
 
 test("pin editor refuses invalid or nonexistent refs without altering the descriptor", () => {

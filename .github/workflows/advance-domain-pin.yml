@@ -111,6 +111,7 @@ jobs:
             echo "Pin branch pushed: ${branch}"
             echo "Advance ${DOMAIN_ID} to ${DOMAIN_REF} after upstream validation and composed boot."
             echo "Open the bot-maintenance PR from: ${compare}"
+            echo 'Apply the bot-maintenance label, or ai-team-independent-review requires an ordinary reviewer.'
             echo "Suggested title: ci: advance composed Domain pin"
             echo "Suggested body:"
             printf 'Advance %s to %s after upstream validation and composed boot.\n\nAI-Team-Lane-Issue: none\n' "$DOMAIN_ID" "$DOMAIN_REF"
