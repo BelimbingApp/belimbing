@@ -238,7 +238,7 @@
                             <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right">
                                 <button
                                     type="button"
-                                    wire:click="removeUser({{ $assignedUser->pivot_id }})"
+                                    wire:click="removeUser({{ $assignedUser->assignment->id }})"
                                     wire:confirm="{{ __('Remove :name from this role?', ['name' => $assignedUser->name]) }}"
                                     class="text-muted hover:text-status-danger transition-colors"
                                     title="{{ __('Remove user') }}"
