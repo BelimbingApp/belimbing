@@ -1294,12 +1294,11 @@ authorable_script="$root/scripts/ci/changed-authorable-php.sh"
     # Touch both existing migrations, add one, add an ordinary class, delete a
     # class, and add a non-PHP file. Each is a different arm of the rule.
     #
-    # The deletion is excluded twice over: --diff-filter=ACMR never lists it,
-    # and [[ -f "$path" ]] would drop it if it did. Measured: removing either
-    # one alone leaves this block green, and removing both turns it red. They
-    # are a redundant pair on purpose, so no single-guard mutation can pin
-    # them individually -- do not "simplify" one away on the strength of a
-    # green run.
+    # Deletion exclusion is two guards: --diff-filter=ACMR (pinned by the
+    # head-tree case below — ACMRD alone stays green because -f still drops
+    # Old.php) and [[ -f "$path" ]] (pinned by the base-tree case that follows —
+    # deleting -f alone turns that case red while the head-tree case stays
+    # green). Do not drop either on the strength of one green run.
     printf '<?php // a changed\n' > app/Base/X/Database/Migrations/2026_01_01_000000_a.php
     printf '<?php // b changed\n' > database/migrations/2026_01_01_000000_b.php
     printf '<?php // s changed\n' > app/Base/X/Services/S.php
@@ -1311,9 +1310,9 @@ authorable_script="$root/scripts/ci/changed-authorable-php.sh"
     git commit -qm head
     authorable_head=$(git rev-parse HEAD)
 
-    # git orders paths lexically, so the expected sequence is fixed. Compared
-    # whole rather than grepped: a missing line and an extra line are both
-    # failures, and a grep for what should be present cannot see an extra.
+    # Head-tree case: working tree matches head (lint.yml checkout). git orders
+    # paths lexically, so the expected sequence is fixed. Compared whole rather
+    # than grepped: a missing line and an extra line are both failures.
     authorable_expected=$(printf '%s\n' \
         'app/Base/X/Database/Migrations/2026_02_01_000000_c.php' \
         'app/Base/X/Livewire/L.php' \
@@ -1336,6 +1335,29 @@ authorable_script="$root/scripts/ci/changed-authorable-php.sh"
         echo "changed-authorable-php.sh emitted $authorable_nuls NUL separators, expected 3" >&2
         exit 1
     fi
+
+    # Base-tree case (#857): checkout at base so paths the diff lists but the
+    # tree lacks (the added migration and Livewire class) are absent on disk.
+    # [[ -f "$path" ]] must drop them; without it the script prints the full
+    # head set against a base tree and Pint would lint ghosts. lint.yml relies
+    # on checkout-at-head; this pins the -f guard alone.
+    git checkout -q "$authorable_base"
+    authorable_base_expected=$(printf '%s\n' 'app/Base/X/Services/S.php')
+    authorable_base_actual=$(bash "$authorable_script" "$authorable_base" "$authorable_head" 2>"$authorable_fixture/base.err" | tr '\0' '\n')
+    if [[ -s "$authorable_fixture/base.err" ]]; then
+        echo 'changed-authorable-php.sh wrote stderr on a base-tree checkout' >&2
+        cat "$authorable_fixture/base.err" >&2
+        exit 1
+    fi
+    if [[ "$authorable_base_actual" != "$authorable_base_expected" ]]; then
+        echo 'changed-authorable-php.sh did not drop missing paths on a base-tree checkout' >&2
+        echo "expected:" >&2
+        printf '%s\n' "$authorable_base_expected" >&2
+        echo "actual:" >&2
+        printf '%s\n' "$authorable_base_actual" >&2
+        exit 1
+    fi
+    git checkout -q "$authorable_head"
 
     # No base ref: the ${1:?} guard refuses rather than diffing against nothing.
     if bash "$authorable_script" >/dev/null 2>"$authorable_fixture/usage.txt"; then
@@ -1494,5 +1516,165 @@ with tempfile.TemporaryDirectory() as tmpdir:
     assert 'not statically verifiable' not in plain.stdout, plain.stdout
     assert 'every referenced secret is allowlisted' in plain.stdout, plain.stdout
 PY
+
+
+# compose-domain.php (#843): cross-domain clone TSV, registry refusals, unknown args.
+compose_fixture=$(mktemp -d)
+trap 'rm -rf "$compose_fixture"' EXIT
+compose_src="$root/tests/ci/fixtures/compose-domain"
+cp -a "$compose_src/registry-root/." "$compose_fixture/tree/"
+mkdir -p "$compose_fixture/present/app/Domains"
+# Pre-existing beta mount so the already-present path is omitted from stdout.
+cp -a "$compose_fixture/tree/app/Domains/Beta" "$compose_fixture/present/app/Domains/Beta"
+python3 - "$compose_fixture" <<'COMPOSE_REG'
+import json, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+tree = root / "tree"
+absent_beta = root / "absent" / "app" / "Domains" / "Beta"
+reg = {
+    "domains": {
+        "solo": {"repo": "Example/solo", "path": str(tree / "app/Domains/Solo")},
+        "needs-beta": {"repo": "Example/needs-beta", "path": str(tree / "app/Domains/NeedsBeta")},
+        "needs-gamma": {"repo": "Example/needs-gamma", "path": str(tree / "app/Domains/NeedsGamma")},
+        # Absent on disk so NeedsBeta must emit a clone line.
+        "beta": {"repo": "Example/beta", "path": str(absent_beta)},
+    }
+}
+(root / "registry.json").write_text(json.dumps(reg))
+# Registry whose beta path already exists on disk (present mount).
+reg_present = dict(reg)
+reg_present["domains"] = dict(reg["domains"])
+reg_present["domains"]["beta"] = {
+    "repo": "Example/beta",
+    "path": str(root / "present/app/Domains/Beta"),
+}
+(root / "registry-present.json").write_text(json.dumps(reg_present))
+COMPOSE_REG
+
+compose_run() {
+    local domain="$1" registry="$2"
+    shift 2 || true
+    php "$root/scripts/ci/compose-domain.php" \
+        --domain-path="$compose_fixture/tree/app/Domains/$domain" \
+        --registry="$registry" \
+        "$@"
+}
+
+# Sibling + core only: nothing to clone.
+set +e
+solo_out=$(compose_run Solo "$compose_fixture/registry.json" 2>"$compose_fixture/solo.err")
+solo_ec=$?
+set -e
+if [[ "$solo_ec" -ne 0 || -n "$solo_out" ]]; then
+    echo "compose-domain Solo expected empty stdout exit 0, got ec=$solo_ec out=$(printf %q "$solo_out")" >&2
+    exit 1
+fi
+if ! grep -qF 'no cross-domain dependencies to clone' "$compose_fixture/solo.err"; then
+    echo 'compose-domain Solo missing no-cross-domain stderr' >&2
+    cat "$compose_fixture/solo.err" >&2
+    exit 1
+fi
+
+# Cross-domain requirement prints one TSV line when the registry path is absent.
+set +e
+need_out=$(compose_run NeedsBeta "$compose_fixture/registry.json" 2>"$compose_fixture/need.err")
+need_ec=$?
+set -e
+if [[ "$need_ec" -ne 0 ]]; then
+    echo "compose-domain NeedsBeta expected exit 0, got $need_ec" >&2
+    cat "$compose_fixture/need.err" >&2
+    exit 1
+fi
+expected_tsv=$'Example/beta\t'"$compose_fixture/absent/app/Domains/Beta"
+if [[ "$need_out" != "$expected_tsv" ]]; then
+    echo "compose-domain NeedsBeta TSV mismatch: $(printf %q "$need_out") expected $(printf %q "$expected_tsv")" >&2
+    exit 1
+fi
+
+# Already-present registry path is omitted.
+set +e
+present_out=$(compose_run NeedsBeta "$compose_fixture/registry-present.json" 2>"$compose_fixture/present.err")
+present_ec=$?
+set -e
+if [[ "$present_ec" -ne 0 || -n "$present_out" ]]; then
+    echo "compose-domain present beta expected empty stdout exit 0, got ec=$present_ec out=$(printf %q "$present_out")" >&2
+    exit 1
+fi
+
+# Required module with no registry entry exits 1 naming it.
+set +e
+miss_out=$(compose_run NeedsGamma "$compose_fixture/registry.json" 2>"$compose_fixture/miss.err")
+miss_ec=$?
+set -e
+if [[ "$miss_ec" -ne 1 ]]; then
+    echo "compose-domain NeedsGamma expected exit 1, got $miss_ec" >&2
+    exit 1
+fi
+if ! grep -qF 'gamma/missing' "$compose_fixture/miss.err"; then
+    echo 'compose-domain NeedsGamma stderr did not name gamma/missing' >&2
+    cat "$compose_fixture/miss.err" >&2
+    exit 1
+fi
+
+# Unreadable registry exits 2.
+set +e
+php "$root/scripts/ci/compose-domain.php" \
+    --domain-path="$compose_fixture/tree/app/Domains/Solo" \
+    --registry="$compose_fixture/no-such-registry.json" \
+    >/dev/null 2>"$compose_fixture/noread.err"
+noread_ec=$?
+set -e
+if [[ "$noread_ec" -ne 2 ]] || ! grep -qF 'cannot read registry' "$compose_fixture/noread.err"; then
+    echo 'compose-domain unreadable registry refusal failed' >&2
+    cat "$compose_fixture/noread.err" >&2
+    exit 1
+fi
+
+# Non-JSON registry exits 2.
+printf 'not-json\n' > "$compose_fixture/bad.json"
+set +e
+php "$root/scripts/ci/compose-domain.php" \
+    --domain-path="$compose_fixture/tree/app/Domains/Solo" \
+    --registry="$compose_fixture/bad.json" \
+    >/dev/null 2>"$compose_fixture/bad.err"
+bad_ec=$?
+set -e
+if [[ "$bad_ec" -ne 2 ]] || ! grep -qF 'not valid JSON' "$compose_fixture/bad.err"; then
+    echo 'compose-domain invalid JSON refusal failed' >&2
+    cat "$compose_fixture/bad.err" >&2
+    exit 1
+fi
+
+# Unknown argument exits 2 naming it.
+set +e
+php "$root/scripts/ci/compose-domain.php" \
+    --domain-path="$compose_fixture/tree/app/Domains/Solo" \
+    --registry="$compose_fixture/registry.json" \
+    --bogus \
+    >/dev/null 2>"$compose_fixture/bogus.err"
+bogus_ec=$?
+set -e
+if [[ "$bogus_ec" -ne 2 ]] || ! grep -qF 'unknown argument --bogus' "$compose_fixture/bogus.err"; then
+    echo 'compose-domain unknown argument refusal failed' >&2
+    cat "$compose_fixture/bogus.err" >&2
+    exit 1
+fi
+
+# Workflow argument list (domain-path only) exits 0 against the fixture.
+set +e
+php "$root/scripts/ci/compose-domain.php" \
+    --domain-path="$compose_fixture/tree/app/Domains/Solo" \
+    --registry="$compose_fixture/registry.json" \
+    >/dev/null 2>"$compose_fixture/wf.err"
+wf_ec=$?
+set -e
+if [[ "$wf_ec" -ne 0 ]]; then
+    echo 'compose-domain workflow args failed against Solo fixture' >&2
+    cat "$compose_fixture/wf.err" >&2
+    exit 1
+fi
+
+rm -rf "$compose_fixture"
+trap - EXIT
 
 echo 'CI script checks passed'
