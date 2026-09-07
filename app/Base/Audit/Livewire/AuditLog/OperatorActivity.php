@@ -8,7 +8,7 @@ use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
-use App\Base\Tenancy\Contracts\TenantContext;
+use App\Base\Audit\Services\AuditTenantScope;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -104,18 +104,17 @@ class OperatorActivity extends Component
 
     private function rows(): LengthAwarePaginator
     {
-        $tenantId = app(TenantContext::class)->requireTenantId();
         $sortColumn = self::SORTABLE[$this->sortBy] ?? 'base_audit_actions.occurred_at';
 
-        return AuditAction::query()
-            ->leftJoin('users', function ($join): void {
-                $join->on('base_audit_actions.actor_id', '=', 'users.id')
-                    ->where('base_audit_actions.actor_type', '=', PrincipalType::USER->value);
-            })
-            ->select([...self::SAFE_COLUMNS, 'users.name as actor_name'])
-            // Guard: cross-tenant rows must never surface. Deleting this where
-            // clause makes the companion Pest denial fail.
-            ->where('base_audit_actions.tenant_id', $tenantId)
+        return app(AuditTenantScope::class)->apply(
+            AuditAction::query()
+                ->leftJoin('users', function ($join): void {
+                    $join->on('base_audit_actions.actor_id', '=', 'users.id')
+                        ->where('base_audit_actions.actor_type', '=', PrincipalType::USER->value);
+                })
+                ->select([...self::SAFE_COLUMNS, 'users.name as actor_name']),
+            'base_audit_actions',
+        )
             ->when($this->search !== '', function (Builder $query): void {
                 $like = '%'.strtolower($this->search).'%';
                 $query->where(function (Builder $inner) use ($like): void {

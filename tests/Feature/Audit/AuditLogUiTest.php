@@ -15,6 +15,7 @@ use App\Base\Authz\Models\PrincipalCapability;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
 use App\Base\Integration\Models\OutboundExchange;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Base\Workflow\DTO\TransitionContext;
 use App\Base\Workflow\Models\StatusConfig;
 use App\Base\Workflow\Models\StatusTransition;
@@ -112,6 +113,7 @@ function auditLogUiInsertAction(array $overrides = []): int
 
     return (int) DB::table('base_audit_actions')->insertGetId(array_replace([
         'company_id' => null,
+        'tenant_id' => app(TenantContext::class)->currentTenantId(),
         'actor_type' => PrincipalType::USER->value,
         'actor_id' => 1,
         'actor_role' => 'core_admin',
@@ -136,6 +138,7 @@ function auditLogUiInsertMutation(array $overrides = []): int
 
     return (int) DB::table('base_audit_mutations')->insertGetId(array_replace([
         'company_id' => null,
+        'tenant_id' => app(TenantContext::class)->currentTenantId(),
         'actor_type' => PrincipalType::USER->value,
         'actor_id' => 1,
         'actor_role' => 'core_admin',

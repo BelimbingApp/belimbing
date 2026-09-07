@@ -127,6 +127,8 @@ Chat agent selection resolves the employee through a company in the current tena
 
 Admin tenant management (list, create with optional parent) lives at `admin/tenancy/tenants` behind the `admin.tenancy.tenant.*` capabilities. The menu surface is gated by the `tenancy.visible` menu condition: more than one tenant, or `tenancy.show_management` set true.
 
+Audit log pages (mutations, actions, source history, and the trace timeline) read only the ambient tenant through `AuditTenantScope`; the platform-operator tenant may widen mutations and actions with an explicit all-tenants toggle. Null-tenant rows stay visible only in that operator view.
+
 The create form is currently the only writer of `tenants.status`; changing an existing tenant's status is not yet an action on this page. The enforcement above applies to whatever status a row carries, however it was set.
 
 ## Boundaries deliberately not built
