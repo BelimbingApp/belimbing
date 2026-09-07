@@ -14,6 +14,7 @@ use App\Base\Tenancy\Services\TenantResolutionMix;
 use App\Core\Company\Models\Company;
 use App\Core\User\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\File;
 use Livewire\Livewire;
 
@@ -180,4 +181,20 @@ it('reads an empty mix when the performance log has no request in the window', f
         ->and($mix['none'])->toBe(0);
 
     File::deleteDirectory($dir);
+});
+
+it('counts a request 23 hours old inside the 24-hour window', function (): void {
+    Carbon::setTestNow('2026-09-07 12:00:00');
+    $dir = tenantAuditPerfDir();
+    createAdminUser();
+    $tenantId = app(TenantContext::class)->requireTenantId();
+
+    // The window is guarded from above by the 25-hour fixture; this guards it
+    // from below, so a window narrower than 24 hours cannot pass unnoticed.
+    tenantAuditPerfEntry($dir, ['tenant_id' => $tenantId, 'tenant_resolver' => 'session', 'ts' => now()->subHours(23)->toIso8601String()]);
+
+    expect(app(TenantAuditPageData::class)->resolutionMix()['resolvers'])->toBe(['session' => 1]);
+
+    File::deleteDirectory($dir);
+    Carbon::setTestNow();
 });
