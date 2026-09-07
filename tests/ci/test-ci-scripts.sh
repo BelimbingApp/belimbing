@@ -536,6 +536,86 @@ if command -v php >/dev/null; then
     fi
     php scripts/ci/validate-php-syntax.php scripts/ci/domain-ci.php scripts/ci/compose-domain.php scripts/ci/filter-domain-coverage-clover.php scripts/ci/validate-extension-manifest.php scripts/ci/composed-smoke.php
 
+    # validate-php-syntax.php (#856): the Extension syntax gate
+    # (extension-conformance.sh) fails an Extension whose PHP does not parse.
+    # The happy path above only feeds known-good files; without an invalid-file
+    # case, exit(1) and the path-in-stderr message can be deleted unnoticed.
+    syntax_fixture=$(mktemp -d)
+    printf '<?php\n' > "$syntax_fixture/good.php"
+    printf '<?php\n function (\n' > "$syntax_fixture/bad.php"
+    printf '<?php\n' > "$syntax_fixture/also-good.php"
+    if ! php scripts/ci/validate-php-syntax.php "$syntax_fixture/good.php" 2>"$syntax_fixture/good.err"; then
+        echo 'validate-php-syntax.php refused a valid PHP file' >&2
+        cat "$syntax_fixture/good.err" >&2
+        rm -rf "$syntax_fixture"
+        exit 1
+    fi
+    if [[ -s "$syntax_fixture/good.err" ]]; then
+        echo 'validate-php-syntax.php wrote stderr for a valid PHP file' >&2
+        cat "$syntax_fixture/good.err" >&2
+        rm -rf "$syntax_fixture"
+        exit 1
+    fi
+    if php scripts/ci/validate-php-syntax.php "$syntax_fixture/good.php" "$syntax_fixture/bad.php" "$syntax_fixture/also-good.php" 2>"$syntax_fixture/bad.err"; then
+        echo 'validate-php-syntax.php accepted invalid PHP syntax' >&2
+        rm -rf "$syntax_fixture"
+        exit 1
+    fi
+    if ! grep -qF "extension-conformance: invalid PHP syntax in $syntax_fixture/bad.php" "$syntax_fixture/bad.err"; then
+        echo 'validate-php-syntax.php did not name the offending path on stderr' >&2
+        cat "$syntax_fixture/bad.err" >&2
+        rm -rf "$syntax_fixture"
+        exit 1
+    fi
+    if grep -qF "$syntax_fixture/also-good.php" "$syntax_fixture/bad.err"; then
+        echo 'validate-php-syntax.php continued past the first invalid file' >&2
+        cat "$syntax_fixture/bad.err" >&2
+        rm -rf "$syntax_fixture"
+        exit 1
+    fi
+    rm -rf "$syntax_fixture"
+
+    # setup-sonar.php (#856): hermetic refusals before any SonarCloud/network
+    # call. SONAR_TOKEN=placeholder keeps resolveSonarToken off the checkout
+    # .env; --registry= points at a temp file so loadRegistry never reads the
+    # live domain registry. These three exits are the testable contract.
+    sonar_fixture=$(mktemp -d)
+    if SONAR_TOKEN=placeholder php scripts/ci/setup-sonar.php --not-a-real-flag 2>"$sonar_fixture/unknown.err"; then
+        echo 'setup-sonar.php accepted an unknown argument' >&2
+        rm -rf "$sonar_fixture"
+        exit 1
+    fi
+    if ! grep -qF 'Unknown argument:' "$sonar_fixture/unknown.err"; then
+        echo 'setup-sonar.php did not report Unknown argument:' >&2
+        cat "$sonar_fixture/unknown.err" >&2
+        rm -rf "$sonar_fixture"
+        exit 1
+    fi
+    if SONAR_TOKEN=placeholder php scripts/ci/setup-sonar.php --registry="$sonar_fixture/missing.json" 2>"$sonar_fixture/missing.err"; then
+        echo 'setup-sonar.php accepted a missing registry' >&2
+        rm -rf "$sonar_fixture"
+        exit 1
+    fi
+    if ! grep -qF "Registry not found: $sonar_fixture/missing.json" "$sonar_fixture/missing.err"; then
+        echo 'setup-sonar.php did not report Registry not found:' >&2
+        cat "$sonar_fixture/missing.err" >&2
+        rm -rf "$sonar_fixture"
+        exit 1
+    fi
+    printf '{"foo":1}\n' > "$sonar_fixture/invalid.json"
+    if SONAR_TOKEN=placeholder php scripts/ci/setup-sonar.php --registry="$sonar_fixture/invalid.json" 2>"$sonar_fixture/invalid.err"; then
+        echo 'setup-sonar.php accepted a registry without domains' >&2
+        rm -rf "$sonar_fixture"
+        exit 1
+    fi
+    if ! grep -qF "Invalid registry: $sonar_fixture/invalid.json" "$sonar_fixture/invalid.err"; then
+        echo 'setup-sonar.php did not report Invalid registry:' >&2
+        cat "$sonar_fixture/invalid.err" >&2
+        rm -rf "$sonar_fixture"
+        exit 1
+    fi
+    rm -rf "$sonar_fixture"
+
     # The composed-application smoke test (#600) judges a boot against a
     # checked-in surface; without a network only its migration scan and the
     # surface/descriptor pin agreement can be proven here. The workflow
