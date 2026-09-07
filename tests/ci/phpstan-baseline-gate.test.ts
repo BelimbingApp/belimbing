@@ -21,6 +21,10 @@ test("quality job runs Larastan then the baseline-count gate", () => {
     expect(unmatched!.run).toContain("reportUnmatchedIgnoredErrors: true");
     expect(unmatched!.run).toContain("vendor/bin/phpstan analyse");
     expect(unmatched!.run).toContain("::notice::PHPStan unmatched baseline ignores");
+    // Relative includes from /tmp resolve under /tmp; the override must pin the
+    // project config with an absolute path or the step never analyses anything.
+    expect(unmatched!.run).toContain("${PWD}/phpstan.neon");
+    expect(unmatched!.run).not.toMatch(/includes:\s*\n\s*-\s+phpstan\.neon\s*\n/);
     expect(steps.indexOf(countGate!)).toBeLessThan(steps.indexOf(unmatched!));
 });
 

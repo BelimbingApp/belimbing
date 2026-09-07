@@ -90,9 +90,11 @@ jobs:
       - name: Report unmatched PHPStan baseline ignores
         continue-on-error: true
         run: |
-          cat > /tmp/phpstan-unmatched.neon <<'EOF'
+          # NEON resolves includes relative to the override file; use an absolute
+          # path so /tmp/phpstan-unmatched.neon actually loads the project config.
+          cat > /tmp/phpstan-unmatched.neon <<EOF
           includes:
-            - phpstan.neon
+            - ${PWD}/phpstan.neon
           parameters:
             reportUnmatchedIgnoredErrors: true
           EOF
