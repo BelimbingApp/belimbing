@@ -11,6 +11,9 @@ the attribute types the database and casts actually produce after a row is
 hydrated. New annotation blocks follow the migration and the model's `casts()`
 honestly. They do not copy a uniform `|null` shape from an earlier model.
 
+Cite this document from later typing lanes; do not cite `AuditMutation.php` as
+the precedent.
+
 The same rule applies across development, staging, and production: the type is
 a property of the schema and casts, not of the environment.
 
@@ -60,8 +63,6 @@ representative Data Share and Audit rows, reloads them, and records
   Action/Schedule models, Data Share plan/receipt/offer models, and siblings
   that cited them) is a separate lane. Do not expand those blocks to "fix"
   nullability inside an unrelated pay-down PR.
-- Cite this document from later typing lanes; do not cite
-  `AuditMutation.php` as the precedent.
 
 ## Related
 
