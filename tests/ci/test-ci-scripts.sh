@@ -1042,4 +1042,96 @@ with tempfile.TemporaryDirectory() as tmp:
     assert failed.returncode == 1, failed.stdout + failed.stderr
 PY
 
+# changed-authorable-php.sh (#823): the subset rule that decides what Pint sees
+# in lint.yml. An existing migration is hash-immutable, so re-linting it can
+# only ever fail CI for a file nobody may edit; a NEWLY added migration is
+# still authorable and must be linted. Both halves lived only in the script.
+# Hermetic: a throwaway repository with two commits, so nothing here reads the
+# platform checkout's own history or working tree.
+authorable_fixture=$(mktemp -d)
+trap 'rm -rf "$authorable_fixture"' EXIT
+authorable_script="$root/scripts/ci/changed-authorable-php.sh"
+(
+    cd "$authorable_fixture"
+    git init -q
+    git config user.name test
+    git config user.email test@example.invalid
+
+    mkdir -p app/Base/X/Database/Migrations database/migrations \
+        app/Base/X/Services app/Base/X/Livewire
+    printf '<?php // a\n' > app/Base/X/Database/Migrations/2026_01_01_000000_a.php
+    printf '<?php // b\n' > database/migrations/2026_01_01_000000_b.php
+    printf '<?php // s\n' > app/Base/X/Services/S.php
+    printf '<?php // old\n' > app/Base/X/Old.php
+    git add -A
+    git commit -qm base
+    authorable_base=$(git rev-parse HEAD)
+
+    # Touch both existing migrations, add one, add an ordinary class, delete a
+    # class, and add a non-PHP file. Each is a different arm of the rule.
+    #
+    # The deletion is excluded twice over: --diff-filter=ACMR never lists it,
+    # and [[ -f "$path" ]] would drop it if it did. Measured: removing either
+    # one alone leaves this block green, and removing both turns it red. They
+    # are a redundant pair on purpose, so no single-guard mutation can pin
+    # them individually -- do not "simplify" one away on the strength of a
+    # green run.
+    printf '<?php // a changed\n' > app/Base/X/Database/Migrations/2026_01_01_000000_a.php
+    printf '<?php // b changed\n' > database/migrations/2026_01_01_000000_b.php
+    printf '<?php // s changed\n' > app/Base/X/Services/S.php
+    printf '<?php // c\n' > app/Base/X/Database/Migrations/2026_02_01_000000_c.php
+    printf '<?php // l\n' > app/Base/X/Livewire/L.php
+    printf 'notes\n' > notes.txt
+    rm app/Base/X/Old.php
+    git add -A
+    git commit -qm head
+    authorable_head=$(git rev-parse HEAD)
+
+    # git orders paths lexically, so the expected sequence is fixed. Compared
+    # whole rather than grepped: a missing line and an extra line are both
+    # failures, and a grep for what should be present cannot see an extra.
+    authorable_expected=$(printf '%s\n' \
+        'app/Base/X/Database/Migrations/2026_02_01_000000_c.php' \
+        'app/Base/X/Livewire/L.php' \
+        'app/Base/X/Services/S.php')
+    authorable_actual=$(bash "$authorable_script" "$authorable_base" "$authorable_head" | tr '\0' '\n')
+
+    if [[ "$authorable_actual" != "$authorable_expected" ]]; then
+        echo 'changed-authorable-php.sh printed the wrong set of files' >&2
+        echo "expected:" >&2
+        printf '%s\n' "$authorable_expected" >&2
+        echo "actual:" >&2
+        printf '%s\n' "$authorable_actual" >&2
+        exit 1
+    fi
+
+    # The output is NUL-separated, which is what lint.yml feeds to xargs -0:
+    # three records means three trailing NULs and no newline of its own.
+    authorable_nuls=$(bash "$authorable_script" "$authorable_base" "$authorable_head" | tr -dc '\0' | wc -c)
+    if [[ "$authorable_nuls" -ne 3 ]]; then
+        echo "changed-authorable-php.sh emitted $authorable_nuls NUL separators, expected 3" >&2
+        exit 1
+    fi
+
+    # No base ref: the ${1:?} guard refuses rather than diffing against nothing.
+    if bash "$authorable_script" >/dev/null 2>"$authorable_fixture/usage.txt"; then
+        echo 'changed-authorable-php.sh accepted a missing base ref' >&2
+        exit 1
+    fi
+    if ! grep -qF 'usage: changed-authorable-php.sh <base> [head]' "$authorable_fixture/usage.txt"; then
+        echo 'changed-authorable-php.sh did not print its usage line' >&2
+        cat "$authorable_fixture/usage.txt" >&2
+        exit 1
+    fi
+
+    # An unresolvable base ref must fail, not silently lint nothing: an empty
+    # file list is exactly what a green "Pint on changed files" step looks like.
+    if bash "$authorable_script" nosuchref >/dev/null 2>&1; then
+        echo 'changed-authorable-php.sh accepted an unknown base ref' >&2
+        exit 1
+    fi
+)
+rm -rf "$authorable_fixture"
+trap - EXIT
+
 echo 'CI script checks passed'
