@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\Audit\Services\AuditBuffer;
 use App\Base\Queue\Livewire\FailedJobs\Index as FailedJobsIndex;
 use App\Core\AI\Enums\AiRunStatus;
 use App\Core\AI\Enums\RunPhase;
@@ -112,4 +113,33 @@ it('retries only actionable failed jobs from retry all', function (): void {
     Livewire::actingAs($user)
         ->test(FailedJobsIndex::class)
         ->call('retryAll');
+});
+
+it('records queue.failed_job.retried for each retried uuid from retryAll and none for terminal AI failures', function (): void {
+    $user = createAdminUser();
+    Employee::provisionLara();
+
+    $terminalTurn = failedJobsIndexCreateChatTurn($user, AiRunStatus::Failed, RunPhase::Finalizing);
+    $queuedTurn = failedJobsIndexCreateChatTurn($user, AiRunStatus::Queued, RunPhase::WaitingForWorker);
+
+    failedJobsIndexInsertChatTurnFailure($terminalTurn->id, FAILED_JOBS_TERMINAL_CHAT_TURN_FAILURE);
+    $queuedUuid = failedJobsIndexInsertChatTurnFailure($queuedTurn->id, FAILED_JOBS_QUEUED_CHAT_TURN_FAILURE);
+
+    Artisan::shouldReceive('call')
+        ->once()
+        ->with('queue:retry', ['id' => [$queuedUuid]])
+        ->andReturn(0);
+
+    Livewire::actingAs($user)
+        ->test(FailedJobsIndex::class)
+        ->call('retryAll');
+
+    $buffer = app(AuditBuffer::class);
+    (new ReflectionClass($buffer))->getMethod('flush')->invoke($buffer);
+
+    $rows = DB::table('base_audit_actions')->where('event', 'queue.failed_job.retried')->orderBy('id')->get()->all();
+    expect($rows)->toHaveCount(1);
+    $payload = json_decode((string) $rows[0]->payload, true);
+    expect($payload['subject']['identifier'] ?? null)->toBe($queuedUuid)
+        ->and($payload['context']['uuid'] ?? null)->toBe($queuedUuid);
 });
