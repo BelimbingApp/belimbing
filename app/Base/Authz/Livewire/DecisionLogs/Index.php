@@ -3,6 +3,7 @@
 namespace App\Base\Authz\Livewire\DecisionLogs;
 
 use App\Base\Audit\Models\AuditAction;
+use App\Base\Audit\Services\AuditTenantScope;
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\DecisionLog;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
@@ -21,6 +22,9 @@ class Index extends Component
     public string $search = '';
 
     public string $filterResult = '';
+
+    /** Platform-operator cross-tenant view (#894). Ignored for non-operators. */
+    public bool $allTenants = false;
 
     public string $sortBy = 'occurred_at';
 
@@ -51,31 +55,29 @@ class Index extends Component
         $this->resetPage();
     }
 
+    public function updatedAllTenants(): void
+    {
+        $this->resetPage();
+    }
+
     public function render(): View
     {
+        $scope = app(AuditTenantScope::class);
         $sortColumn = self::SORTABLE[$this->sortBy] ?? 'base_authz_decision_logs.occurred_at';
-        $retentionDays = (int) config('authz.decision_log_retention_days', 90);
-        $oldest = DecisionLog::query()->min('occurred_at');
-        $lastPrune = AuditAction::query()
-            ->where('event', 'console.command')
-            ->where('url', 'like', '%blb:authz:decision-logs:prune%')
-            ->orderByDesc('occurred_at')
-            ->value('occurred_at');
-
-        $retentionCaption = __('Retention :days days, oldest row :oldest, last prune :prune', [
-            'days' => $retentionDays,
-            'oldest' => $oldest !== null ? Carbon::parse($oldest)->toDateString() : __('none'),
-            'prune' => $lastPrune !== null ? Carbon::parse($lastPrune)->format('Y-m-d H:i') : __('never'),
-        ]);
 
         return view('livewire.admin.authz.decision-logs.index', [
-            'retentionCaption' => $retentionCaption,
-            'logs' => DecisionLog::query()
-                ->leftJoin('users', function ($join): void {
-                    $join->on('base_authz_decision_logs.actor_id', '=', 'users.id')
-                        ->where('base_authz_decision_logs.actor_type', '=', PrincipalType::USER->value);
-                })
-                ->select('base_authz_decision_logs.*', 'users.name as actor_name')
+            'scopeCaption' => $this->scopeCaption($scope),
+            'canViewAllTenants' => $scope->ambientIsPlatformOperator(),
+            'logs' => $scope->apply(
+                DecisionLog::query()
+                    ->leftJoin('users', function ($join): void {
+                        $join->on('base_authz_decision_logs.actor_id', '=', 'users.id')
+                            ->where('base_authz_decision_logs.actor_type', '=', PrincipalType::USER->value);
+                    })
+                    ->select('base_authz_decision_logs.*', 'users.name as actor_name'),
+                'base_authz_decision_logs',
+                $this->allTenants,
+            )
                 ->when($this->search, function ($query, $search): void {
                     $query->where(function ($q) use ($search): void {
                         $q->where('capability', 'like', '%'.$search.'%')
@@ -93,6 +95,34 @@ class Index extends Component
                 ->orderBy($sortColumn, $this->sortDir)
                 ->orderByDesc('base_authz_decision_logs.id')
                 ->paginate(25),
+        ]);
+    }
+
+    private function scopeCaption(AuditTenantScope $scope): string
+    {
+        $scopeLabel = $scope->ambientIsPlatformOperator() && $this->allTenants
+            ? __('Decision logs (all tenants)')
+            : __('Decision logs (current tenant)');
+
+        $days = (int) config('authz.decision_log_retention_days', 90);
+        $oldest = $scope->apply(
+            DecisionLog::query(),
+            'base_authz_decision_logs',
+            $this->allTenants,
+        )->min('occurred_at');
+        $lastPrune = $scope->apply(
+            AuditAction::query()
+                ->where('event', 'console.command')
+                ->where('url', 'like', '%blb:authz:decision-logs:prune%')
+                ->orderByDesc('occurred_at'),
+            'base_audit_actions',
+            $this->allTenants,
+        )->value('occurred_at');
+
+        return $scopeLabel.' — '.__('Retention :days days, oldest row :oldest, last prune :prune', [
+            'days' => $days,
+            'oldest' => $oldest !== null ? Carbon::parse($oldest)->toDateString() : __('none'),
+            'prune' => $lastPrune !== null ? Carbon::parse($lastPrune)->format('Y-m-d H:i') : __('never'),
         ]);
     }
 }
