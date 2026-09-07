@@ -27,7 +27,7 @@
         <x-ui.alert variant="info">{{ __('No capability matches that filter.') }}</x-ui.alert>
     @else
         <x-ui.card>
-            <x-ui.table>
+            <x-ui.table container="flush" :caption="__('Declared capabilities, their modules, granting roles and holders in this tenant')">
                 <x-slot:head>
                     <tr>
                         <x-ui.th>{{ __('Capability') }}</x-ui.th>
