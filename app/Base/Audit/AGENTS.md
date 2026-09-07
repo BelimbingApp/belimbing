@@ -128,7 +128,7 @@ Guidelines:
 | Table | Retention |
 |---|---|
 | `base_audit_mutations` | Forever |
-| `base_audit_actions` | Configurable (`audit.action_retention_days`, default 90); rows with `is_retained = true`, including default semantic product actions, are not pruned. |
+| `base_audit_actions` | Configurable (`audit.action_retention_days`, default 90); rows with `is_retained = true`, including default semantic product actions, are not pruned. Scheduled command: `blb:audit:actions:prune` (daily 01:50). |
 
 ## UI
 

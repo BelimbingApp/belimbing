@@ -1,6 +1,10 @@
 <?php
-/** @var \App\Base\Audit\Livewire\AuditLog\Actions $this */
-/** @var \App\Base\Audit\Services\AuditLogPresenter $presenter */
+
+use App\Base\Audit\Livewire\AuditLog\Actions;
+use App\Base\Audit\Services\AuditLogPresenter;
+
+/** @var Actions $this */
+/** @var AuditLogPresenter $presenter */
 ?>
 
 <div>
@@ -52,7 +56,7 @@
                 </p>
             @endif
 
-            <x-ui.table container="flush" :caption="__('Audit action log')">
+            <x-ui.table container="flush" :caption="$retentionCaption ?? __('Audit action log')">
                 <x-slot name="head">
                     <tr>
                         <x-ui.sortable-th

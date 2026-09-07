@@ -193,12 +193,6 @@ parameters:
 			path: app/Base/Audit/Livewire/AuditLog/Concerns/InteractsWithSourceHistory.php
 
 		-
-			message: '#^Call to function method_exists\(\) with \$this\(App\\Base\\Audit\\Livewire\\AuditLog\\Mutations\) and ''resetPage'' will always evaluate to true\.$#'
-			identifier: function.alreadyNarrowedType
-			count: 1
-			path: app/Base/Audit/Livewire/AuditLog/Mutations.php
-
-		-
 			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Audit\\Models\\AuditAction\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
 			identifier: property.phpDocType
 			count: 1
@@ -1459,22 +1453,10 @@ parameters:
 			path: app/Base/Foundation/Livewire/Concerns/DecodesJsonFields.php
 
 		-
-			message: '#^Call to function method_exists\(\) with \$this\(App\\Base\\Schedule\\Livewire\\Index\) and ''resetPage'' will always evaluate to true\.$#'
-			identifier: function.alreadyNarrowedType
-			count: 1
-			path: app/Base/Foundation/Livewire/Concerns/FiltersByPeriod.php
-
-		-
 			message: '#^Offset 0 on non\-empty\-list\<string\> on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
 			path: app/Base/Foundation/Livewire/Domains.php
-
-		-
-			message: '#^Call to function method_exists\(\) with \$this\(App\\Base\\Foundation\\Livewire\\SearchablePaginatedList\) and ''resetPage'' will always evaluate to true\.$#'
-			identifier: function.alreadyNarrowedType
-			count: 1
-			path: app/Base/Foundation/Livewire/SearchablePaginatedList.php
 
 		-
 			message: '#^Call to function is_array\(\) with array\<mixed\> will always evaluate to true\.$#'
@@ -1702,12 +1684,6 @@ parameters:
 			message: '#^Call to an undefined method App\\Base\\Schedule\\Contracts\\ScheduleCadenceContributor\:\:tasks\(\)\.$#'
 			identifier: method.notFound
 			count: 1
-			path: app/Base/Schedule/Livewire/Index.php
-
-		-
-			message: '#^Call to function method_exists\(\) with \$this\(App\\Base\\Schedule\\Livewire\\Index\) and ''resetPage'' will always evaluate to true\.$#'
-			identifier: function.alreadyNarrowedType
-			count: 2
 			path: app/Base/Schedule/Livewire/Index.php
 
 		-

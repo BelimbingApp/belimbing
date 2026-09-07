@@ -12,6 +12,7 @@ use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -100,6 +101,24 @@ class Actions extends Component
             'actions' => $this->getActions(),
             'actorTypeOptions' => PrincipalType::orderedCases(),
             'presenter' => app(AuditLogPresenter::class),
+            'retentionCaption' => $this->retentionCaption(),
+        ]);
+    }
+
+    private function retentionCaption(): string
+    {
+        $days = (int) config('audit.action_retention_days', 90);
+        $oldest = AuditAction::query()->min('occurred_at');
+        $lastPrune = AuditAction::query()
+            ->where('event', 'console.command')
+            ->where('url', 'like', '%blb:audit:actions:prune%')
+            ->orderByDesc('occurred_at')
+            ->value('occurred_at');
+
+        return __('Audit action log — Retention :days days, oldest row :oldest, last prune :prune', [
+            'days' => $days,
+            'oldest' => $oldest !== null ? Carbon::parse($oldest)->toDateString() : __('none'),
+            'prune' => $lastPrune !== null ? Carbon::parse($lastPrune)->format('Y-m-d H:i') : __('never'),
         ]);
     }
 
