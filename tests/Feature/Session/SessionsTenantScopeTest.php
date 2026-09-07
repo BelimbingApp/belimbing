@@ -192,3 +192,25 @@ it('denies the page without admin.system.session.list', function (): void {
 
     $this->actingAs($stranger)->get(route('admin.system.sessions.index'))->assertForbidden();
 });
+
+it('refuses to terminate without admin.system.session.manage', function (): void {
+    [$tenant, $company] = createTenantWithCompany(['name' => 'Sessions Read Only']);
+    app(TenantContext::class)->set((int) $tenant->id);
+
+    // Only the capability that opens the page, and none that ends a session:
+    // no tenant_owner role here, because that grants both.
+    $reader = User::factory()->create(['company_id' => $company->id, 'name' => 'Read Only Admin']);
+    sessionsGrant($reader, 'admin.system.session.list');
+
+    $subject = User::factory()->create(['company_id' => $company->id, 'name' => 'Stays Signed In']);
+    $target = sessionsRow('sess-read-only', (int) $subject->id, 'read-only-marker');
+
+    Livewire::actingAs($reader)
+        ->test(Index::class)
+        ->assertSee('read-only-marker')
+        ->call('terminate', $target)
+        ->assertDispatched('notify', variant: 'error');
+
+    expect(DB::table('sessions')->where('id', $target)->exists())->toBeTrue()
+        ->and(sessionsTerminationRows())->toBe(0);
+});
