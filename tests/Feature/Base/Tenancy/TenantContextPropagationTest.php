@@ -74,7 +74,6 @@ it('clears the tenant when a job throws but still has attempts left', function (
     expect($context->currentTenantId())->toBeNull();
 });
 
-
 it('clears the tenant when a job fails permanently', function (): void {
     // JobFailed alone (no preceding JobExceptionOccurred) must clear: this is
     // the listener at Tenancy ServiceProvider for permanent failure, not the
