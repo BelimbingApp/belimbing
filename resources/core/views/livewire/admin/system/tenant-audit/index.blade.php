@@ -95,6 +95,31 @@
         </x-ui.card>
 
         <x-ui.card>
+            <h2 class="mb-3 text-sm font-semibold text-ink">{{ __('Resolution mix') }}</h2>
+            <p class="mb-3 text-sm text-muted">{{ __('Requests in the last :hours hours by the resolver that answered the tenant, from the request performance log. Requests that resolved no tenant belong to no tenant and are counted across the installation.', ['hours' => $resolutionMix['hours']]) }}</p>
+
+            <x-ui.table container="flush" :caption="__('Requests per tenant resolver over the last :hours hours', ['hours' => $resolutionMix['hours']])">
+                <x-slot name="head">
+                    <tr>
+                        <th scope="col" class="px-table-cell-x py-table-cell-y text-left text-xs font-medium text-muted uppercase tracking-wider">{{ __('Resolver') }}</th>
+                        <th scope="col" class="px-table-cell-x py-table-cell-y text-right text-xs font-medium text-muted uppercase tracking-wider">{{ __('Requests') }}</th>
+                    </tr>
+                </x-slot>
+
+                @foreach ($resolutionMix['resolvers'] as $resolver => $count)
+                    <tr wire:key="tenant-audit-resolver-{{ $resolver }}" data-resolution-mix="{{ $resolver }}">
+                        <td class="px-table-cell-x py-table-cell-y font-mono text-xs text-ink">{{ $resolver }}</td>
+                        <td class="px-table-cell-x py-table-cell-y text-right text-sm text-ink tabular-nums">{{ $count }}</td>
+                    </tr>
+                @endforeach
+                <tr wire:key="tenant-audit-resolver-none" data-resolution-mix="none">
+                    <td class="px-table-cell-x py-table-cell-y text-sm text-muted">{{ __('No tenant (miss)') }}</td>
+                    <td class="px-table-cell-x py-table-cell-y text-right text-sm text-ink tabular-nums">{{ $resolutionMix['none'] }}</td>
+                </tr>
+            </x-ui.table>
+        </x-ui.card>
+
+        <x-ui.card>
             <h2 class="mb-3 text-sm font-semibold text-ink">{{ __('Recent tenant-context misses') }}</h2>
             <p class="mb-3 text-sm text-muted">{{ __('Last :count RequireTenantContext refusals with the route name and the resolver that returned null. The HTTP 404 is unchanged.', ['count' => 50]) }}</p>
 
