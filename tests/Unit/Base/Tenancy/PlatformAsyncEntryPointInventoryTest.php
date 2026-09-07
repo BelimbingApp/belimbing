@@ -2,6 +2,7 @@
 
 use App\Base\Tenancy\Exceptions\PlatformAsyncEntryPointInventoryException;
 use App\Base\Tenancy\Support\PlatformAsyncEntryPointInventory;
+use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\File;
 use Tests\TestCase;
 
@@ -95,4 +96,49 @@ it('throws a tenancy inventory exception when discovery drifts from the declarat
     } finally {
         File::deleteDirectory($root);
     }
+});
+
+it('extracts Artisan signatures from Schedule event command strings', function (): void {
+    $method = new ReflectionMethod(PlatformAsyncEntryPointInventory::class, 'signatureFromScheduleEvent');
+
+    $artisan = new class
+    {
+        public $command = "'/usr/bin/php' 'artisan' perf:prune";
+    };
+    $bare = new class
+    {
+        public $command = 'blb:workflow:reconcile';
+    };
+    $described = new class
+    {
+        public $command = '';
+
+        public $description = 'blb:ai:schedules:tick';
+    };
+    $closure = new class
+    {
+        public $command = 'php -r "echo 1;"';
+    };
+    $empty = new class
+    {
+        public $command = '';
+    };
+
+    expect($method->invoke(null, $artisan))->toBe('perf:prune')
+        ->and($method->invoke(null, $bare))->toBe('blb:workflow:reconcile')
+        ->and($method->invoke(null, $described))->toBe('blb:ai:schedules:tick')
+        ->and($method->invoke(null, $closure))->toBeNull()
+        ->and($method->invoke(null, $empty))->toBeNull();
+});
+
+it('lists live Schedule signatures matching the Base/Core declaration by default', function (): void {
+    app()->make(Kernel::class)->bootstrap();
+
+    expect(PlatformAsyncEntryPointInventory::liveScheduledCommandSignatures())
+        ->toEqualCanonicalizing(PlatformAsyncEntryPointInventory::scheduledCommandSignatures());
+
+    // A root that contains no command classes drops every resolvable platform signature.
+    expect(PlatformAsyncEntryPointInventory::liveScheduledCommandSignatures([
+        storage_path('framework/testing/no-schedule-root-'.uniqid()),
+    ]))->toBe([]);
 });
