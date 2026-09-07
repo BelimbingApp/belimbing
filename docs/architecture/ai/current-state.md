@@ -227,9 +227,16 @@ User-visible features:
 
 Added commands:
 
-- `blb:ai:orchestration:status {id}`
-- `blb:ai:skills:list`
-- `blb:ai:skills:verify {pack}`
+- `blb:ai:skills:list [--json]` - one row per discovered filesystem skill pack
+  (id, owner, name, status, declaration checks, source path), plus the
+  duplicate ids `FilesystemSkillPackLoader` shadowed and which root won each
+- `blb:ai:skills:verify {pack}` - exits non-zero when a pack's `SKILL.md` is
+  missing, declares no frontmatter `name` or `description`, or carries a body
+  too short to instruct an agent
+
+Not implemented: `blb:ai:orchestration:status {id}` was listed here before it
+existed and has no command class; it fronts a different service and is not part
+of the skills surface.
 
 ### 5.6 Phase 6 - Operator Control Plane & Policy Depth
 
