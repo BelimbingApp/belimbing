@@ -4,7 +4,7 @@ set -euo pipefail
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 python3 tests/ci/test-domain-pins.py
-bash -n scripts/ci/changed-authorable-php.sh scripts/ci/extension-conformance.sh scripts/ci/mount-guard.sh scripts/ci/phpstan-baseline-gate.sh scripts/ci/record-pest-timing.sh
+bash -n scripts/ci/changed-authorable-php.sh scripts/ci/extension-conformance.sh scripts/ci/mount-guard.sh scripts/ci/phpstan-baseline-gate.sh scripts/ci/record-pest-timing.sh scripts/ci/token-audit.sh
 python3 -m py_compile scripts/ci/aggregate-pest-timing.py scripts/ci/pest-timing-ratchet.py
 
 # Timing aggregator (#614): one table from per-suite JSON, fail-closed on empty.
@@ -927,6 +927,92 @@ with tempfile.TemporaryDirectory() as tmp:
     head = commit_on('mixed', mixed)
     failed = run_policy(head)
     assert failed.returncode == 1, failed.stdout + failed.stderr
+PY
+
+# token-audit.sh (#780): every secrets.* reference must be allowlisted in
+# docs/ci/secrets.json; stale rotation warns, malformed entries fail.
+python3 - <<'PY'
+from pathlib import Path
+import json
+import subprocess
+import tempfile
+
+root = Path('.').resolve()
+audit = root / 'scripts/ci/token-audit.sh'
+assert audit.is_file(), 'missing scripts/ci/token-audit.sh'
+assert audit.stat().st_mode & 0o111, 'token-audit.sh must be executable'
+lint_yml = (root / '.github/workflows/lint.yml').read_text(encoding='utf-8')
+assert 'run: scripts/ci/token-audit.sh' in lint_yml, 'quality job must run token-audit.sh'
+
+live = subprocess.run(['bash', str(audit)], cwd=root, capture_output=True, text=True)
+assert live.returncode == 0, live.stdout + live.stderr
+assert 'every referenced secret is allowlisted' in live.stdout, live.stdout
+assert '::warning::' not in live.stdout, live.stdout
+
+
+def run_audit(tmp, workflow, allowlist, today='2026-09-07'):
+    (tmp / 'wf').mkdir(exist_ok=True)
+    (tmp / 'wf/ci.yml').write_text(workflow, encoding='utf-8')
+    (tmp / 'secrets.json').write_text(json.dumps(allowlist), encoding='utf-8')
+    return subprocess.run(
+        ['bash', str(audit), '--workflows', str(tmp / 'wf'),
+         '--allowlist', str(tmp / 'secrets.json'), '--today', today],
+        capture_output=True, text=True,
+    )
+
+
+def entry(name, **overrides):
+    payload = {'name': name, 'purpose': 'fixture', 'owner': 'kiatng', 'rotated': '2026-09-01'}
+    payload.update(overrides)
+    return payload
+
+
+workflow = (
+    'jobs:\n  a:\n    steps:\n      - env:\n'
+    '          A: ${{ secrets.LISTED_TOKEN }}\n'
+    '          B: ${{ secrets.GITHUB_TOKEN }}\n'
+    '          C: ${{ steps.x.outputs.token || secrets.FIXTURE_UNLISTED_TOKEN }}\n'
+)
+with tempfile.TemporaryDirectory() as tmpdir:
+    tmp = Path(tmpdir)
+    unlisted = run_audit(tmp, workflow, {'secrets': [entry('LISTED_TOKEN')]})
+    assert unlisted.returncode == 1, unlisted.stdout + unlisted.stderr
+    assert 'FIXTURE_UNLISTED_TOKEN' in unlisted.stderr, unlisted.stderr
+    assert 'secret LISTED_TOKEN is referenced' not in unlisted.stderr, unlisted.stderr
+    assert 'GITHUB_TOKEN' not in unlisted.stderr, unlisted.stderr
+
+    listed = run_audit(tmp, workflow, {'secrets': [entry('LISTED_TOKEN'), entry('FIXTURE_UNLISTED_TOKEN')]})
+    assert listed.returncode == 0, listed.stdout + listed.stderr
+    assert '::warning::' not in listed.stdout, listed.stdout
+
+    stale = run_audit(tmp, workflow, {'secrets': [
+        entry('LISTED_TOKEN', rotated='2026-06-01'), entry('FIXTURE_UNLISTED_TOKEN')]})
+    assert stale.returncode == 0, stale.stdout + stale.stderr
+    assert '::warning::secret LISTED_TOKEN was last rotated 2026-06-01 (98 days ago' in stale.stdout, stale.stdout
+
+    fresh = run_audit(tmp, workflow, {'secrets': [
+        entry('LISTED_TOKEN', rotated='2026-06-09'), entry('FIXTURE_UNLISTED_TOKEN')]})
+    assert fresh.returncode == 0 and '::warning::' not in fresh.stdout, fresh.stdout
+
+    no_owner = run_audit(tmp, workflow, {'secrets': [
+        entry('LISTED_TOKEN', owner=''), entry('FIXTURE_UNLISTED_TOKEN')]})
+    assert no_owner.returncode == 1, no_owner.stdout + no_owner.stderr
+    assert 'entry LISTED_TOKEN: missing owner' in no_owner.stderr, no_owner.stderr
+
+    no_date = run_audit(tmp, workflow, {'secrets': [
+        entry('LISTED_TOKEN'), {'name': 'FIXTURE_UNLISTED_TOKEN', 'purpose': 'p', 'owner': 'kiatng'}]})
+    assert no_date.returncode == 1, no_date.stdout + no_date.stderr
+    assert 'entry FIXTURE_UNLISTED_TOKEN: missing rotated' in no_date.stderr, no_date.stderr
+
+    bad_date = run_audit(tmp, workflow, {'secrets': [
+        entry('LISTED_TOKEN', rotated='soon'), entry('FIXTURE_UNLISTED_TOKEN')]})
+    assert bad_date.returncode == 1 and 'not an ISO date' in bad_date.stderr, bad_date.stderr
+
+    (tmp / 'secrets.json').unlink()
+    missing = subprocess.run(
+        ['bash', str(audit), '--workflows', str(tmp / 'wf'), '--allowlist', str(tmp / 'secrets.json')],
+        capture_output=True, text=True)
+    assert missing.returncode == 1 and 'is missing' in missing.stderr, missing.stderr
 PY
 
 echo 'CI script checks passed'
