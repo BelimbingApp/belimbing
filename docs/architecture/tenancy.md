@@ -125,9 +125,11 @@ Chat agent selection resolves the employee through a company in the current tena
 
 ### Operator surface
 
-Admin tenant management (list, create with optional parent) lives at `admin/tenancy/tenants` behind the `admin.tenancy.tenant.*` capabilities. The menu surface is gated by the `tenancy.visible` menu condition: more than one tenant, or `tenancy.show_management` set true.
+Admin tenant management (list, create with optional parent, suspend/reactivate) lives at `admin/tenancy/tenants` behind the `admin.tenancy.tenant.*` capabilities. The menu surface is gated by the `tenancy.visible` menu condition: more than one tenant, or `tenancy.show_management` set true.
 
-The create form is currently the only writer of `tenants.status`; changing an existing tenant's status is not yet an action on this page. The enforcement above applies to whatever status a row carries, however it was set.
+Two writers of `tenants.status` exist: the create form sets the initial value, and the per-row Suspend / Reactivate action changes an existing one. That action is a separate authority from creating a tenant — `admin.tenancy.tenant.manage`, not `admin.tenancy.tenant.create` — because it takes a live tenant off every entry point above; without it the column is hidden and a direct component call is refused. Each change records one `base_audit_actions` row (`tenancy.tenant.suspended` / `tenancy.tenant.reactivated`) carrying the actor, the tenant and the status it moved between.
+
+The platform-operator row offers no Suspend action. That is a presentation of the model invariant, not a second rule: `Tenant`'s `saving` hook refuses the transition for every writer, so the page only has to avoid offering what the model already refuses.
 
 ## Boundaries deliberately not built
 

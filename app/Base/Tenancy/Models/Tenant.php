@@ -42,6 +42,9 @@ class Tenant extends Model
     /** The only tenant status that may be served by any entry point. */
     public const STATUS_ACTIVE = 'active';
 
+    /** The status an operator sets to take a tenant off every entry point. */
+    public const STATUS_SUSPENDED = 'suspended';
+
     protected $table = 'tenants';
 
     /**
