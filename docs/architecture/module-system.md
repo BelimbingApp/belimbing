@@ -335,7 +335,7 @@ Providerless modules participate in dependency resolution. Rebuild cached config
 | Menus | `Config/menu.php` under Base/Core Modules, Domain/Extension source anchors, and Domain/Extension Modules | `App\Base\Menu\Services\MenuDiscoveryService` |
 | Routes | `Routes/web.php` and `Routes/api.php` under Base components, Core Modules, Domain Modules, and Extension Modules; a file that registers an HTTP method and URI, or a non-empty route name, an earlier file already registered refuses boot with `RouteCollisionException`, because Laravel would otherwise keep only the last route | `App\Base\Routing\RouteDiscoveryService` |
 | Settings | Module-level `Config/settings.php` under all four roots | `App\Base\Settings\ServiceProvider` |
-| Authorization | `Config/authz.php` under all four roots, including an explicit Extension source anchor where needed | `App\Base\Authz\ServiceProvider` |
+| Authorization | `Config/authz.php` under all four roots, including an explicit Extension source anchor where needed | `App\Base\Authz\ServiceProvider`; `blb:module-check` refuses a Module whose declared keys the capability catalog rejects. |
 | Audit, dashboard, and other contributions | The documented `Config/{surface}.php` under supported Module roots | Owning Base discovery service |
 | Livewire components | `Livewire/` below supported Base components and Modules | `App\Base\Livewire\ComponentDiscoveryService` |
 | Views | Not implicitly namespace-registered; the owning provider calls `loadViewsFrom()` | Module provider |
