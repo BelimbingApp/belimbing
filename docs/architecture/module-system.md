@@ -401,7 +401,7 @@ Domain and Extension page presentation belongs in the owning Module's `Views/` d
 
 Module-owned CSS or JavaScript belongs under the Module's `Assets/` directory and enters the build only through an explicit reviewed Vite import or entry. Do not create parallel global `resources/{domain}` or `resources/{extension}` trees.
 
-Because optional source checkouts are ignored by the platform repository, Tailwind source entries and Vite refresh paths must explicitly cover every installed Core, Domain, and Extension view root. Adding a source must not leave its classes invisible to production builds.
+Because optional source checkouts are ignored by the platform repository, `resources/app.css` keeps wildcard `@source` families that mirror Vite's `bladeRefreshPaths` (`app/Core/*/Views`, `app/Domains/*/*/Views`, `app/Extensions/*/*/Views`) and also spells out each installed nested Domain and Extension root. Tailwind honors `.gitignore` when expanding globs, so a wildcard alone leaves nested-checkout classes out of the production CSS; adding a Domain or Extension requires a named `@source` line. Adding a source must not leave its classes invisible to production builds.
 
 ## Configuration Ownership
 
