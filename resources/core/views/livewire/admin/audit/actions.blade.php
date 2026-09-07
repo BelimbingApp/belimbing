@@ -52,7 +52,7 @@
                 </p>
             @endif
 
-            <x-ui.table container="flush" :caption="__('Audit action log')">
+            <x-ui.table container="flush" :caption="$retentionCaption ?? __('Audit action log')">
                 <x-slot name="head">
                     <tr>
                         <x-ui.sortable-th

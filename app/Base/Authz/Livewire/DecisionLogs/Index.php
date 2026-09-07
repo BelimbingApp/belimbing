@@ -1,11 +1,14 @@
 <?php
+
 namespace App\Base\Authz\Livewire\DecisionLogs;
 
+use App\Base\Audit\Models\AuditAction;
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\DecisionLog;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Carbon;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -51,8 +54,22 @@ class Index extends Component
     public function render(): View
     {
         $sortColumn = self::SORTABLE[$this->sortBy] ?? 'base_authz_decision_logs.occurred_at';
+        $retentionDays = (int) config('authz.decision_log_retention_days', 90);
+        $oldest = DecisionLog::query()->min('occurred_at');
+        $lastPrune = AuditAction::query()
+            ->where('event', 'console.command')
+            ->where('url', 'like', '%blb:authz:decision-logs:prune%')
+            ->orderByDesc('occurred_at')
+            ->value('occurred_at');
+
+        $retentionCaption = __('Retention :days days, oldest row :oldest, last prune :prune', [
+            'days' => $retentionDays,
+            'oldest' => $oldest !== null ? Carbon::parse($oldest)->toDateString() : __('none'),
+            'prune' => $lastPrune !== null ? Carbon::parse($lastPrune)->format('Y-m-d H:i') : __('never'),
+        ]);
 
         return view('livewire.admin.authz.decision-logs.index', [
+            'retentionCaption' => $retentionCaption,
             'logs' => DecisionLog::query()
                 ->leftJoin('users', function ($join): void {
                     $join->on('base_authz_decision_logs.actor_id', '=', 'users.id')
