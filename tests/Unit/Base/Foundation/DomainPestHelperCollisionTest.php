@@ -5,9 +5,10 @@
  *
  * Pest declares file-level helpers as global functions. Two Domain packages that
  * choose the same top-level name fatal when both trees load in one process
- * (belimbing#384 / transferred #891). Domain CI mounts one Domain per lane and
- * composed-smoke never runs Pest, so this ratchet is the composed-checkout
- * guard that catches collisions without triggering the redeclare fatal.
+ * (belimbing#384 / transferred #891). Platform tests.yml sees an empty Domains
+ * tree; domain-ci.yml runs the composed-checkout assertion per lane (intra-
+ * Domain). Cross-Domain coverage belongs on composed-smoke once every pin is
+ * collision-free (blocked on blb-people#386 / cutoverFixture rename).
  */
 
 use App\Base\Foundation\ApplicationTopology;
@@ -109,7 +110,7 @@ function domainPestHelperCollisionMessages(array $collisions): array
 }
 
 it('fails when the same top-level function is declared in two Domain trees, naming both paths', function (): void {
-    $domainsRoot = base_path(ApplicationTopology::DOMAINS);
+    $domainsRoot = sys_get_temp_dir().'/blb-pest-helper-collision-'.bin2hex(random_bytes(8));
     $a = $domainsRoot.'/ZzPestHelperA/Probe';
     $b = $domainsRoot.'/ZzPestHelperB/Probe';
     $fileA = $a.'/dup.php';
@@ -134,13 +135,12 @@ it('fails when the same top-level function is declared in two Domain trees, nami
             ->toContain('ZzPestHelperB/Probe/dup.php')
             ->toContain('zzSharedPestHelperCollisionProbe');
     } finally {
-        File::deleteDirectory($domainsRoot.'/ZzPestHelperA');
-        File::deleteDirectory($domainsRoot.'/ZzPestHelperB');
+        File::deleteDirectory($domainsRoot);
     }
 });
 
 it('passes when a top-level function name appears in only one Domain file', function (): void {
-    $domainsRoot = base_path(ApplicationTopology::DOMAINS);
+    $domainsRoot = sys_get_temp_dir().'/blb-pest-helper-collision-'.bin2hex(random_bytes(8));
     $a = $domainsRoot.'/ZzPestHelperSolo/Probe';
     $fileA = $a.'/solo.php';
 
@@ -152,12 +152,12 @@ it('passes when a top-level function name appears in only one Domain file', func
 
         expect($collisions)->not->toHaveKey('zzSoloPestHelperCollisionProbe');
     } finally {
-        File::deleteDirectory($domainsRoot.'/ZzPestHelperSolo');
+        File::deleteDirectory($domainsRoot);
     }
 });
 
 it('ignores identically named class methods — only column-0 function declarations count', function (): void {
-    $domainsRoot = base_path(ApplicationTopology::DOMAINS);
+    $domainsRoot = sys_get_temp_dir().'/blb-pest-helper-collision-'.bin2hex(random_bytes(8));
     $a = $domainsRoot.'/ZzPestHelperMethodA/Probe';
     $b = $domainsRoot.'/ZzPestHelperMethodB/Probe';
 
@@ -171,13 +171,12 @@ it('ignores identically named class methods — only column-0 function declarati
 
         expect($collisions)->not->toHaveKey('zzMethodNameSharedAcrossDomains');
     } finally {
-        File::deleteDirectory($domainsRoot.'/ZzPestHelperMethodA');
-        File::deleteDirectory($domainsRoot.'/ZzPestHelperMethodB');
+        File::deleteDirectory($domainsRoot);
     }
 });
 
 it('fails when two files in the same Domain declare the same top-level function', function (): void {
-    $domainsRoot = base_path(ApplicationTopology::DOMAINS);
+    $domainsRoot = sys_get_temp_dir().'/blb-pest-helper-collision-'.bin2hex(random_bytes(8));
     $mod = $domainsRoot.'/ZzPestHelperIntra/Probe';
 
     File::ensureDirectoryExists($mod);
@@ -193,7 +192,7 @@ it('fails when two files in the same Domain declare the same top-level function'
                 'ZzPestHelperIntra/Probe/two.php',
             );
     } finally {
-        File::deleteDirectory($domainsRoot.'/ZzPestHelperIntra');
+        File::deleteDirectory($domainsRoot);
     }
 });
 
