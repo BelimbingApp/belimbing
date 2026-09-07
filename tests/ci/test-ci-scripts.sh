@@ -612,6 +612,77 @@ PY
     if php scripts/ci/validate-extension-manifest.php tests/Fixtures/ci/extensions/invalid/Example/composer.json >/dev/null 2>&1; then
         echo 'invalid Extension manifest was accepted' >&2; exit 1
     fi
+
+    # extension-conformance.sh (#822): hermetic refusals + happy path.
+    ext_root=$(mktemp -d)
+    trap 'rm -rf "$ext_root"' EXIT
+    cp -a tests/Fixtures/ci/extensions/conventional/. "$ext_root/"
+    conf_out=$(scripts/ci/extension-conformance.sh "$ext_root")
+    grep -q 'extension-conformance: passed 1 Module manifest(s)' <<< "$conf_out"
+
+    empty_ext=$(mktemp -d)
+    if scripts/ci/extension-conformance.sh "$empty_ext" >/dev/null 2>&1; then
+        echo 'extension-conformance accepted an empty Extension root' >&2; exit 1
+    fi
+    empty_err=$(scripts/ci/extension-conformance.sh "$empty_ext" 2>&1 || true)
+    grep -q 'no Module composer.json found' <<< "$empty_err"
+    rm -rf "$empty_ext"
+
+    bad_ext=$(mktemp -d)
+    cp -a tests/Fixtures/ci/extensions/invalid/. "$bad_ext/"
+    if scripts/ci/extension-conformance.sh "$bad_ext" >/dev/null 2>&1; then
+        echo 'extension-conformance accepted an invalid Extension manifest' >&2; exit 1
+    fi
+    rm -rf "$bad_ext"
+
+    assets_ext=$(mktemp -d)
+    cp -a tests/Fixtures/ci/extensions/conventional/. "$assets_ext/"
+    mkdir -p "$assets_ext/Example/Assets"
+    printf 'console.log(1)\n' > "$assets_ext/Example/Assets/app.js"
+    if scripts/ci/extension-conformance.sh "$assets_ext" >/dev/null 2>&1; then
+        echo 'extension-conformance accepted owned assets without package.json and bun.lock' >&2; exit 1
+    fi
+    assets_err=$(scripts/ci/extension-conformance.sh "$assets_ext" 2>&1 || true)
+    grep -q 'owned assets require package.json and bun.lock' <<< "$assets_err"
+    rm -rf "$assets_ext"
+
+    # Tracked migrations are excluded from Pint; the same untracked file fails.
+    mig_ext=$(mktemp -d)
+    cp -a tests/Fixtures/ci/extensions/conventional/. "$mig_ext/"
+    mkdir -p "$mig_ext/Example/Database/Migrations"
+    # Deliberately unformatted so Pint --test fails when the file is authorable.
+    cat > "$mig_ext/Example/Database/Migrations/0330_01_01_000000_probe.php" <<'PHP'
+<?php
+return new class {
+public function up(): void
+{
+$x=1;
+}
+};
+PHP
+    git -C "$mig_ext" init -q
+    git -C "$mig_ext" config user.name 'ci'
+    git -C "$mig_ext" config user.email 'ci@example.invalid'
+    git -C "$mig_ext" add Example/composer.json Example/Example.php Example/Database/Migrations/0330_01_01_000000_probe.php
+    git -C "$mig_ext" commit -qm 'tracked migration'
+    scripts/ci/extension-conformance.sh "$mig_ext" >/dev/null
+    # A never-tracked sibling must still face Pint (tracked exclusion is path+git).
+    cat > "$mig_ext/Example/Database/Migrations/0330_01_01_000001_untracked_probe.php" <<'PHP'
+<?php
+return new class {
+public function up(): void
+{
+$x=1;
+}
+};
+PHP
+    if scripts/ci/extension-conformance.sh "$mig_ext" >/dev/null 2>&1; then
+        echo 'extension-conformance accepted an untracked migration that fails Pint' >&2; exit 1
+    fi
+    rm -rf "$mig_ext"
+
+    rm -rf "$ext_root"
+    trap - EXIT
     rendered=$(php scripts/ci/domain-ci.php render --domain-id=people --workflow-ref=0123456789abcdef0123456789abcdef01234567)
     grep -q 'domain-id: people' <<< "$rendered"
     grep -q 'platform-ref: 0123456789abcdef0123456789abcdef01234567' <<< "$rendered"
