@@ -32,7 +32,10 @@ test("composed route middleware audit gates SQLite before Domain Pest", () => {
 test("composed command tenant-scope audit gates SQLite after the route audit and before Domain Pest", () => {
     const name = "Audit composed Domain command tenant scope";
     const audit = step(name);
-    expect(audit.run).toBe("php artisan blb:domain-commands --audit");
+    expect(audit.run).toContain("php artisan blb:domain-commands --audit --json");
+    expect(audit.run).toContain(".expiring[]");
+    expect(audit.run).toContain("::warning title=Tenant-scope exemption lapses::");
+    expect(audit.run).toContain("exit \"$audit_status\"");
     expect(audit.if).toBeUndefined();
     expect(audit["continue-on-error"]).toBeUndefined();
     const names = sqliteSteps().map((entry: any) => entry.name);

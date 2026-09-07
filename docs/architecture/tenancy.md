@@ -57,7 +57,7 @@ Rollback is intentionally constrained: after a non-1 operator has been used, the
 
 - **Web:** `ResolveTenantContext` middleware resolves the authenticated user's tenant (derived from their company); guests resolve to null.
 - **Queue:** the tenant ID is stamped onto the queue payload at dispatch; the worker restores it on `JobProcessing` and clears it on `JobProcessed`/`JobFailed`, so sequential jobs in one worker never share context.
-- **CLI/scheduler:** platform operations run with no tenant context by default. Domain console commands that need a tenant extend `TenantScopedCommand` (`--tenant=<id>`, assert active tenant before `handle()`). Other tenant-scoped console work wraps execution in `TenantContext::runForTenant($id, ...)`. Audit Domain commands that skip the base via `php artisan blb:domain-commands --audit`.
+- **CLI/scheduler:** platform operations run with no tenant context by default. Domain console commands that need a tenant extend `TenantScopedCommand` (`--tenant=<id>`, assert active tenant before `handle()`). Other tenant-scoped console work wraps execution in `TenantContext::runForTenant($id, ...)`. Audit Domain commands that skip the base via `php artisan blb:domain-commands --audit`. The audit warns about exemptions lapsing within 14 days (`--warn-days=<positive integer>`), includes stale entries for unmounted commands, and exposes `failures` and `expiring` in `--json` for Domain CI annotations; warnings do not change the exit code.
 
 Consumers fail closed on null: no tenant context must never widen into unscoped access. Octane/FrankenPHP scoped-binding flushes plus explicit queue clearing defend against worker leakage.
 

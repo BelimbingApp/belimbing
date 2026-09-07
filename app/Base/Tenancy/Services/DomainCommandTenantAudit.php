@@ -65,6 +65,55 @@ final class DomainCommandTenantAudit
     }
 
     /**
+     * Stale entries retain their date, but have no discoverable Domain owner.
+     *
+     * @return list<array{name: string, domain: ?string, module: ?string, expires: string, days_left: int, reason: string, stale: bool}>
+     */
+    public function expiring(int $withinDays, ?CarbonImmutable $now = null): array
+    {
+        $now ??= CarbonImmutable::now();
+        $allowlist = config('domain_commands.tenant_scope.allowlist', []);
+        if (! is_array($allowlist)) {
+            return [];
+        }
+
+        $commands = array_column($this->inventory->all(), null, 'name');
+        $required = config('domain_commands.tenant_scope.required_domains', []);
+        $warnings = [];
+
+        foreach ($allowlist as $name => $entry) {
+            $expiry = $this->validatedExpiry($entry);
+            if (! is_string($name) || $expiry === null || $expiry->endOfDay()->lessThan($now)) {
+                continue;
+            }
+
+            $daysLeft = (int) $now->startOfDay()->diffInDays($expiry->startOfDay());
+            if ($daysLeft > $withinDays) {
+                continue;
+            }
+
+            $command = $commands[$name] ?? null;
+            if ($command !== null && ($command['tenant_scoped'] || ! is_array($required) || ! in_array($command['domain'], $required, true))) {
+                continue;
+            }
+
+            $warnings[] = [
+                'name' => $name,
+                'domain' => $command['domain'] ?? null,
+                'module' => $command['module'] ?? null,
+                'expires' => $expiry->format('Y-m-d'),
+                'days_left' => $daysLeft,
+                'reason' => $entry['reason'],
+                'stale' => $command === null,
+            ];
+        }
+
+        usort($warnings, static fn (array $left, array $right): int => [$left['expires'], $left['name']] <=> [$right['expires'], $right['name']]);
+
+        return $warnings;
+    }
+
+    /**
      * An entry exempts a command only with a non-blank reason and an
      * expiry date that has not passed. A bare string reason never expires
      * and is accepted only for fixtures; shipped entries are dated.
@@ -82,31 +131,38 @@ final class DomainCommandTenantAudit
             return trim($entry) !== '';
         }
 
+        $expiry = $this->validatedExpiry($entry);
+
+        return $expiry !== null && ! $expiry->endOfDay()->isPast();
+    }
+
+    private function validatedExpiry(mixed $entry): ?CarbonImmutable
+    {
         if (! is_array($entry)) {
-            return false;
+            return null;
         }
 
         $reason = $entry['reason'] ?? null;
         $expires = $entry['expires'] ?? null;
 
         if (! is_string($reason) || trim($reason) === '' || ! is_string($expires)) {
-            return false;
+            return null;
         }
 
         if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $expires) !== 1) {
-            return false;
+            return null;
         }
 
         try {
-            $expiry = CarbonImmutable::createFromFormat('Y-m-d', $expires);
+            $expiry = CarbonImmutable::createFromFormat('!Y-m-d', $expires);
         } catch (InvalidFormatException) {
-            return false;
+            return null;
         }
 
         if ($expiry === null || $expiry->format('Y-m-d') !== $expires) {
-            return false;
+            return null;
         }
 
-        return ! $expiry->endOfDay()->isPast();
+        return $expiry;
     }
 }
