@@ -7,6 +7,7 @@ use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalCapability;
 use App\Base\Integration\Livewire\OutboundExchanges\Index;
 use App\Base\Integration\Models\OutboundExchange;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\Company\Models\Company;
 use App\Core\User\Models\User;
 
@@ -81,6 +82,8 @@ it('shows exchange record history without leaking retained payloads', function (
             'is_allowed' => true,
         ]);
     }
+
+    app(TenantContext::class)->set((int) $company->tenant_id);
 
     $exchange = OutboundExchange::query()->create([
         'system' => 'example',
