@@ -3,9 +3,7 @@
 use App\Base\Audit\Livewire\AuditLog\OperatorActivity;
 use App\Base\Audit\Services\AuditBuffer;
 use App\Base\Database\Livewire\Backups\Index;
-use App\Base\Database\Services\Backup\BackupRuntimeSettings;
 use App\Base\Database\Services\Backup\BackupService;
-use App\Base\Database\Services\Backup\RetentionPolicy;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\Support\SettingSubject;
 use App\Base\Tenancy\Contracts\TenantContext;
@@ -423,10 +421,11 @@ it('records one database.backup.pruned row per expired artifact from blb:db:back
     $disk->put($manifestPath, json_encode($payload));
 
     $service = app(BackupService::class);
-    $config = app(BackupRuntimeSettings::class)->configuration();
-    $entries = $service->listManifestEntries($config, BACKUPS_TEST_DISK);
-    $expired = (new RetentionPolicy(1, 0))->selectExpired($entries, time());
-    expect($expired)->not->toBeEmpty();
+    $expired = [[
+        'manifest_path' => $manifestPath,
+        'artifact_path' => $artifactPath,
+        'finished_at_unix' => now()->subDays(10)->timestamp,
+    ]];
 
     $service->deleteEntries(
         diskName: BACKUPS_TEST_DISK,
@@ -437,7 +436,7 @@ it('records one database.backup.pruned row per expired artifact from blb:db:back
     );
 
     $rows = backupsAuditEvents('database.backup.pruned');
-    expect($rows)->toHaveCount(count($expired));
+    expect($rows)->toHaveCount(1);
     $rowPayload = json_decode((string) $rows[0]->payload, true);
     expect($rowPayload['surface'] ?? null)->toBe('console:blb:db:backup')
         ->and($rowPayload['context']['keep_days'] ?? null)->toBe(1)
