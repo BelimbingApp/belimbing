@@ -3,6 +3,7 @@
 use App\Base\Tenancy\Contracts\TenantContext;
 use App\Base\Tenancy\Exceptions\TenantContextMissingException;
 use App\Base\Tenancy\Support\PlatformAsyncEntryPointInventory;
+use App\Domains\ZzScheduleProbe\Fixture\Console\Commands\ZzScheduleProbeCommand;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Contracts\Queue\Job as QueueJob;
@@ -58,7 +59,7 @@ final class ZzScheduleProbeCommand extends Command
 PHP);
         require_once $commands.'/ZzScheduleProbeCommand.php';
 
-        Artisan::registerCommand(app(\App\Domains\ZzScheduleProbe\Fixture\Console\Commands\ZzScheduleProbeCommand::class));
+        Artisan::registerCommand(app(ZzScheduleProbeCommand::class));
         app(Schedule::class)->command('zz-schedule-probe:noop')->daily();
 
         $live = PlatformAsyncEntryPointInventory::liveScheduledCommandSignatures();
