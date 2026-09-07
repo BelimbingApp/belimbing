@@ -18,6 +18,7 @@ class Index extends Component
             'routeRows' => $pageData->routeRows(),
             'ownership' => $pageData->ownershipReport(),
             'missRows' => $pageData->missRows(),
+            'resolutionMix' => $pageData->resolutionMix(),
         ]);
     }
 }

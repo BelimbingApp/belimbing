@@ -10,6 +10,9 @@
     'empty' => false,
     'emptyColspan' => 1,
     'emptyMessage' => null,
+    // Opt-out for deliberately captionless tables (guarded in blb-people):
+    // declared so it never falls through $attributes onto the wrapper.
+    'no-caption' => false,
 ])
 
 @php

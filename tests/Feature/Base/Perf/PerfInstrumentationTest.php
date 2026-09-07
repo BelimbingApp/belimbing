@@ -78,6 +78,15 @@ it('records the tenant resolver in the request performance log', function (): vo
     expect(latestPerfEntry($this->perfDir)['tenant_resolver'])->toBe('session');
 });
 
+it('records the resolved tenant id in the request performance log', function (): void {
+    $admin = createAdminUser();
+    $this->actingAs($admin)->get(route('dashboard'))->assertOk();
+
+    // The tenant-audit resolution mix (#781) scopes by this; without it a
+    // resolver count could only ever be installation-wide.
+    expect(latestPerfEntry($this->perfDir)['tenant_id'])->toBe((int) $admin->tenant_id);
+});
+
 it('counts queries, cache traffic, and subprocesses while a request window is active', function (): void {
     Process::fake();
 
