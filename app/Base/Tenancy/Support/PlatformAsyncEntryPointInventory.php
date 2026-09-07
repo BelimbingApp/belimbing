@@ -152,16 +152,13 @@ final class PlatformAsyncEntryPointInventory
         }
 
         $reflection = new ReflectionClass($class);
-        if ($reflection->isAbstract() || $reflection->isInterface() || $reflection->isTrait()) {
-            return null;
-        }
-
-        if (! $reflection->implementsInterface(ShouldQueue::class)) {
-            return null;
-        }
+        $usable = ! $reflection->isAbstract()
+            && ! $reflection->isInterface()
+            && ! $reflection->isTrait()
+            && $reflection->implementsInterface(ShouldQueue::class);
 
         /** @var class-string<ShouldQueue> $class */
-        return $class;
+        return $usable ? $class : null;
     }
 
     private static function looksLikeJobPath(SplFileInfo $file): bool
@@ -216,11 +213,14 @@ final class PlatformAsyncEntryPointInventory
         return implode("\n", $lines)."\n";
     }
 
-    public static function assertJobsMatchDiscovery(): void
+    /**
+     * @param  list<string>|null  $roots
+     */
+    public static function assertJobsMatchDiscovery(?array $roots = null): void
     {
         $declared = self::queuedJobClasses();
         sort($declared);
-        $discovered = self::discoverQueuedJobClasses();
+        $discovered = self::discoverQueuedJobClasses($roots);
 
         if ($declared !== $discovered) {
             throw new PlatformAsyncEntryPointInventoryException(

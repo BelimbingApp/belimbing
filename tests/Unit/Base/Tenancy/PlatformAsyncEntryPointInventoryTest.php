@@ -26,6 +26,18 @@ it('maps app-relative paths to App classes and refuses paths outside app/', func
         ->toBeNull();
 });
 
+it('builds a dispatchable instance for every declared queued job', function (): void {
+    $pairs = PlatformAsyncEntryPointInventory::dispatchableQueuedJobs();
+    $declared = PlatformAsyncEntryPointInventory::queuedJobClasses();
+
+    expect($pairs)->toHaveCount(count($declared));
+
+    foreach ($pairs as [$class, $job]) {
+        expect($declared)->toContain($class)
+            ->and($job)->toBeInstanceOf($class);
+    }
+});
+
 it('discovers only concrete ShouldQueue jobs under supplied roots', function (): void {
     $root = storage_path('framework/testing/async-inventory-'.bin2hex(random_bytes(4)));
     $jobs = $root.'/app/Base/Tenancy/Jobs';
@@ -48,6 +60,12 @@ PHP);
 <?php
 namespace App\Base\Tenancy\Jobs;
 final class NotQueuedProbe {}
+PHP);
+        // Filename maps to a class that was never loaded — class_exists fails closed.
+        file_put_contents($jobs.'/MissingAutoloadJob.php', <<<'PHP'
+<?php
+namespace App\Base\Tenancy\Jobs;
+// Intentionally empty: path implies MissingAutoloadJob but the class is absent.
 PHP);
         file_put_contents($jobs.'/notes.txt', 'ignore');
 
@@ -72,14 +90,8 @@ it('throws a tenancy inventory exception when discovery drifts from the declarat
     File::ensureDirectoryExists($root);
 
     try {
-        expect(fn () => (function () use ($root): void {
-            $declared = PlatformAsyncEntryPointInventory::queuedJobClasses();
-            sort($declared);
-            $discovered = PlatformAsyncEntryPointInventory::discoverQueuedJobClasses([$root]);
-            if ($declared !== $discovered) {
-                throw new PlatformAsyncEntryPointInventoryException('drift');
-            }
-        })())->toThrow(PlatformAsyncEntryPointInventoryException::class);
+        expect(fn () => PlatformAsyncEntryPointInventory::assertJobsMatchDiscovery([$root]))
+            ->toThrow(PlatformAsyncEntryPointInventoryException::class);
     } finally {
         File::deleteDirectory($root);
     }
