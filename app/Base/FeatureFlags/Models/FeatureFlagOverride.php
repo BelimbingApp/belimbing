@@ -3,11 +3,14 @@
 namespace App\Base\FeatureFlags\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 
 /**
  * @property string $flag
  * @property int $tenant_id
  * @property bool $enabled
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
  *
  * Per-tenant override of a declared feature flag.
  *
