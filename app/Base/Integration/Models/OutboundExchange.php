@@ -20,11 +20,28 @@ use Illuminate\Support\Str;
  * @property string|null $owner_type
  * @property int|null $owner_id
  * @property string|null $correlation_id
+ * @property string|null $traceparent
+ * @property string|null $tracestate
+ * @property array<string, mixed>|null $request_headers
+ * @property array<string, mixed>|null $request_body
+ * @property bool $request_body_truncated
+ * @property int|null $request_body_original_bytes
  * @property int|null $response_status
+ * @property array<string, mixed>|null $response_headers
+ * @property array<string, mixed>|null $response_body
+ * @property bool $response_body_truncated
+ * @property int|null $response_body_original_bytes
+ * @property int|null $duration_ms
+ * @property int|null $retry_count
  * @property string $outcome
+ * @property string|null $error_class
+ * @property string|null $error_message
  * @property bool $fallback_used
  * @property string|null $fallback_reason
+ * @property array<string, mixed>|null $metadata
  * @property Carbon $occurred_at
+ * @property Carbon|null $updated_at
+ * @property Carbon|null $created_at
  */
 class OutboundExchange extends Model
 {

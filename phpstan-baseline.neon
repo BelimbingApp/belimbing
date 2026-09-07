@@ -439,12 +439,6 @@ parameters:
 			path: app/Base/Audit/Services/AuditTraceTimeline.php
 
 		-
-			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$company_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Database/Seeders/Dev/DevAuthzCompanyAssignmentSeeder.php
-
-		-
 			message: '#^Match arm comparison between ''module'' and ''module'' is always true\.$#'
 			identifier: match.alwaysTrue
 			count: 2
@@ -457,46 +451,10 @@ parameters:
 			path: app/Base/Authz/Livewire/Capabilities/Index.php
 
 		-
-			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$company_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Livewire/Roles/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$email\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Authz/Livewire/Roles/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 4
-			path: app/Base/Authz/Livewire/Roles/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$pivot_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Livewire/Roles/Show.php
-
-		-
 			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Authz\\Models\\DecisionLog\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
 			identifier: property.phpDocType
 			count: 1
 			path: app/Base/Authz/Models/DecisionLog.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\PrincipalCapability\:\:\$principal_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Models/PrincipalCapability.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\PrincipalCapability\:\:\$principal_type\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Models/PrincipalCapability.php
 
 		-
 			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Authz\\Models\\PrincipalCapability\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
@@ -505,46 +463,10 @@ parameters:
 			path: app/Base/Authz/Models/PrincipalCapability.php
 
 		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\PrincipalRole\:\:\$principal_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Models/PrincipalRole.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\PrincipalRole\:\:\$principal_type\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Models/PrincipalRole.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\PrincipalRole\:\:\$role_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Models/PrincipalRole.php
-
-		-
 			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Authz\\Models\\PrincipalRole\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
 			identifier: property.phpDocType
 			count: 1
 			path: app/Base/Authz/Models/PrincipalRole.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\PrincipalCapability\:\:\$capability_key\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Authz/Services/EffectivePermissions.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\PrincipalCapability\:\:\$is_allowed\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Services/EffectivePermissions.php
-
-		-
-			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Authz/Services/ImpersonationManager.php
 
 		-
 			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
@@ -785,18 +707,6 @@ parameters:
 			identifier: class.notFound
 			count: 1
 			path: app/Base/Database/Livewire/DatabaseTables/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$email\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/Queries/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Base/Database/Livewire/Queries/Show.php
 
 		-
 			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Core\\User\\Models\\User\>\:\:map\(\) contains unresolvable type\.$#'
@@ -1423,12 +1333,6 @@ parameters:
 			path: app/Base/Database/Services/TableInspector.php
 
 		-
-			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$company_id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/DateTime/Services/DateTimeDisplayService.php
-
-		-
 			message: '#^Access to an undefined property App\\Base\\FeatureFlags\\Models\\FeatureFlagOverride\:\:\$enabled\.$#'
 			identifier: property.notFound
 			count: 1
@@ -1891,12 +1795,6 @@ parameters:
 			path: app/Base/Settings/DTO/SettingDefinition.php
 
 		-
-			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$company_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Settings/Livewire/SettingsForm.php
-
-		-
 			message: '#^PHPDoc type array\<string\> of property App\\Base\\Settings\\Models\\Setting\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
 			identifier: property.phpDocType
 			count: 1
@@ -2027,12 +1925,6 @@ parameters:
 			identifier: class.extendsFinalByPhpDoc
 			count: 1
 			path: app/Base/System/Console/Commands/TestCommand.php
-
-		-
-			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$company_id\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Base/System/Livewire/Localization/Index.php
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>value" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
