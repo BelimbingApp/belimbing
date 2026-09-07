@@ -2,6 +2,7 @@
 
 namespace App\Base\Database\Services;
 
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 final class IncubatingSchemaTableDropper
@@ -28,11 +29,22 @@ final class IncubatingSchemaTableDropper
      * foreign-key enforcement and SQLite's pragma without disabling checks.
      * Remaining cycles are dropped together with driver-specific handling.
      *
+     * On SQLite, user triggers are dropped first. Triggers may call
+     * connection-local PHP functions (`sqliteCreateFunction`) that do not
+     * survive process restart; evaluating them during DROP TABLE then fails
+     * with "no such function" and blocks incubating rebuilds.
+     *
      * @param  list<string>  $tables
      * @param  array<string, list<array<string, mixed>>>  $foreignKeysByTable
      */
     public function drop(array $tables, array $foreignKeysByTable): void
     {
+        $connection = Schema::getConnection();
+
+        if ($connection->getDriverName() === 'sqlite') {
+            $this->dropSqliteTriggers($tables);
+        }
+
         [$ordered, $cyclic] = $this->topologicalDropOrder($tables, $foreignKeysByTable);
 
         foreach ($ordered as $table) {
@@ -42,8 +54,6 @@ final class IncubatingSchemaTableDropper
         if ($cyclic === []) {
             return;
         }
-
-        $connection = Schema::getConnection();
 
         if ($connection->getDriverName() === 'sqlite') {
             $deferForeignKeys = $connection->transactionLevel() > 0;
@@ -76,6 +86,32 @@ final class IncubatingSchemaTableDropper
         $grammar = $connection->getQueryGrammar();
         $wrapped = array_map(fn (string $table): string => $grammar->wrapTable($table), $cyclic);
         $connection->statement('DROP TABLE IF EXISTS '.implode(', ', $wrapped));
+    }
+
+    /**
+     * @param  list<string>  $tables
+     */
+    private function dropSqliteTriggers(array $tables): void
+    {
+        if ($tables === []) {
+            return;
+        }
+
+        $placeholders = implode(', ', array_fill(0, count($tables), '?'));
+        $triggers = DB::select(
+            "SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name IN ({$placeholders})",
+            $tables,
+        );
+
+        foreach ($triggers as $trigger) {
+            $name = is_object($trigger) ? ($trigger->name ?? null) : null;
+
+            if (! is_string($name) || $name === '' || ! preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $name)) {
+                continue;
+            }
+
+            DB::statement('DROP TRIGGER IF EXISTS '.$name);
+        }
     }
 
     /**
