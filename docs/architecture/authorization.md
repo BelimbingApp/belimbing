@@ -441,9 +441,10 @@ Implemented as a composable policy pipeline (not hardcoded):
 
 1. **Actor validity** — `ActorContextPolicy`
 2. **Capability registry** — `KnownCapabilityPolicy`
-3. **Company scope gate** — `CompanyScopePolicy`
-4. **Delegation gate** — `DelegationPolicy`
-5. **Grant evaluation** — `GrantPolicy` (RBAC + direct grants)
+3. **Tenant scope gate** — `TenantScopePolicy`
+4. **Company scope gate** — `CompanyScopePolicy`
+5. **Delegation gate** — `DelegationPolicy`
+6. **Grant evaluation** — `GrantPolicy` (RBAC + direct grants)
 
 Future policies (resource ownership, workflow state) can be inserted into the pipeline without modifying existing code.
 
