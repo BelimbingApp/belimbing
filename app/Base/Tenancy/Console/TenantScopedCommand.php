@@ -75,7 +75,9 @@ abstract class TenantScopedCommand extends Command
     {
         $raw = $input->getOption('tenant');
 
-        if ($raw === null || $raw === '' || ! is_numeric($raw)) {
+        // A whole id only: is_numeric() admits "12.9", "1e1" and " 12", and the
+        // cast would then bind a tenant the operator did not name.
+        if (! is_scalar($raw) || preg_match('/^\d+$/', (string) $raw) !== 1) {
             throw new TenantOptionRequiredException;
         }
 

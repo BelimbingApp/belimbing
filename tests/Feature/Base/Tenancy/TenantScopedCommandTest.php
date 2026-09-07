@@ -57,3 +57,15 @@ it('requires --tenant before handle runs', function (): void {
 
     expect(ZzTenantScopedProbeCommand::$handled)->toBeFalse();
 });
+
+it('refuses a --tenant that is numeric but not a whole id', function (string $suffix): void {
+    $tenant = createTenant(['name' => 'Scoped']);
+
+    // "<id>.9" and "<id>e0" are numeric, so is_numeric() would let them through
+    // and the (int) cast would bind the real tenant: a mistyped id must be
+    // refused, never rounded to a neighbour.
+    $this->artisan('zz:tenant-scoped-probe', ['--tenant' => $tenant->id.$suffix])
+        ->assertFailed();
+
+    expect(ZzTenantScopedProbeCommand::$handled)->toBeFalse();
+})->with(['decimal' => '.9', 'exponent' => 'e0', 'trailing space' => ' ']);
