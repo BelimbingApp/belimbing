@@ -15,10 +15,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  *
  * @property int $id
  * @property DataOperationType $operation_type
- * @property string $source
- * @property string $direction
+ * @property string|null $source
+ * @property string|null $direction
  * @property bool $is_forced
- * @property string $transfer_mode
+ * @property string|null $transfer_mode
  * @property string|null $local_instance_id
  * @property string|null $remote_instance_id
  * @property string|null $actor_type
@@ -33,7 +33,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property CarbonInterface|null $finished_at
  * @property int|null $duration_ms
  * @property int $table_count
- * @property int $total_rows_affected
+ * @property int|null $total_rows_affected
  * @property string|null $failure_summary
  * @property CarbonInterface|null $audit_projection_attempted_at
  */
