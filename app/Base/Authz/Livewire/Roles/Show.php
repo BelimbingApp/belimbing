@@ -355,10 +355,12 @@ class Show extends Component implements ProvidesLaraPageContext
                 ->with('company')
                 ->get()
                 ->map(function (User $user) use ($assignedPrincipalRoles) {
-                    $user->pivot_id = $assignedPrincipalRoles
+                    $assignment = $assignedPrincipalRoles
                         ->where('principal_id', $user->id)
-                        ->first()
-                        ?->id;
+                        ->first();
+                    if ($assignment !== null) {
+                        $user->setRelation('assignment', $assignment);
+                    }
 
                     return $user;
                 })
@@ -425,8 +427,8 @@ class Show extends Component implements ProvidesLaraPageContext
                     'name' => $dir * strcmp((string) $a->name, (string) $b->name),
                     'email' => $dir * strcmp((string) $a->email, (string) $b->email),
                     'company' => $dir * strcmp(
-                        (string) ($a->company?->name ?? ''),
-                        (string) ($b->company?->name ?? ''),
+                        (string) ($a->company->name ?? ''),
+                        (string) ($b->company->name ?? ''),
                     ),
                     default => $dir * strcmp((string) $a->name, (string) $b->name),
                 };

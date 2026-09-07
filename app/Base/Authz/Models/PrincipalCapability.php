@@ -5,6 +5,14 @@ namespace App\Base\Authz\Models;
 use App\Base\Authz\Enums\PrincipalType;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @property int $id
+ * @property int|null $company_id
+ * @property string $principal_type
+ * @property int|null $principal_id
+ * @property string $capability_key
+ * @property bool $is_allowed
+ */
 class PrincipalCapability extends Model
 {
     /**
@@ -13,7 +21,7 @@ class PrincipalCapability extends Model
     protected $table = 'base_authz_principal_capabilities';
 
     /**
-     * @var array<int, string>
+     * @var list<string>
      */
     protected $fillable = [
         'company_id',

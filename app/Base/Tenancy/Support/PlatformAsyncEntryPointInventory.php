@@ -71,6 +71,8 @@ final class PlatformAsyncEntryPointInventory
             'blb:software:inventory:warm',
             'blb:workflow:reconcile',
             'blb:integration:payloads:prune',
+            'blb:authz:decision-logs:prune',
+            'blb:audit:actions:prune',
             'blb:ai:schedules:tick',
             'blb:ai:runs:reap-orphans',
             'blb:ai:turns:sweep-stale',

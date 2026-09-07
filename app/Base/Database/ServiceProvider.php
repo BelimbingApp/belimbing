@@ -6,6 +6,7 @@ use App\Base\Database\Console\Commands\ApplyDataSharePackageCommand;
 use App\Base\Database\Console\Commands\ApproveIncubatingMigrationCommand;
 use App\Base\Database\Console\Commands\AttachFreshnessTrackingCommand;
 use App\Base\Database\Console\Commands\BackupCommand;
+use App\Base\Database\Console\Commands\DataShareHistoryCommand;
 use App\Base\Database\Console\Commands\DataShareScopesCommand;
 use App\Base\Database\Console\Commands\ExportDataSharePackageCommand;
 use App\Base\Database\Console\Commands\FetchDataShareTransferOfferCommand;
@@ -166,6 +167,7 @@ class ServiceProvider extends BaseServiceProvider
             AttachFreshnessTrackingCommand::class,
             ReconcileDataOperationsCommand::class,
             BackupCommand::class,
+            DataShareHistoryCommand::class,
             DataShareScopesCommand::class,
             ExportDataSharePackageCommand::class,
             FetchDataShareTransferOfferCommand::class,

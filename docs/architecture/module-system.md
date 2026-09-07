@@ -236,10 +236,20 @@ Reading, overriding, or clearing an undeclared name throws
 any module descriptor.` Declare the flag in an enabled owning Module and correct
 the consumer's name; an undeclared flag is not treated as disabled.
 
+When a Domain is disabled, uninstalled, or a flag is renamed, an override row can
+outlive its declaration. Those rows are **orphaned**:
+`FeatureFlagDeclarationInventory::orphanedOverridesForCurrentTenant()` lists them
+for the ambient tenant, the Administration page shows an Orphaned overrides
+section, and `FeatureFlags::purgeOrphanedOverride()` deletes the ambient-tenant
+row only when the name is *not* declared (declared names still clear only through
+`clearOverride()`). Purge writes the same `FeatureFlagOverride` mutation audit
+trail as toggle/clear. `blb:feature-flags` includes orphans with `module = null`
+and an `orphaned` column (JSON field `orphaned: true|false`).
+
 For operators, `php artisan blb:feature-flags` lists Flag, Module, Default,
-Enabled, Overridden, and Description for the current tenant;
+Enabled, Overridden, Orphaned, and Description for the current tenant;
 `php artisan blb:feature-flags --json` emits the same resolved inventory as
-`flag`, `module`, `default`, `enabled`, `overridden`, and `description` fields.
+`flag`, `module`, `default`, `enabled`, `overridden`, `orphaned`, and `description` fields.
 The [command](../../app/Base/FeatureFlags/Console/Commands/ListFeatureFlagsCommand.php)
 has no tenant-selection or mutation option: the invoking runtime must already
 establish tenant context. Without it, the command exits with failure and
@@ -339,7 +349,7 @@ Providerless modules participate in dependency resolution. Rebuild cached config
 | Audit, dashboard, and other contributions | The documented `Config/{surface}.php` under supported Module roots | Owning Base discovery service |
 | Livewire components | `Livewire/` below supported Base components and Modules | `App\Base\Livewire\ComponentDiscoveryService` |
 | Views | Not implicitly namespace-registered; the owning provider calls `loadViewsFrom()` | Module provider |
-| Agent skills | project `.agents/skills`, Core Modules, Domain Modules, Extension sources, and Extension Modules | `App\Core\AI\Services\Orchestration\FilesystemSkillPackLoader` |
+| Agent skills | project `.agents/skills`, Core Modules, Domain Modules, Extension sources, and Extension Modules; the first root to declare an id keeps it and later roots are shadowed, which `blb:ai:skills:list` reports | `App\Core\AI\Services\Orchestration\FilesystemSkillPackLoader` |
 | Tailwind and Blade refresh | `resources/core/views`, plus installed `app/Core/*/Views`, `app/Domains/*/*/Views`, and `app/Extensions/*/*/Views` | Tailwind/Vite configuration |
 | Tests | root `tests/`; Domain-level and Domain-Module `Tests/`; Extension-Module `Tests/` | PHPUnit and Pest configuration |
 | Module manifests | Module-root `composer.json` containing `extra.blb` | `App\Base\Foundation\ModuleManifest\ModuleManifestReader` |
