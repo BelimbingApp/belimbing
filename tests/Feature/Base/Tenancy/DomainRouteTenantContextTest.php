@@ -8,7 +8,11 @@ use App\Core\User\Models\User;
 use Illuminate\Support\Facades\File;
 
 const TENANT_REQUIRED_DOMAIN_FIXTURE = 'app/Domains/ZzTenantRequired/Fixture';
-const TENANT_REQUIRED_ROUTE_NAME = 'people-connector.webhook';
+const TENANT_REQUIRED_ROUTE_NAME = 'zz-tenant-required.probe';
+// The one exclusion the platform ships, asserted by its real name below. The
+// fixture must not borrow it: in a composed checkout the PeopleConnector mount
+// registers it and RouteDiscoveryService rightly refuses the duplicate (#804).
+const TENANT_REQUIRED_SHIPPED_EXCLUSION = 'people-connector.webhook';
 const TENANT_REQUIRED_ROUTE_PROBE = 'zz_tenant_required_route_reached';
 
 function registerTenantRequiredDomainFixture(): void
@@ -24,7 +28,7 @@ Route::get('zz-tenant-required/probe', function () {
     $GLOBALS['zz_tenant_required_route_reached'] = true;
 
     return response()->json(['reached' => true]);
-})->name('people-connector.webhook');
+})->name('zz-tenant-required.probe');
 PHP);
 
     config()->set('domain_routes.tenant_context.required_domains', ['ZzTenantRequired']);
@@ -82,9 +86,14 @@ it('allows only named exclusions carrying a non-empty reason', function (): void
 it('declares guarded domains, the signed webhook exclusion, and visible middleware provenance', function (): void {
     expect(config('domain_routes.tenant_context.required_domains'))->toBe(['People', 'PeopleConnector'])
         ->and(config('domain_routes.tenant_context.exclusions'))->toBe([
-            TENANT_REQUIRED_ROUTE_NAME => 'Signed provider callback resolves its tenant from the verified connection before dispatch.',
+            TENANT_REQUIRED_SHIPPED_EXCLUSION => 'Signed provider callback resolves its tenant from the verified connection before dispatch.',
         ]);
 
+    // The shipped exclusion is checked above by name; the machinery it relies
+    // on is exercised through the fixture's own route, excluded the same way.
+    config()->set('domain_routes.tenant_context.exclusions', [
+        TENANT_REQUIRED_ROUTE_NAME => 'Fixture probe stands in for the signed callback.',
+    ]);
     registerTenantRequiredDomainFixture();
     $row = collect(app(DomainRouteInventory::class)->all())
         ->firstWhere('name', TENANT_REQUIRED_ROUTE_NAME);
