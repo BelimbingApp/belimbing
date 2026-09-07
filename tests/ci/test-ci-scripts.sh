@@ -985,6 +985,15 @@ with tempfile.TemporaryDirectory() as tmpdir:
     assert listed.returncode == 0, listed.stdout + listed.stderr
     assert '::warning::' not in listed.stdout, listed.stdout
 
+    # A bracketed reference is the same reference: GitHub accepts
+    # ${{ secrets['NAME'] }} exactly as it accepts ${{ secrets.NAME }}.
+    bracketed = run_audit(tmp, (
+        'jobs:\n  a:\n    steps:\n      - env:\n'
+        "          A: ${{ secrets['FIXTURE_UNLISTED_TOKEN'] }}\n"
+    ), {'secrets': [entry('LISTED_TOKEN')]})
+    assert bracketed.returncode == 1, bracketed.stdout + bracketed.stderr
+    assert 'FIXTURE_UNLISTED_TOKEN' in bracketed.stderr, bracketed.stderr
+
     stale = run_audit(tmp, workflow, {'secrets': [
         entry('LISTED_TOKEN', rotated='2026-06-01'), entry('FIXTURE_UNLISTED_TOKEN')]})
     assert stale.returncode == 0, stale.stdout + stale.stderr

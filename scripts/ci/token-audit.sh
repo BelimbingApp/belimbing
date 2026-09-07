@@ -8,6 +8,15 @@
 # GITHUB_TOKEN is the workflow-scoped installation token, not a repository
 # secret, so it is exempt. No secret values are read — only workflow text.
 #
+# Both reference forms are matched and normalised to one name:
+# `secrets.NAME` and `secrets['NAME']` / `secrets["NAME"]`.
+#
+# Known blind spots (static text scan; neither is detected or warned about):
+#   - a computed index, e.g. `secrets[format('TOKEN_{0}', github.ref_name)]`,
+#     cannot be resolved statically and is invisible to the audit;
+#   - `secrets: inherit` on a reusable-workflow call passes every secret to
+#     the callee without naming any.
+#
 #   token-audit.sh [--workflows DIR] [--allowlist FILE] [--today YYYY-MM-DD]
 #
 set -euo pipefail
@@ -36,9 +45,11 @@ if [[ ! -f "$allowlist" ]]; then
 fi
 
 # name<TAB>file, one row per referencing file, GITHUB_TOKEN exempt.
+# secrets.NAME and secrets['NAME'] / secrets["NAME"] both normalise to NAME.
 mapfile -t references < <(
-  grep -rHoE 'secrets\.[A-Za-z_][A-Za-z0-9_]*' --include='*.yml' --include='*.yaml' "$workflows" \
-    | sed -E 's/^([^:]+):secrets\.(.*)$/\2\t\1/' \
+  grep -rHoE "secrets\.[A-Za-z_][A-Za-z0-9_]*|secrets\[[[:space:]]*['\"][A-Za-z_][A-Za-z0-9_]*['\"][[:space:]]*\]" \
+    --include='*.yml' --include='*.yaml' "$workflows" \
+    | sed -E "s/^([^:]+):secrets\.(.*)\$/\2\t\1/; s/^([^:]+):secrets\[[[:space:]]*['\"]([A-Za-z_][A-Za-z0-9_]*)['\"][[:space:]]*\]\$/\2\t\1/" \
     | grep -v $'^GITHUB_TOKEN\t' \
     | sort -u || true
 )
