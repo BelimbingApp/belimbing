@@ -133,10 +133,7 @@ it('covers every domain-repos.json path with an @source glob for its module View
 });
 
 it('keeps vite bladeRefreshPaths and @source on the same root families', function (): void {
-    $sources = array_values(array_filter(
-        tailwindSourceGlobs(),
-        static fn (string $glob): bool => str_ends_with($glob, '/Views') || str_contains($glob, '/Views'),
-    ));
+    $sources = tailwindSourceGlobs();
     $viteRoots = viteBladeRefreshViewRoots();
 
     $requiredFamilies = [
@@ -151,6 +148,5 @@ it('keeps vite bladeRefreshPaths and @source on the same root families', functio
     }
 
     expect($viteRoots)->toContain('resources/core/views');
-    expect(pathMatchesAnyGlob('resources/core/views', $sources) || in_array('resources/core/views', $sources, true))
-        ->toBeTrue();
+    expect($sources)->toContain('resources/core/views');
 });
