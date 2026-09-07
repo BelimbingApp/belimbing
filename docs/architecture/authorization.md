@@ -537,7 +537,10 @@ Routes are auto-discovered from `app/Base/Authz/Routes/web.php`.
 ### 12.4 Constraints (v1)
 
 - Cannot impersonate yourself.
-- No nested impersonation (buttons hidden while impersonating).
+- No nested impersonation: `ImpersonationManager::start()` refuses when a session is already impersonating (HTTP 403); UI buttons stay hidden as a convenience, not the enforcement.
+- Cross-tenant targets are refused in the manager (and still 404 at the route when the ambient tenant does not own the user).
+- Each start and stop records a retained semantic action (`impersonation.started` / `impersonation.stopped`) naming the real admin as `impersonator_id` before the auth swap.
+- While impersonating, audit actor payloads carry `impersonator_id` so mutation and action rows answer who was really acting.
 - Impersonation guard is `admin.user.impersonate`, included in `core_admin` role.
 
 ---
