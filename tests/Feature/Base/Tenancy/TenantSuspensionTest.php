@@ -142,3 +142,52 @@ it('reports a soft-deleted tenant as unusable through the shared rule', function
 
     expect($tenant->isActive())->toBeFalse();
 });
+
+/*
+ * The two below pin the `withTrashed()` token on the web and queue lookups.
+ * Reviewer finding on #826 (fable-5.1): `isActive()` was only exercised on
+ * the model, so replacing `Tenant::withTrashed()->find()` with
+ * `Tenant::query()->find()` at either entry point survived the whole suite.
+ * A trashed row then reads as "no row", which both sites deliberately treat
+ * as "leave alone" for the unresolvable-tenant path (#729) — so a
+ * soft-deleted tenant's users keep being served and its jobs keep running.
+ */
+it('refuses a soft-deleted tenant on the web the same way it refuses a suspended one', function (): void {
+    tenantSuspensionProbeRoute();
+
+    [$tenant, $company] = createTenantWithCompany(['name' => 'Trashed Web Tenant']);
+    $user = tenantSuspensionUserIn((int) $company->id);
+
+    $tenant->delete();
+
+    app(TenantContext::class)->set(TENANT_SUSPENSION_SENTINEL);
+
+    $this->actingAs($user)
+        ->get('/zz-tenant-suspension')
+        ->assertRedirect(route('login'))
+        ->assertSessionHas('error', __('tenancy.suspended'));
+
+    expect(app(TenantContext::class)->currentTenantId())->toBeNull();
+    expect(auth()->guard('web')->check())->toBeFalse();
+});
+
+it('fails a queued job stamped with a soft-deleted tenant without running it', function (): void {
+    config()->set('queue.default', 'database');
+    TenantSuspensionProbeJob::resetProbe();
+
+    $tenant = createTenant(['name' => 'Trashed Queue Tenant']);
+
+    app(TenantContext::class)->runForTenant(
+        (int) $tenant->id,
+        fn () => Bus::dispatch(new TenantSuspensionProbeJob),
+    );
+
+    expect(DB::table('jobs')->count())->toBe(1);
+
+    $tenant->delete();
+
+    tenantSuspensionRunNextJob();
+
+    expect(TenantSuspensionProbeJob::$runs)->toBe(0);
+    expect(DB::table('jobs')->count())->toBe(0);
+});
