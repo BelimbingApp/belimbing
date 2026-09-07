@@ -75,7 +75,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      pull-requests: write
       actions: read
     steps:
       - uses: actions/checkout@v7 # NOSONAR — GitHub-maintained action
@@ -85,9 +84,11 @@ jobs:
         with:
           name: advanced-domain-pin
           path: generated
-      - name: Open pin PR
+      # Org setting "Allow GitHub Actions to create and approve pull requests" is
+      # off, so GITHUB_TOKEN cannot createPullRequest (#793). Push the branch and
+      # print a compare URL; a human opens the bot-maintenance PR from there.
+      - name: Push pin branch
         env:
-          GH_TOKEN: ${{ github.token }}
           DOMAIN_ID: ${{ inputs.domain-id }}
           DOMAIN_REF: ${{ inputs.ref }}
         run: |
@@ -105,7 +106,12 @@ jobs:
           git add scripts/ci/domain-repos.json scripts/ci/composed-surface.json
           git commit -m "ci: advance composed Domain pin"
           git push origin "HEAD:refs/heads/$branch"
-          printf 'Advance %s to %s after upstream validation and composed boot.\n\nAI-Team-Lane-Issue: none\n' "$DOMAIN_ID" "$DOMAIN_REF" > "$RUNNER_TEMP/pin-pr.md"
-          gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
-            --title "ci: advance composed Domain pin" --body-file "$RUNNER_TEMP/pin-pr.md" \
-            --label bot-maintenance
+          compare="https://github.com/${GITHUB_REPOSITORY}/compare/main...${branch}?expand=1"
+          {
+            echo "Pin branch pushed: ${branch}"
+            echo "Advance ${DOMAIN_ID} to ${DOMAIN_REF} after upstream validation and composed boot."
+            echo "Open the bot-maintenance PR from: ${compare}"
+            echo "Suggested title: ci: advance composed Domain pin"
+            echo "Suggested body:"
+            printf 'Advance %s to %s after upstream validation and composed boot.\n\nAI-Team-Lane-Issue: none\n' "$DOMAIN_ID" "$DOMAIN_REF"
+          } | tee "$GITHUB_STEP_SUMMARY"

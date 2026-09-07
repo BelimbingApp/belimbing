@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 const root = resolve(import.meta.dir, "../..");
-test("pin advance validates before composing, then publishes only a maintenance PR", () => {
+test("pin advance validates before composing, then pushes a compare URL (no Actions PR create)", () => {
     const workflow = Bun.YAML.parse(readFileSync(join(root, ".github/workflows/advance-domain-pin.yml"), "utf8")) as any;
     expect(Object.keys(workflow.on)).toEqual(["workflow_dispatch"]);
     expect(workflow.on.workflow_dispatch.inputs["domain-id"].required).toBe(true);
@@ -20,9 +20,14 @@ test("pin advance validates before composing, then publishes only a maintenance 
     expect(steps[validate].run).toContain("advance-domain-pin.py");
     expect(readFileSync(join(root, "scripts/ci/advance-domain-pin.py"), "utf8")).toContain("validate-domain-pins.py");
     expect(steps[compose].run).toContain("composed-smoke.php --print-surface");
-    const publish = workflow.jobs.publish.steps.find((step: any) => step.name === "Open pin PR").run;
-    expect(publish).toContain("gh pr create");
-    expect(publish).toContain("--label bot-maintenance");
+    // GITHUB_TOKEN cannot createPullRequest when the org setting is off (#793):
+    // push the branch and print a compare URL instead of failing after a good push.
+    expect(workflow.jobs.publish.permissions["pull-requests"]).toBeUndefined();
+    const publish = workflow.jobs.publish.steps.find((step: any) => step.name === "Push pin branch").run;
+    expect(publish).toContain("git push origin");
+    expect(publish).toContain("/compare/main...");
+    expect(publish).toContain("Open the bot-maintenance PR from:");
+    expect(publish).not.toContain("gh pr create");
     expect(publish).not.toContain("HEAD:main");
 });
 
