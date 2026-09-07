@@ -85,6 +85,7 @@ final class RecordRequestPerformance
             'path' => '/'.ltrim($request->path(), '/'),
             'route' => $this->routeLabel($request),
             'tenant_resolver' => $this->tenantContext->resolution()?->resolver,
+            'tenant_id' => $this->tenantContext->currentTenantId(),
             'status' => $status,
             'ms' => round($totalMs, 1),
             'db_ms' => round($metrics['db_ms'], 1),
