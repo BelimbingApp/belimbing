@@ -615,7 +615,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$name\.$#'
 			identifier: property.notFound
-			count: 1
+			count: 2
 			path: app/Base/Authz/Services/ImpersonationManager.php
 
 		-
