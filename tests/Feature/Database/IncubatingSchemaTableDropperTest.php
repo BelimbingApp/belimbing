@@ -50,6 +50,10 @@ function createIncubatingDropCycle(): void
 }
 
 afterEach(function (): void {
+    if (Schema::getConnection()->getDriverName() !== 'sqlite') {
+        return; // nothing was created on other drivers; DROP TRIGGER syntax differs there
+    }
+
     // The trigger survives a rolled-back drop; remove it before the plain drops.
     DB::unprepared('DROP TRIGGER IF EXISTS test_incubating_drop_child_guard');
     Schema::dropIfExists(INCUBATING_DROP_CHILD);
@@ -57,6 +61,10 @@ afterEach(function (): void {
 });
 
 test('a cascade into a table whose trigger calls a missing php function fails a plain drop inside a transaction', function (): void {
+    if (Schema::getConnection()->getDriverName() !== 'sqlite') {
+        $this->markTestSkipped('SQLite-only: implicit DELETE on DROP TABLE and connection-local functions.');
+    }
+
     createIncubatingDropCycle();
 
     expect(fn () => DB::table(INCUBATING_DROP_CHILD)->delete())->toThrow(QueryException::class);
@@ -65,12 +73,13 @@ test('a cascade into a table whose trigger calls a missing php function fails a 
         Schema::disableForeignKeyConstraints();
         Schema::drop(INCUBATING_DROP_PARENT);
     }))->toThrow(QueryException::class, 'no such function');
-})->skip(
-    fn (): bool => Schema::getConnection()->getDriverName() !== 'sqlite',
-    'SQLite-only: implicit DELETE on DROP TABLE and connection-local functions.',
-);
+});
 
 test('sqlite incubating drops remove triggers of the planned tables before dropping a cycle inside a transaction', function (): void {
+    if (Schema::getConnection()->getDriverName() !== 'sqlite') {
+        $this->markTestSkipped('SQLite-only: implicit DELETE on DROP TABLE and connection-local functions.');
+    }
+
     createIncubatingDropCycle();
 
     $dropper = app(IncubatingSchemaTableDropper::class);
@@ -81,7 +90,4 @@ test('sqlite incubating drops remove triggers of the planned tables before dropp
     expect(Schema::hasTable(INCUBATING_DROP_PARENT))->toBeFalse()
         ->and(Schema::hasTable(INCUBATING_DROP_CHILD))->toBeFalse()
         ->and(DB::table('sqlite_master')->where('type', 'trigger')->where('tbl_name', INCUBATING_DROP_CHILD)->count())->toBe(0);
-})->skip(
-    fn (): bool => Schema::getConnection()->getDriverName() !== 'sqlite',
-    'SQLite-only: sqlite_master trigger cleanup before DROP TABLE.',
-);
+});
