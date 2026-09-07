@@ -11,5 +11,6 @@ enum AuthorizationReasonCode: string
     case DENIED_COMPANY_SCOPE = 'denied_company_scope';
     case DENIED_MISSING_CAPABILITY = 'denied_missing_capability';
     case DENIED_EXPLICITLY = 'denied_explicitly';
+    case DENIED_DELEGATION_EXCEEDS_SUPERVISOR = 'denied_delegation_exceeds_supervisor';
     case DENIED_POLICY_ENGINE_ERROR = 'denied_policy_engine_error';
 }
