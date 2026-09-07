@@ -78,12 +78,16 @@ it('clears the tenant when a job throws but still has attempts left', function (
 it('clears the tenant when a job fails permanently', function (): void {
     // JobFailed alone (no preceding JobExceptionOccurred) must clear: this is
     // the listener at Tenancy ServiceProvider for permanent failure, not the
-    // attempts-left path covered above.
+    // attempts-left path covered above. Audit's JobListener also hears
+    // JobFailed, so the mock must answer resolveName/getQueue/getConnectionName.
     $context = app(TenantContext::class);
     $context->set(11);
 
     $job = Mockery::mock(Job::class);
     $job->allows('payload')->andReturns(['tenantId' => 11]);
+    $job->allows('resolveName')->andReturns(TenantContextProbeJob::class);
+    $job->allows('getQueue')->andReturns('default');
+    $job->allows('getConnectionName')->andReturns('database');
 
     event(new JobProcessing('database', $job));
     expect($context->currentTenantId())->toBe(11);
@@ -101,6 +105,9 @@ it('does not clear on JobFailed for a tenant a sibling worker set', function ():
 
     $job = Mockery::mock(Job::class);
     $job->allows('payload')->andReturns(['tenantId' => 11]);
+    $job->allows('resolveName')->andReturns(TenantContextProbeJob::class);
+    $job->allows('getQueue')->andReturns('default');
+    $job->allows('getConnectionName')->andReturns('database');
 
     event(new JobFailed('database', $job, new RuntimeException('permanent')));
 
