@@ -1,6 +1,10 @@
 <?php
-/** @var \App\Base\Audit\Livewire\AuditLog\Actions $this */
-/** @var \App\Base\Audit\Services\AuditLogPresenter $presenter */
+
+use App\Base\Audit\Livewire\AuditLog\Actions;
+use App\Base\Audit\Services\AuditLogPresenter;
+
+/** @var Actions $this */
+/** @var AuditLogPresenter $presenter */
 ?>
 
 <div>
