@@ -52,19 +52,22 @@ abstract class TenantScopedCommand extends Command
             return self::FAILURE;
         }
 
-        // Outside unit tests, CommandFinished is bridged from Symfony TERMINATE
-        // after CommandListener stamps audit rows. Inside Pest, that bridge is
-        // disabled, so clear in finally instead.
-        if (! $this->laravel->runningUnitTests()) {
-            $app = $this->laravel;
-            $app['events']->listen(CommandFinished::class, static function () use ($app): void {
-                self::clearTenantBinding($app);
-            });
-        }
+        // The production clear rides CommandFinished, which Symfony TERMINATE
+        // bridges to after CommandListener has stamped its audit rows. Register
+        // in every mode, unit tests included: Foundation\Console\Kernel wires
+        // that bridge only when ! runningUnitTests(), so a suite that skipped
+        // the registration could never notice it had stopped firing.
+        $app = $this->laravel;
+        $app['events']->listen(CommandFinished::class, static function () use ($app): void {
+            self::clearTenantBinding($app);
+        });
 
         try {
             return parent::execute($input, $output);
         } finally {
+            // Under Pest the bridge is off, so CommandFinished never arrives on
+            // its own and the binding would outlive the command. Tests that
+            // want the listener's clear dispatch CommandFinished themselves.
             if ($this->laravel->runningUnitTests()) {
                 self::clearTenantBinding($this->laravel);
             }

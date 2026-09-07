@@ -5,7 +5,7 @@ root=$(git rev-parse --show-toplevel)
 cd "$root"
 python3 tests/ci/test-domain-pins.py
 bash -n scripts/ci/changed-authorable-php.sh scripts/ci/extension-conformance.sh scripts/ci/mount-guard.sh scripts/ci/phpstan-baseline-gate.sh scripts/ci/record-pest-timing.sh
-python3 -m py_compile scripts/ci/aggregate-pest-timing.py scripts/ci/pest-timing-ratchet.py
+python3 -m py_compile scripts/ci/aggregate-pest-timing.py scripts/ci/pest-timing-ratchet.py scripts/ci/refresh-livewire-action-baselines.py
 
 # Timing aggregator (#614): one table from per-suite JSON, fail-closed on empty.
 timing_fixture=$(mktemp -d)
@@ -895,6 +895,99 @@ with tempfile.TemporaryDirectory() as tmp:
 PY
 
 
+# refresh-livewire-action-baselines.py (#775): never raise a committed count.
+python3 - <<'PY'
+from pathlib import Path
+import importlib.util
+import json
+import subprocess
+import tempfile
+
+root = Path('.').resolve()
+script = root / 'scripts/ci/refresh-livewire-action-baselines.py'
+workflow = (root / '.github/workflows/refresh-livewire-action-baselines.yml').read_text(
+    encoding='utf-8'
+)
+assert script.is_file(), 'missing refresh-livewire-action-baselines.py'
+assert 'refresh-livewire-action-baselines.py' in workflow
+assert 'gh pr create' in workflow
+assert '--label bot-maintenance' in workflow
+assert 'Protect Main refuses direct pushes' in workflow
+assert 'HEAD:main' not in workflow.replace('HEAD:refs/heads/$branch', '')
+
+spec = importlib.util.spec_from_file_location('refresh_livewire', script)
+mod = importlib.util.module_from_spec(spec)
+assert spec.loader is not None
+spec.loader.exec_module(mod)
+source = script.read_text(encoding='utf-8')
+assert 'never-raise guard' in source
+
+with tempfile.TemporaryDirectory() as tmp:
+    fixture = Path(tmp)
+    baseline = fixture / 'baseline.json'
+    measured = fixture / 'measured.json'
+    baseline.write_text(
+        json.dumps({'domain': None, 'module_owned_unreferenced': 10, 'actions': ['A::a']})
+        + '\n',
+        encoding='utf-8',
+    )
+
+    # Lower count rewrites the baseline.
+    measured.write_text(
+        json.dumps({'domain': None, 'module_owned_unreferenced': 7, 'actions': ['A::a']})
+        + '\n',
+        encoding='utf-8',
+    )
+    lower = subprocess.run(
+        ['python3', str(script), '--baseline', str(baseline), '--measured', str(measured)],
+        capture_output=True,
+        text=True,
+    )
+    assert lower.returncode == 0, lower.stdout + lower.stderr
+    assert json.loads(baseline.read_text(encoding='utf-8'))['module_owned_unreferenced'] == 7
+
+    # Higher count leaves the file untouched and exits 0 with a message.
+    before = baseline.read_text(encoding='utf-8')
+    measured.write_text(
+        json.dumps({'domain': None, 'module_owned_unreferenced': 99, 'actions': ['Z::z']})
+        + '\n',
+        encoding='utf-8',
+    )
+    higher = subprocess.run(
+        ['python3', str(script), '--baseline', str(baseline), '--measured', str(measured)],
+        capture_output=True,
+        text=True,
+    )
+    assert higher.returncode == 0, higher.stdout + higher.stderr
+    assert 'refusing to raise' in higher.stdout
+    assert baseline.read_text(encoding='utf-8') == before
+    assert json.loads(baseline.read_text(encoding='utf-8'))['module_owned_unreferenced'] == 7
+
+    # Delete the never-raise guard and the higher count is written (check goes red).
+    patched = source.replace(
+        '        # never-raise guard: a higher measured count must not rewrite the file.\n'
+        '        if measured_count > old:\n'
+        '            print(\n'
+        '                f"refusing to raise Livewire action-debt baseline {baseline}: "\n'
+        '                f"{old} -> {measured_count}; leaving file untouched"\n'
+        '            )\n'
+        '            return "unchanged-raise"\n',
+        '',
+        1,
+    )
+    assert patched != source, 'never-raise guard block missing for red check'
+    patched_path = fixture / 'patched.py'
+    patched_path.write_text(patched, encoding='utf-8')
+    raised = subprocess.run(
+        ['python3', str(patched_path), '--baseline', str(baseline), '--measured', str(measured)],
+        capture_output=True,
+        text=True,
+    )
+    assert raised.returncode == 0, raised.stdout + raised.stderr
+    assert json.loads(baseline.read_text(encoding='utf-8'))['module_owned_unreferenced'] == 99
+PY
+
+
 # bot-pr-policy.sh (#728): hermetic profile check + workflow contracts.
 python3 - <<'PY'
 from pathlib import Path
@@ -908,16 +1001,22 @@ assert policy.stat().st_mode & 0o111, 'bot-pr-policy.sh must be executable'
 
 tests_yml = (root / '.github/workflows/tests.yml').read_text(encoding='utf-8')
 timings_yml = (root / '.github/workflows/refresh-feature-shard-timings.yml').read_text(encoding='utf-8')
+livewire_yml = (root / '.github/workflows/refresh-livewire-action-baselines.yml').read_text(
+    encoding='utf-8'
+)
 review_yml = (root / '.github/workflows/ai-team-independent-review.yml').read_text(encoding='utf-8')
 assert '--label bot-maintenance' in tests_yml, 'coverage raise must apply bot-maintenance'
 assert '--add-label bot-maintenance' in tests_yml
 assert '--label bot-maintenance' in timings_yml, 'timings refresh must apply bot-maintenance'
 assert 'AI-Team-Lane-Issue: none' in timings_yml
+assert '--label bot-maintenance' in livewire_yml, 'livewire refresh must apply bot-maintenance'
+assert 'AI-Team-Lane-Issue: none' in livewire_yml
 assert 'Recognize a bot-maintenance PR' in review_yml
 assert 'Materialize bot-maintenance policy' in review_yml
 assert 'scripts/ci/bot-pr-policy.sh' in review_yml
 assert "steps.bot_policy.outputs.accepted != 'true'" in review_yml
 assert "contains(github.event.pull_request.labels.*.name, 'bot-maintenance')" in review_yml
+assert 'livewire_actions_profile' in policy.read_text(encoding='utf-8')
 
 with tempfile.TemporaryDirectory() as tmp:
     repo = Path(tmp)
@@ -925,10 +1024,12 @@ with tempfile.TemporaryDirectory() as tmp:
     subprocess.check_call(['git', 'config', 'user.name', 'test'], cwd=repo)
     subprocess.check_call(['git', 'config', 'user.email', 'test@example.invalid'], cwd=repo)
     (repo / 'tests/ci').mkdir(parents=True)
+    (repo / 'tests/ci/livewire-actions-baselines').mkdir(parents=True)
     (repo / 'scripts/ci').mkdir(parents=True)
     (repo / 'tests/ci/platform-coverage-baseline.json').write_text('{}\n', encoding='utf-8')
     (repo / 'scripts/ci/platform-feature-shard-timings.json').write_text('{}\n', encoding='utf-8')
     (repo / 'scripts/ci/platform-feature-shards.json').write_text('{}\n', encoding='utf-8')
+    (repo / 'tests/ci/livewire-actions-baselines/platform.json').write_text('{}\n', encoding='utf-8')
     (repo / 'README.md').write_text('other\n', encoding='utf-8')
     subprocess.check_call(['git', 'add', '-A'], cwd=repo)
     subprocess.check_call(['git', 'commit', '-qm', 'base'], cwd=repo)
@@ -984,6 +1085,18 @@ with tempfile.TemporaryDirectory() as tmp:
         )
 
     head = commit_on('timings-ok', timings_ok)
+    passed = run_policy(head)
+    assert passed.returncode == 0, passed.stdout + passed.stderr
+
+    def livewire_ok():
+        (repo / 'tests/ci/livewire-actions-baselines/platform.json').write_text(
+            '{"module_owned_unreferenced":1}\n', encoding='utf-8'
+        )
+        (repo / 'tests/ci/livewire-actions-baselines/people.json').write_text(
+            '{"module_owned_unreferenced":2}\n', encoding='utf-8'
+        )
+
+    head = commit_on('livewire-ok', livewire_ok)
     passed = run_policy(head)
     assert passed.returncode == 0, passed.stdout + passed.stderr
 
