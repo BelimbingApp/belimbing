@@ -81,5 +81,11 @@ php artisan blb:livewire-actions --domain=People \
   --write-baseline=tests/ci/livewire-actions-baselines/people.json
 ```
 
+To lock in improvements across the platform and every pinned Domain without a
+hand edit, dispatch `refresh-livewire-action-baselines`. It measures the
+platform before Domains mount, then each pin after composition, applies each
+snapshot through `scripts/ci/refresh-livewire-action-baselines.py` (never raises
+a count), and opens one `bot-maintenance` PR.
+
 The check still uses lexical references (not coverage). Raising a baseline is a
 deliberate debt increase and should be rare.
