@@ -92,9 +92,10 @@ abstract class TenantScopedCommand extends Command
             throw new TenantUnknownException($tenantId);
         }
 
-        $status = (string) $tenant->status;
-        if ($status !== 'active') {
-            throw new TenantInactiveException($tenantId, $status);
+        // One rule, three entry points: Tenant::isActive() is the same test the
+        // web middleware and the queue worker apply.
+        if (! $tenant->isActive()) {
+            throw new TenantInactiveException($tenantId, (string) $tenant->status);
         }
 
         app(TenantContext::class)->set($tenantId);
