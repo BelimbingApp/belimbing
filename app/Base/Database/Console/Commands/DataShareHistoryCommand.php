@@ -44,7 +44,7 @@ class DataShareHistoryCommand extends Command
                     'scope_name' => $event->scope_name,
                     'actor' => $event->actor_id === null ? null : ($actorNames[$event->actor_id] ?? null),
                     'error_summary' => $event->error_summary,
-                    'created_at' => $event->created_at?->toIso8601String(),
+                    'created_at' => $event->created_at->toIso8601String(),
                     'metadata' => $event->metadata ?? [],
                 ];
             })->values()->all();
@@ -72,7 +72,7 @@ class DataShareHistoryCommand extends Command
                     $event->scope_name ?? '—',
                     $event->actor_id === null ? '—' : ($actorNames[$event->actor_id] ?? '—'),
                     $event->error_summary ?? '—',
-                    $event->created_at?->toIso8601String() ?? '—',
+                    $event->created_at->toIso8601String(),
                 ];
             })->all(),
         );

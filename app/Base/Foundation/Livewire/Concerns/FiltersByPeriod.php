@@ -215,9 +215,7 @@ trait FiltersByPeriod
 
     protected function periodFilterUpdated(): void
     {
-        if (method_exists($this, 'resetPage')) {
-            $this->resetPage();
-        }
+        $this->resetPage();
     }
 
     private function applyPresetPeriodRange(string $period): void

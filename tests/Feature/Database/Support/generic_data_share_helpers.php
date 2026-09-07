@@ -1,8 +1,5 @@
 <?php
 
-use App\Base\Authz\Enums\PrincipalType;
-use App\Base\Authz\Models\PrincipalRole;
-use App\Base\Authz\Models\Role;
 use App\Base\Database\DTO\DataShare\DataShareExportResult;
 use App\Base\Database\DTO\DataShare\DataShareInstanceIdentity;
 use App\Base\Database\DTO\DataShare\DataSharePackageExpectation;
@@ -15,8 +12,6 @@ use App\Base\Database\Services\DataShare\DataSharePackageInbox;
 use App\Base\Database\Services\DataShare\DataSharePackageReader;
 use App\Base\Database\Services\DataShare\DataShareTransferOfferManager;
 use App\Base\Settings\Contracts\SettingsService;
-use App\Base\Tenancy\Contracts\TenantContext;
-use App\Core\User\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
@@ -168,25 +163,5 @@ if (! function_exists('receiveGenericDataShare')) {
             $export->path,
             DataSharePackageExpectation::fromOffer($bundle),
         );
-    }
-}
-
-if (! function_exists('createNonOperatorDatabaseConsoleAdmin')) {
-    function createNonOperatorDatabaseConsoleAdmin(): User
-    {
-        [$tenant, $company] = createTenantWithCompany();
-        $user = User::factory()->create(['company_id' => $company->id]);
-        $role = Role::query()->where('code', 'core_admin')->whereNull('company_id')->firstOrFail();
-
-        PrincipalRole::query()->create([
-            'company_id' => $company->id,
-            'principal_type' => PrincipalType::USER->value,
-            'principal_id' => $user->id,
-            'role_id' => $role->id,
-        ]);
-
-        app(TenantContext::class)->set((int) $tenant->id);
-
-        return $user;
     }
 }

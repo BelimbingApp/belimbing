@@ -2,6 +2,9 @@
 
 require_once __DIR__.'/Support/generic_data_share_helpers.php';
 
+use App\Base\Authz\Enums\PrincipalType;
+use App\Base\Authz\Models\PrincipalRole;
+use App\Base\Authz\Models\Role;
 use App\Base\Database\Exceptions\DataSharePackageException;
 use App\Base\Database\Exceptions\DataShareTransportException;
 use App\Base\Database\Livewire\DataShare\Index as DataShareIndex;
@@ -11,6 +14,8 @@ use App\Base\Database\Models\TableRegistry;
 use App\Base\Database\Services\DataShare\DataShareImportPlanner;
 use App\Base\Database\Services\DataShare\DataShareOfferFetcher;
 use App\Base\Database\Services\DataShare\DataSharePackageExporter;
+use App\Base\Tenancy\Contracts\TenantContext;
+use App\Core\User\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
@@ -49,6 +54,24 @@ afterEach(function (): void {
     Schema::dropIfExists(GENERIC_SHARE_CHILD);
     Schema::dropIfExists(GENERIC_SHARE_PARENT);
 });
+
+function createNonOperatorDataShareHistoryAdmin(): User
+{
+    [$tenant, $company] = createTenantWithCompany();
+    $user = User::factory()->create(['company_id' => $company->id]);
+    $role = Role::query()->where('code', 'core_admin')->whereNull('company_id')->firstOrFail();
+
+    PrincipalRole::query()->create([
+        'company_id' => $company->id,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => $user->id,
+        'role_id' => $role->id,
+    ]);
+
+    app(TenantContext::class)->set((int) $tenant->id);
+
+    return $user;
+}
 
 function seedGenericDataShareFixtureSettings(): void
 {
@@ -178,7 +201,7 @@ it('lists every action class on the History tab and mirrors failures on the CLI'
 });
 
 it('refuses History for a non-operator tenant on the page and CLI', function (): void {
-    $user = createNonOperatorDatabaseConsoleAdmin();
+    $user = createNonOperatorDataShareHistoryAdmin();
 
     Livewire::actingAs($user)->test(DataShareIndex::class)
         ->assertForbidden();
