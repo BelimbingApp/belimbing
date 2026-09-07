@@ -140,6 +140,7 @@ return [
                 'admin.authz.decision-log.list',
                 'admin.system.log.list',
                 'admin.system.session.list',
+                'admin.system.capabilities.view',
             ],
         ],
         'system_viewer' => [
@@ -150,6 +151,7 @@ return [
                 'admin.system.database-table.view',
                 'admin.system.log.list',
                 'admin.system.failed-job.list',
+                'admin.system.capabilities.view',
                 'admin.system.job-batch.list',
                 'admin.system.schedule.view',
                 'admin.system.info.view',

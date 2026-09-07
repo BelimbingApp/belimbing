@@ -2,6 +2,7 @@
 
 use App\Base\System\Enums\UiReferenceSection;
 use App\Base\System\Http\Controllers\TestTransportStreamController;
+use App\Base\System\Livewire\Capabilities\Index as CapabilitiesIndex;
 use App\Base\System\Livewire\Email\Index as EmailIndex;
 use App\Base\System\Livewire\Info\Index;
 use App\Base\System\Livewire\IntegrationParameters\Index as IntegrationParametersIndex;
@@ -15,6 +16,10 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['auth'])->group(function () {
     Route::get('admin/system/info', Index::class)
         ->name('admin.system.info.index');
+
+    Route::get('admin/system/capabilities', CapabilitiesIndex::class)
+        ->middleware('authz:'.CapabilitiesIndex::VIEW_CAPABILITY)
+        ->name('admin.system.capabilities.index');
 
     Route::get('admin/system/settings', SystemSettings::class)
         ->middleware('authz:admin.system.settings.manage')

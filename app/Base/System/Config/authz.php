@@ -11,5 +11,6 @@ return [
         'admin.system.test-transport.view',
         'admin.system.ui-reference.view',
         'admin.system.audit.view',
+        'admin.system.capabilities.view',
     ],
 ];
