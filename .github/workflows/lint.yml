@@ -36,6 +36,10 @@ jobs:
           bun-version: '1.3.10'
           no-cache: true
 
+      # #780: audit secrets.* references before anything that installs vendor/.
+      - name: Audit workflow secret references
+        run: scripts/ci/token-audit.sh
+
       # Before test-ci-scripts.sh: extension-conformance hermetics need vendor/bin/pint (#822).
       - name: Install Dependencies
         run: |
