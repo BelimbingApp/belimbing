@@ -211,9 +211,10 @@ interface AuthorizationPolicy
 |-------|--------|-----|----------|
 | 1 | `ActorContextPolicy` | `actor_context` | Deny if actor fails validation (invalid ID, missing company, agent without delegation). Abstain on valid. |
 | 2 | `KnownCapabilityPolicy` | `capability_registry` | Deny if capability key is not in the registry. Abstain on known. |
-| 3 | `CompanyScopePolicy` | `company_scope` | Deny if resource company differs from actor company. Abstain when no resource or companies match. |
-| 4 | `DelegationPolicy` | `delegation` | Deny if an Agent's supervisor lacks the capability. Abstain for non-agents and when the supervisor is allowed. |
-| 5 | `GrantPolicy` | `grant` | **Authoritative (final)**. Loads `EffectivePermissions` for the actor and evaluates: explicit deny > explicit allow > role grant > deny. Always returns a decision. |
+| 3 | `TenantScopePolicy` | `tenant_scope` | Deny if resource tenant differs from actor tenant. Abstain when no resource tenant or tenants match. |
+| 4 | `CompanyScopePolicy` | `company_scope` | Deny if resource company differs from actor company. Abstain when no resource or companies match. |
+| 5 | `DelegationPolicy` | `delegation` | Deny if an Agent's supervisor lacks the capability. Abstain for non-agents and when the supervisor is allowed. |
+| 6 | `GrantPolicy` | `grant` | **Authoritative (final)**. Loads `EffectivePermissions` for the actor and evaluates: explicit deny > explicit allow > role grant > deny. Always returns a decision. |
 
 **Adding new policies:** Create a class implementing `AuthorizationPolicy`, then add it to the pipeline array in `AuthzServiceProvider`. No existing code changes required.
 
