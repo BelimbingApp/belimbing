@@ -39,7 +39,12 @@ function parseArguments(array $argv): array
 
         if (str_starts_with($argument, '--registry=')) {
             $registry = substr($argument, strlen('--registry='));
+
+            continue;
         }
+
+        fwrite(STDERR, "compose-domain: unknown argument {$argument}\n");
+        exit(2);
     }
 
     if ($domainPath === null || $domainPath === '') {

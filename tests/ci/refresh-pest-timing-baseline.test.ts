@@ -22,6 +22,10 @@ test("timing refresh selects successful main artifacts and opens a labelled PR",
     const refresh = steps.find((step: any) => step.name === "Refresh baseline");
     expect(refresh.run).toContain("--write-baseline");
     const pr = steps.find((step: any) => step.name === "Open baseline PR");
+    expect(config.jobs.refresh.permissions["pull-requests"]).toBeUndefined();
+    expect(pr.env.COVERAGE_BASELINE_RAISE_TOKEN).toBe("${{ secrets.COVERAGE_BASELINE_RAISE_TOKEN }}");
+    expect(pr.run).toContain("COVERAGE_BASELINE_RAISE_TOKEN is required");
+    expect(pr.run).toContain('export GH_TOKEN="$COVERAGE_BASELINE_RAISE_TOKEN"');
     expect(pr.run).toContain("gh pr create");
     expect(pr.run).toContain("--label bot-maintenance");
     expect(pr.run).toContain("tests/ci/pest-timing-baseline.json");

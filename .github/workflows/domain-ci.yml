@@ -129,7 +129,7 @@ jobs:
 
       - name: Compose exact cross-domain dependencies
         run: |
-          php scripts/ci/compose-domain.php --domain-path="$DOMAIN_PATH" --exact > extra-repos.tsv
+          php scripts/ci/compose-domain.php --domain-path="$DOMAIN_PATH" > extra-repos.tsv
           while IFS=$'\t' read -r repo path; do
             [ -z "$repo" ] && continue
             ref=$(jq -r --arg repo "$repo" '.domains[] | select(.repo == $repo) | .ref' scripts/ci/domain-repos.json)
@@ -415,7 +415,7 @@ jobs:
 
       - name: Compose exact cross-domain dependencies
         run: |
-          php scripts/ci/compose-domain.php --domain-path="$DOMAIN_PATH" --exact > extra-repos.tsv
+          php scripts/ci/compose-domain.php --domain-path="$DOMAIN_PATH" > extra-repos.tsv
           while IFS=$'\t' read -r repo path; do
             [ -z "$repo" ] && continue
             ref=$(jq -r --arg repo "$repo" '.domains[] | select(.repo == $repo) | .ref' scripts/ci/domain-repos.json)
