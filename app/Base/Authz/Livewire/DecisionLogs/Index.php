@@ -2,14 +2,12 @@
 
 namespace App\Base\Authz\Livewire\DecisionLogs;
 
-use App\Base\Audit\Models\AuditAction;
 use App\Base\Audit\Services\AuditTenantScope;
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\DecisionLog;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use Illuminate\Contracts\View\View;
-use Illuminate\Support\Carbon;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -100,29 +98,14 @@ class Index extends Component
 
     private function scopeCaption(AuditTenantScope $scope): string
     {
-        $scopeLabel = $scope->ambientIsPlatformOperator() && $this->allTenants
-            ? __('Decision logs (all tenants)')
-            : __('Decision logs (current tenant)');
-
-        $days = (int) config('authz.decision_log_retention_days', 90);
-        $oldest = $scope->apply(
-            DecisionLog::query(),
-            'base_authz_decision_logs',
-            $this->allTenants,
-        )->min('occurred_at');
-        $lastPrune = $scope->apply(
-            AuditAction::query()
-                ->where('event', 'console.command')
-                ->where('url', 'like', '%blb:authz:decision-logs:prune%')
-                ->orderByDesc('occurred_at'),
-            'base_audit_actions',
-            $this->allTenants,
-        )->value('occurred_at');
-
-        return $scopeLabel.' — '.__('Retention :days days, oldest row :oldest, last prune :prune', [
-            'days' => $days,
-            'oldest' => $oldest !== null ? Carbon::parse($oldest)->toDateString() : __('none'),
-            'prune' => $lastPrune !== null ? Carbon::parse($lastPrune)->format('Y-m-d H:i') : __('never'),
-        ]);
+        return $scope->retentionCaption(
+            allTenantsLabel: __('Decision logs (all tenants)'),
+            currentTenantLabel: __('Decision logs (current tenant)'),
+            allTenants: $this->allTenants,
+            retentionDays: (int) config('authz.decision_log_retention_days', 90),
+            oldestSource: DecisionLog::query(),
+            oldestTable: 'base_authz_decision_logs',
+            pruneCommandNeedle: 'blb:authz:decision-logs:prune',
+        );
     }
 }
