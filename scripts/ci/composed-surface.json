@@ -6,7 +6,7 @@
         "operation": "8a21b59ffd37ff4c6a93f135e735926782ea228a",
         "people-connector": "c7df58445ec9f2d1e05a18e3d6baecdc8e447471"
     },
-    "domain_route_count": 94,
+    "domain_route_count": 95,
     "route_names": [
         "admin.integration.outbound-exchanges.index",
         "admin.integration.outbound-exchanges.show",
@@ -30,6 +30,7 @@
         "it.tickets.create",
         "it.tickets.index",
         "it.tickets.show",
+        "people-connector.webhook",
         "people.attendance.allowance-rules",
         "people.attendance.approvals",
         "people.attendance.clocking-locations",
