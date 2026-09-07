@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Authz\Policies;
 
 use App\Base\Authz\Contracts\AuthorizationPolicy;
@@ -33,9 +34,18 @@ class GrantPolicy implements AuthorizationPolicy
         ?ResourceContext $resource,
         array $context
     ): ?AuthorizationDecision {
-        $permissions = $this->cache[$actor->cacheKey()]
-            ??= EffectivePermissions::forActor($actor);
+        return $this->permissionsFor($actor)->evaluate($capability);
+    }
 
-        return $permissions->evaluate($capability);
+    /**
+     * Load (and memoize) effective permissions for an actor.
+     *
+     * Shared with DelegationPolicy so a supervisor lookup reuses the same
+     * per-request cache as GrantPolicy instead of issuing a second load.
+     */
+    public function permissionsFor(Actor $actor): EffectivePermissions
+    {
+        return $this->cache[$actor->cacheKey()]
+            ??= EffectivePermissions::forActor($actor);
     }
 }

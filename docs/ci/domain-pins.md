@@ -200,7 +200,7 @@ to report success from their configured integrations. It excludes agent lanes,
 forks, drafts, and holds. Repository merge settings, active rulesets, and classic
 protection determine the merge method; GitHub still enforces approval and other
 merge rules. The final merge is bound to the checked SHA and uses
-`COVERAGE_BASELINE_RAISE_TOKEN`. If policy cannot be read, the workflow refuses.
+`COVERAGE_BASELINE_RAISE_TOKEN`. The same raise token also opens bot-maintenance PRs from `tests.yml` (coverage baseline), `refresh-pest-timing-baseline`, `refresh-feature-shard-timings`, and `refresh-livewire-action-baselines` (#853). If policy cannot be read, the workflow refuses.
 Applying `bot-maintenance` also authorizes a Domain descriptor/surface pin advance
 to land on green required checks without an independent reviewer; it is not limited
 to numeric baseline refreshes. The label is the authorization, not the PR author's identity.

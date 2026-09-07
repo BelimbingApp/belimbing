@@ -10,6 +10,7 @@ use App\Base\Authz\Contracts\TenantDirectory;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\Policies\ActorContextPolicy;
 use App\Base\Authz\Policies\CompanyScopePolicy;
+use App\Base\Authz\Policies\DelegationPolicy;
 use App\Base\Authz\Policies\GrantPolicy;
 use App\Base\Authz\Policies\KnownCapabilityPolicy;
 use App\Base\Authz\Policies\TenantScopePolicy;
@@ -64,6 +65,7 @@ class ServiceProvider extends BaseServiceProvider
                 new KnownCapabilityPolicy($app->make(CapabilityRegistry::class)),
                 new TenantScopePolicy,
                 new CompanyScopePolicy,
+                new DelegationPolicy($app->make(GrantPolicy::class)),
                 $app->make(GrantPolicy::class),
             ], $app->make(TenantDirectory::class));
         });

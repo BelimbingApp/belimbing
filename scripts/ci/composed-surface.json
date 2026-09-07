@@ -4,12 +4,13 @@
         "people": "e99ef4330dc9c5f8d3e554adbd2d0cdebfea205c",
         "commerce": "deac42bc27e912555c4dbfcf773045f3242be8bd",
         "operation": "8a21b59ffd37ff4c6a93f135e735926782ea228a",
-        "people-connector": "5dd1ab00815dbbb7cfa07b953567367855a3c952"
+        "people-connector": "c7df58445ec9f2d1e05a18e3d6baecdc8e447471"
     },
-    "domain_route_count": 86,
+    "domain_route_count": 87,
     "route_names": [
         "admin.integration.outbound-exchanges.index",
         "admin.integration.outbound-exchanges.show",
+        "admin.people-connector.audit.index",
         "admin.people-connector.connections.index",
         "admin.people-connector.reconciliation.index",
         "commerce.catalog.attributes",

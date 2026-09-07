@@ -134,3 +134,15 @@ test("both Domain test lanes raise the coverage memory limit before Pest runs", 
         expect(run).toContain("phpunit.xml");
     }
 });
+
+test("both jobs compose cross-domain dependencies without unknown flags", () => {
+    const name = "Compose exact cross-domain dependencies";
+    for (const jobName of ["sqlite", "postgres-mirror"] as const) {
+        const steps = workflow.jobs[jobName].steps as any[];
+        const found = steps.find((entry: any) => entry.name === name);
+        expect(found).toBeDefined();
+        expect(found.run).toContain('php scripts/ci/compose-domain.php --domain-path="$DOMAIN_PATH"');
+        expect(found.run).not.toContain("--exact");
+        expect(found.run).toContain("> extra-repos.tsv");
+    }
+});
