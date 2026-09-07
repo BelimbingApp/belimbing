@@ -689,6 +689,88 @@ PHP
     if php scripts/ci/domain-ci.php render --domain-id=people --workflow-ref=main >/dev/null 2>&1; then
         echo 'mutable workflow ref was accepted' >&2; exit 1
     fi
+
+    # filter-domain-coverage-clover.php (#842): Domain CI attributes Sonar
+    # coverage only to the mount under test. Sibling domains, platform files,
+    # and a path that merely contains the domain name as a substring must be
+    # stripped; relative and absolute Clover paths under the mount must stay.
+    clover_fixture=$(mktemp -d)
+    trap 'rm -rf "$clover_fixture"' EXIT
+    cp tests/ci/fixtures/domain-coverage-clover/mixed.xml "$clover_fixture/clover.xml"
+    clover_err=$(
+        php scripts/ci/filter-domain-coverage-clover.php \
+            --domain-path=app/Domains/People \
+            --coverage="$clover_fixture/clover.xml" 2>&1 >/dev/null
+    )
+    if ! grep -qF 'kept 2 file(s), removed 3' <<< "$clover_err"; then
+        echo "filter-domain-coverage-clover.php summary mismatch: $clover_err" >&2
+        exit 1
+    fi
+    python3 - "$clover_fixture/clover.xml" <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+
+tree = ET.parse(sys.argv[1])
+root = tree.getroot()
+assert root.tag == 'coverage', root.tag
+project = root.find('project')
+assert project is not None, 'missing <project> root'
+names = sorted(f.get('name') for f in project.findall('file'))
+expected = sorted([
+    'app/Domains/People/Skills/Foo.php',
+    '/home/runner/work/blb-people/blb-people/app/Domains/People/Skills/Bar.php',
+])
+assert names == expected, names
+forbidden = (
+    'app/Domains/PeopleConnector/Services/Sync.php',
+    'app/Base/Tenancy/Tenant.php',
+    'app/Domains/PeopleX/Ghost.php',
+)
+for name in forbidden:
+    assert name not in names, name
+PY
+    clover_usage_status=0
+    clover_usage_err=$(php scripts/ci/filter-domain-coverage-clover.php --domain-path=app/Domains/People 2>&1 >/dev/null) || clover_usage_status=$?
+    if [[ "$clover_usage_status" -ne 2 ]]; then
+        echo "filter-domain-coverage-clover.php missing --coverage exited $clover_usage_status, expected 2" >&2
+        exit 1
+    fi
+    if ! grep -qF 'usage: filter-domain-coverage-clover.php --domain-path=<path> --coverage=<clover.xml>' <<< "$clover_usage_err"; then
+        echo "filter-domain-coverage-clover.php did not print its usage line: $clover_usage_err" >&2
+        exit 1
+    fi
+    clover_missing="$clover_fixture/missing.xml"
+    clover_missing_status=0
+    clover_missing_err=$(
+        php scripts/ci/filter-domain-coverage-clover.php \
+            --domain-path=app/Domains/People \
+            --coverage="$clover_missing" 2>&1 >/dev/null
+    ) || clover_missing_status=$?
+    if [[ "$clover_missing_status" -ne 1 ]]; then
+        echo "filter-domain-coverage-clover.php unreadable path exited $clover_missing_status, expected 1" >&2
+        exit 1
+    fi
+    if ! grep -qF "coverage file not readable: $clover_missing" <<< "$clover_missing_err"; then
+        echo "filter-domain-coverage-clover.php did not name the unreadable path: $clover_missing_err" >&2
+        exit 1
+    fi
+    printf 'not xml\n' > "$clover_fixture/invalid.xml"
+    clover_invalid_status=0
+    clover_invalid_err=$(
+        php scripts/ci/filter-domain-coverage-clover.php \
+            --domain-path=app/Domains/People \
+            --coverage="$clover_fixture/invalid.xml" 2>&1 >/dev/null
+    ) || clover_invalid_status=$?
+    if [[ "$clover_invalid_status" -ne 1 ]]; then
+        echo "filter-domain-coverage-clover.php invalid XML exited $clover_invalid_status, expected 1" >&2
+        exit 1
+    fi
+    if ! grep -qF 'invalid clover XML' <<< "$clover_invalid_err"; then
+        echo "filter-domain-coverage-clover.php did not report invalid clover XML: $clover_invalid_err" >&2
+        exit 1
+    fi
+    rm -rf "$clover_fixture"
+    trap - EXIT
 else
     echo 'SKIP: PHP checks (php is unavailable)' >&2
 fi
