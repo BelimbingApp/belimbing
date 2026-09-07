@@ -2,6 +2,7 @@
 
 use App\Base\Tenancy\Exceptions\PlatformAsyncEntryPointInventoryException;
 use App\Base\Tenancy\Support\PlatformAsyncEntryPointInventory;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\File;
 use Tests\TestCase;
@@ -141,4 +142,12 @@ it('lists live Schedule signatures matching the Base/Core declaration by default
     expect(PlatformAsyncEntryPointInventory::liveScheduledCommandSignatures([
         storage_path('framework/testing/no-schedule-root-'.uniqid()),
     ]))->toBe([]);
+});
+
+it('keeps a live Schedule signature that resolves to no registered command', function (): void {
+    app()->make(Kernel::class)->bootstrap();
+    app(Schedule::class)->command('zz-unregistered:probe')->daily();
+
+    expect(PlatformAsyncEntryPointInventory::liveScheduledCommandSignatures())
+        ->toContain('zz-unregistered:probe');
 });
