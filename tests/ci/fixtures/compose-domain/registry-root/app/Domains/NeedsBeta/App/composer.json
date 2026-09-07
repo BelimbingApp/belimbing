@@ -1,0 +1,11 @@
+{
+  "extra": {
+    "blb": {
+      "module": "needs-beta/app",
+      "requires-modules": {
+        "beta/mod": "*",
+        "core/company": "*"
+      }
+    }
+  }
+}

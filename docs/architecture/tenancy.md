@@ -55,11 +55,13 @@ Rollback is intentionally constrained: after a non-1 operator has been used, the
 
 `TenantContext` (scoped binding, `ApplicationTenantContext`) is the only current-tenant carrier:
 
-- **Web:** `ResolveTenantContext` middleware resolves the authenticated user's tenant (derived from their company); guests resolve to null.
-- **Queue:** the tenant ID is stamped onto the queue payload at dispatch; the worker restores it on `JobProcessing` and clears it on `JobProcessed`/`JobFailed`, so sequential jobs in one worker never share context.
-- **CLI/scheduler:** platform operations run with no tenant context by default. Domain console commands that need a tenant extend `TenantScopedCommand` (`--tenant=<id>`, assert active tenant before `handle()`). Other tenant-scoped console work wraps execution in `TenantContext::runForTenant($id, ...)`. Audit Domain commands that skip the base via `php artisan blb:domain-commands --audit`.
+- **Web:** `ResolveTenantContext` middleware resolves the authenticated user's tenant (derived from their company); guests resolve to null. A resolved tenant that is not active is never bound: the user is signed out of the web guard and redirected to login with the `tenancy.suspended` flash. A tenant ID with no row is unchanged — that remains the unresolvable-tenant 404 (`TENANT_CONTEXT_MISSING`); suspension only narrows what an *existing* tenant may do.
+- **Queue:** the tenant ID is stamped onto the queue payload at dispatch; the worker restores it on `JobProcessing` and clears it on `JobProcessed`/`JobFailed`, so sequential jobs in one worker never share context. A job whose stamped tenant is not active is failed on that same `JobProcessing` boundary with `TenantInactiveException` — failed, not released — so `handle()` never runs and a suspended tenant's backlog stops draining instead of retrying.
+- **CLI/scheduler:** platform operations run with no tenant context by default. Domain console commands that need a tenant extend `TenantScopedCommand` (`--tenant=<id>`, assert active tenant before `handle()`, refusing an inactive one with `TenantInactiveException`). Other tenant-scoped console work wraps execution in `TenantContext::runForTenant($id, ...)`. Audit Domain commands that skip the base via `php artisan blb:domain-commands --audit`.
 
 Consumers fail closed on null: no tenant context must never widen into unscoped access. Octane/FrankenPHP scoped-binding flushes plus explicit queue clearing defend against worker leakage.
+
+Consumers also fail closed on suspended. `Tenant::isActive()` — status `active` and not soft-deleted — is the single definition of a usable tenant, and all three entry points above read it, so suspension cannot mean one thing at the console and another on the web. The platform-operator tenant is excluded by construction rather than by a check in each caller: the model refuses any save that would mark it inactive (`PLATFORM_OPERATOR_TENANT_INVALID`), so an operator can never suspend themselves out of their own console.
 
 ### Platform async entry-point inventory
 
@@ -125,7 +127,11 @@ Chat agent selection resolves the employee through a company in the current tena
 
 ### Operator surface
 
-Admin tenant management (list, create with optional parent) lives at `admin/tenancy/tenants` behind the `admin.tenancy.tenant.*` capabilities. The menu surface is gated by the `tenancy.visible` menu condition: more than one tenant, or `tenancy.show_management` set true.
+Admin tenant management (list, create with optional parent, suspend/reactivate) lives at `admin/tenancy/tenants` behind the `admin.tenancy.tenant.*` capabilities. The menu surface is gated by the `tenancy.visible` menu condition: more than one tenant, or `tenancy.show_management` set true.
+
+Two writers of `tenants.status` exist: the create form sets the initial value, and the per-row Suspend / Reactivate action changes an existing one. That action is a separate authority from creating a tenant — `admin.tenancy.tenant.manage`, not `admin.tenancy.tenant.create` — because it takes a live tenant off every entry point above; without it the column is hidden and a direct component call is refused. Each change records one `base_audit_actions` row (`tenancy.tenant.suspended` / `tenancy.tenant.reactivated`) carrying the actor, the tenant and the status it moved between.
+
+The platform-operator row offers no Suspend action. That is a presentation of the model invariant, not a second rule: `Tenant`'s `saving` hook refuses the transition for every writer, so the page only has to avoid offering what the model already refuses.
 
 ## Boundaries deliberately not built
 

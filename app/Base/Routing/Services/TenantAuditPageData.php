@@ -7,7 +7,9 @@ use App\Base\Foundation\ApplicationTopology;
 use App\Base\Foundation\ModuleManifest\ModuleManifestReader;
 use App\Base\Foundation\Services\ModuleCheck;
 use App\Base\Routing\DomainRouteMiddlewareAudit;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Base\Tenancy\Services\TenantContextMissRecorder;
+use App\Base\Tenancy\Services\TenantResolutionMix;
 
 /**
  * Read-only operator feed for the tenant-audit page.
@@ -24,6 +26,8 @@ class TenantAuditPageData
         private readonly DomainRouteMiddlewareAudit $routeAudit,
         private readonly ModuleCheck $moduleCheck,
         private readonly TenantContextMissRecorder $missRecorder,
+        private readonly TenantResolutionMix $resolutionMix,
+        private readonly TenantContext $tenantContext,
     ) {}
 
     /**
@@ -109,6 +113,17 @@ class TenantAuditPageData
     public function missRows(): array
     {
         return $this->missRecorder->recent();
+    }
+
+    /**
+     * Requests per resolver over the last 24 hours for the current tenant,
+     * plus the requests that resolved no tenant (#781).
+     *
+     * @return array{resolvers: array<string, int>, none: int, hours: int}
+     */
+    public function resolutionMix(): array
+    {
+        return $this->resolutionMix->forTenant($this->tenantContext->requireTenantId());
     }
 
     /**

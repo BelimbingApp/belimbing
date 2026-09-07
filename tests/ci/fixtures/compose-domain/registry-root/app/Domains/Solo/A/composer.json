@@ -1,0 +1,3 @@
+{
+  "extra": {"blb": {"module": "solo/a", "requires-modules": {"solo/b": "*", "core/company": "*"}}}
+}

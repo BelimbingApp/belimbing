@@ -3,15 +3,19 @@
 @import './core/css/components.css';
 
 @source './core/views';
-/* Domains and extensions are nested git repos ignored by the parent
-   .gitignore, and Tailwind's scanner honors that ignore when expanding a
-   glob star silently matches nothing for them. Each ignored
-   root must be spelled out; stars below it work. Add a line when adding a
-   domain or extension. */
+/* Wildcard families mirror vite.config.js bladeRefreshPaths and keep the
+   coverage contract honest for roots that are not gitignored. Nested Domain
+   and Extension checkouts are ignored by the platform .gitignore, and
+   Tailwind's scanner honors that ignore when expanding a glob — so each
+   installed nested root must still be spelled out below or its classes never
+   enter the production CSS. Add a named line when adding a Domain or Extension. */
 @source '../app/Core/*/Views';
+@source '../app/Domains/*/*/Views';
+@source '../app/Extensions/*/*/Views';
 @source '../app/Domains/Commerce/*/Views';
 @source '../app/Domains/Operation/*/Views';
 @source '../app/Domains/People/*/Views';
+@source '../app/Domains/PeopleConnector/*/Views';
 @source '../app/Extensions/Ham/*/Views';
 @source '../app/Extensions/Kiat/*/Views';
 @source '../app/Extensions/SbGroup/*/Views';
