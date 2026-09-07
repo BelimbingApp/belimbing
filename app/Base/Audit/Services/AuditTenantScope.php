@@ -5,6 +5,7 @@ namespace App\Base\Audit\Services;
 use App\Base\Tenancy\Contracts\TenantContext;
 use App\Base\Tenancy\Models\Tenant;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 
 /**
  * Single tenant predicate for audit readers (#873).
@@ -17,6 +18,12 @@ final class AuditTenantScope
 {
     public function __construct(private readonly TenantContext $tenants) {}
 
+    /**
+     * @template TModel of Model
+     *
+     * @param  Builder<TModel>  $query
+     * @return Builder<TModel>
+     */
     public function apply(Builder $query, string $table, bool $allTenants = false): Builder
     {
         $tenantId = $this->tenants->requireTenantId();

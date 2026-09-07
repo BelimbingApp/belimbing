@@ -49,11 +49,23 @@ const AUDIT_LOG_UI_WORKFLOW_SUMMARY_SUFFIX = ' from Pending Review to Active';
 const AUDIT_LOG_UI_ADDRESS_PHONE = '03-77862444';
 const AUDIT_LOG_UI_ADDRESS_PREFIX = 'Address#';
 
+beforeEach(function (): void {
+    if (app(TenantContext::class)->currentTenantId() !== null) {
+        return;
+    }
+
+    $company = Company::factory()->create();
+    app(TenantContext::class)->set((int) $company->tenant_id);
+});
+
 function auditLogUiActor(): User
 {
-    return MutationListener::withoutAuditing(
+    $user = MutationListener::withoutAuditing(
         fn (): User => User::factory()->create(['name' => 'Audit Actor'])
     );
+    app(TenantContext::class)->set((int) $user->tenant_id);
+
+    return $user;
 }
 
 function auditLogUiFlushBuffer(): void
@@ -82,6 +94,8 @@ function auditLogUiViewerWithoutAudit(string $targetName): array
         'principal_id' => $viewer->id,
         'role_id' => $viewerRole->id,
     ]);
+
+    app(TenantContext::class)->set((int) $company->tenant_id);
 
     return [$company, $viewer, $target];
 }
