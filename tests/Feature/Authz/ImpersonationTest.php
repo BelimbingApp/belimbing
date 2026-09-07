@@ -167,6 +167,30 @@ it('refuses nested impersonation without rewriting the original admin', function
         ->and(session('impersonation.original_user_id'))->toBe($admin->id);
 });
 
+it('refuses nested impersonation when the impersonated user also holds the capability', function (): void {
+    $company = Company::factory()->create();
+    app(TenantContext::class)->set((int) $company->tenant_id);
+    $admin = User::factory()->create(['company_id' => $company->id]);
+    $firstAdmin = User::factory()->create(['company_id' => $company->id]);
+    $second = User::factory()->create(['company_id' => $company->id]);
+
+    $role = Role::query()->where('code', 'core_admin')->whereNull('company_id')->firstOrFail();
+    foreach ([$admin, $firstAdmin] as $holder) {
+        PrincipalRole::query()->create([
+            'company_id' => $company->id,
+            'principal_type' => PrincipalType::USER->value,
+            'principal_id' => $holder->id,
+            'role_id' => $role->id,
+        ]);
+    }
+
+    $this->actingAs($admin)->post(route('admin.impersonate.start', $firstAdmin))->assertRedirect(route('dashboard'));
+    $this->post(route('admin.impersonate.start', $second))->assertForbidden();
+
+    expect(auth()->id())->toBe($firstAdmin->id)
+        ->and(session('impersonation.original_user_id'))->toBe($admin->id);
+});
+
 it('refuses cross-tenant starts inside the manager', function (): void {
     $admin = createAdminUser();
     [, $foreignCompany] = createTenantWithCompany(['name' => 'Foreign Impersonation Tenant']);
