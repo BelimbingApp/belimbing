@@ -30,6 +30,10 @@ test("livewire baseline refresh is dispatch-only, opens a PR, and never pushes t
     expect(domains.run).toContain("refresh-livewire-action-baselines.py");
 
     const openPr = steps.find((step: any) => step.name === "Open baseline PR");
+    expect(config.jobs.refresh.permissions["pull-requests"]).toBeUndefined();
+    expect(openPr.env.COVERAGE_BASELINE_RAISE_TOKEN).toBe("${{ secrets.COVERAGE_BASELINE_RAISE_TOKEN }}");
+    expect(openPr.run).toContain("COVERAGE_BASELINE_RAISE_TOKEN is required");
+    expect(openPr.run).toContain('export GH_TOKEN="$COVERAGE_BASELINE_RAISE_TOKEN"');
     expect(openPr.run).toContain("gh pr create");
     expect(openPr.run).toContain("--label bot-maintenance");
     expect(openPr.run).toContain("AI-Team-Lane-Issue: none");

@@ -18,7 +18,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      pull-requests: write
     env:
       PLATFORM_OPERATOR_COMPANY_NAME: Belimbing CI
       PLATFORM_OPERATOR_COMPANY_CODE: belimbing_ci
@@ -95,14 +94,21 @@ jobs:
               --measured "$measured"
           done
 
+      # Org policy refuses GITHUB_TOKEN createPullRequest (#686 / #853). Push stays on
+      # github.token; PR open uses COVERAGE_BASELINE_RAISE_TOKEN.
       - name: Open baseline PR
         env:
           GH_TOKEN: ${{ github.token }}
+          COVERAGE_BASELINE_RAISE_TOKEN: ${{ secrets.COVERAGE_BASELINE_RAISE_TOKEN }}
         run: |
           set -euo pipefail
           if git diff --quiet -- tests/ci/livewire-actions-baselines; then
             echo "Livewire action-debt baselines unchanged."
             exit 0
+          fi
+          if [[ -z "${COVERAGE_BASELINE_RAISE_TOKEN:-}" ]]; then
+            echo '::error::COVERAGE_BASELINE_RAISE_TOKEN is required to open the baseline raise PR (org disables Actions PR creation with GITHUB_TOKEN).'
+            exit 1
           fi
           # Protect Main refuses direct pushes; open a PR and never push to main.
           branch="ci/refresh-livewire-action-baselines-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
@@ -112,6 +118,7 @@ jobs:
           git add tests/ci/livewire-actions-baselines
           git commit -m "ci: refresh Livewire action-debt baselines"
           git push origin "HEAD:refs/heads/$branch"
+          export GH_TOKEN="$COVERAGE_BASELINE_RAISE_TOKEN"
           printf '%s\n' \
             'Refresh Livewire action-debt baselines from a composed pin run.' \
             'Counts only fall or stay; a higher measured count leaves that file untouched (#775).' \

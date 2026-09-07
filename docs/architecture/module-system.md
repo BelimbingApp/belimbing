@@ -236,10 +236,20 @@ Reading, overriding, or clearing an undeclared name throws
 any module descriptor.` Declare the flag in an enabled owning Module and correct
 the consumer's name; an undeclared flag is not treated as disabled.
 
+When a Domain is disabled, uninstalled, or a flag is renamed, an override row can
+outlive its declaration. Those rows are **orphaned**:
+`FeatureFlagDeclarationInventory::orphanedOverridesForCurrentTenant()` lists them
+for the ambient tenant, the Administration page shows an Orphaned overrides
+section, and `FeatureFlags::purgeOrphanedOverride()` deletes the ambient-tenant
+row only when the name is *not* declared (declared names still clear only through
+`clearOverride()`). Purge writes the same `FeatureFlagOverride` mutation audit
+trail as toggle/clear. `blb:feature-flags` includes orphans with `module = null`
+and an `orphaned` column (JSON field `orphaned: true|false`).
+
 For operators, `php artisan blb:feature-flags` lists Flag, Module, Default,
-Enabled, Overridden, and Description for the current tenant;
+Enabled, Overridden, Orphaned, and Description for the current tenant;
 `php artisan blb:feature-flags --json` emits the same resolved inventory as
-`flag`, `module`, `default`, `enabled`, `overridden`, and `description` fields.
+`flag`, `module`, `default`, `enabled`, `overridden`, `orphaned`, and `description` fields.
 The [command](../../app/Base/FeatureFlags/Console/Commands/ListFeatureFlagsCommand.php)
 has no tenant-selection or mutation option: the invoking runtime must already
 establish tenant context. Without it, the command exits with failure and
@@ -401,7 +411,7 @@ Domain and Extension page presentation belongs in the owning Module's `Views/` d
 
 Module-owned CSS or JavaScript belongs under the Module's `Assets/` directory and enters the build only through an explicit reviewed Vite import or entry. Do not create parallel global `resources/{domain}` or `resources/{extension}` trees.
 
-Because optional source checkouts are ignored by the platform repository, Tailwind source entries and Vite refresh paths must explicitly cover every installed Core, Domain, and Extension view root. Adding a source must not leave its classes invisible to production builds.
+Because optional source checkouts are ignored by the platform repository, `resources/app.css` keeps wildcard `@source` families that mirror Vite's `bladeRefreshPaths` (`app/Core/*/Views`, `app/Domains/*/*/Views`, `app/Extensions/*/*/Views`) and also spells out each installed nested Domain and Extension root. Tailwind honors `.gitignore` when expanding globs, so a wildcard alone leaves nested-checkout classes out of the production CSS; adding a Domain or Extension requires a named `@source` line. Adding a source must not leave its classes invisible to production builds.
 
 ## Configuration Ownership
 

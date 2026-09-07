@@ -13,6 +13,9 @@
         </x-ui.alert>
     @endif
 
+    {{-- Refusals that redirect here, such as a suspended tenant, flash `error`. --}}
+    <x-ui.session-flash />
+
     <x-ui.alert x-cloak x-show="redirecting" variant="info" role="status">
         {{ __('Signed in. Opening your workspace…') }}
     </x-ui.alert>
