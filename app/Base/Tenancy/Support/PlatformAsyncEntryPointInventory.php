@@ -17,7 +17,9 @@ use App\Core\AI\Jobs\RunHeadlessCliTaskJob;
 use App\Core\AI\Jobs\RunLaraTaskProfileJob;
 use App\Core\AI\Jobs\SpawnAgentSessionJob;
 use App\Core\Geonames\Jobs\ImportPostcodes;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
 use ReflectionClass;
 use SplFileInfo;
@@ -106,6 +108,82 @@ final class PlatformAsyncEntryPointInventory
             [SpawnAgentSessionJob::class, new SpawnAgentSessionJob(orchestrationSessionId: 'tenant-audit-session')],
             [ImportPostcodes::class, new ImportPostcodes(countryCodes: [])],
         ];
+    }
+
+    /**
+     * Live Schedule signatures scoped to Base and Core (or `$roots`).
+     *
+     * Each event's Artisan signature is resolved through {@see Artisan::all()}
+     * to a command class; only classes whose source file lies under the given
+     * roots are kept. Closure/exec events with no resolvable class stay in the
+     * list so the inventory still notices them. Domain and Extension schedules
+     * therefore do not fail the platform comparison on a composed checkout.
+     *
+     * @param  list<string>|null  $roots
+     * @return list<string>
+     */
+    public static function liveScheduledCommandSignatures(?array $roots = null): array
+    {
+        $roots = $roots ?? [ApplicationTopology::baseRoot(), ApplicationTopology::coreRoot()];
+        $normalizedRoots = array_map(
+            static fn (string $root): string => rtrim(str_replace('\\', '/', $root), '/').'/',
+            $roots,
+        );
+
+        $commands = Artisan::all();
+        $scheduled = [];
+
+        foreach (app(Schedule::class)->events() as $event) {
+            $signature = self::signatureFromScheduleEvent($event);
+            if ($signature === null) {
+                continue;
+            }
+
+            $instance = $commands[$signature] ?? null;
+            if ($instance === null) {
+                $scheduled[] = $signature;
+
+                continue;
+            }
+
+            $path = (new ReflectionClass($instance))->getFileName();
+            if ($path === false) {
+                $scheduled[] = $signature;
+
+                continue;
+            }
+
+            $normalizedPath = str_replace('\\', '/', $path);
+            foreach ($normalizedRoots as $root) {
+                if (str_starts_with($normalizedPath, $root)) {
+                    $scheduled[] = $signature;
+                    break;
+                }
+            }
+        }
+
+        $scheduled = array_values(array_unique($scheduled));
+        sort($scheduled);
+
+        return $scheduled;
+    }
+
+    private static function signatureFromScheduleEvent(object $event): ?string
+    {
+        $command = (string) ($event->command ?? '');
+        if ($command === '' && isset($event->description)) {
+            $command = (string) $event->description;
+        }
+
+        if (preg_match("/artisan['\"]?\s+(\S+)/", $command, $matches) === 1) {
+            return $matches[1];
+        }
+
+        if ($command !== '' && ! str_contains($command, ' ')) {
+            return $command;
+        }
+
+        return null;
     }
 
     /**
