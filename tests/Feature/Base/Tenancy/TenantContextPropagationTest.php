@@ -86,6 +86,7 @@ it('clears the tenant when a job fails permanently', function (): void {
     $job = Mockery::mock(Job::class);
     $job->allows('payload')->andReturns(['tenantId' => 11]);
     $job->allows('resolveName')->andReturns(TenantContextProbeJob::class);
+    $job->allows('getName')->andReturns(TenantContextProbeJob::class);
     $job->allows('getQueue')->andReturns('default');
     $job->allows('getConnectionName')->andReturns('database');
 
@@ -106,6 +107,7 @@ it('does not clear on JobFailed for a tenant a sibling worker set', function ():
     $job = Mockery::mock(Job::class);
     $job->allows('payload')->andReturns(['tenantId' => 11]);
     $job->allows('resolveName')->andReturns(TenantContextProbeJob::class);
+    $job->allows('getName')->andReturns(TenantContextProbeJob::class);
     $job->allows('getQueue')->andReturns('default');
     $job->allows('getConnectionName')->andReturns('database');
 
