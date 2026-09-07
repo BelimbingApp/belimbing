@@ -460,7 +460,8 @@ final class BackupService
         $removed = [];
 
         foreach ($entries as $entry) {
-            $manifestPath = (string) ($entry['manifest_path'] ?? '');
+            $manifestPath = (string) $entry['manifest_path'];
+            $artifactPath = (string) $entry['artifact_path'];
             $manifestData = ($manifestPath !== '' && $disk->exists($manifestPath))
                 ? json_decode((string) $disk->get($manifestPath), true)
                 : null;
@@ -469,7 +470,7 @@ final class BackupService
             $sizeBytes = is_array($manifestData) ? (int) ($manifestData['size_bytes'] ?? 0) : 0;
             $encryptionMode = is_array($manifestData) ? (string) ($manifestData['encryption_mode'] ?? '') : '';
 
-            foreach ([$entry['artifact_path'], $entry['manifest_path']] as $path) {
+            foreach ([$artifactPath, $manifestPath] as $path) {
                 if ($path !== '' && $disk->exists($path)) {
                     $disk->delete($path);
                     $removed[] = $path;
@@ -485,7 +486,7 @@ final class BackupService
                 uiElement: $uiElement ?? '--prune',
                 context: [
                     'backup_id' => $backupId,
-                    'artifact_path' => (string) ($entry['artifact_path'] ?? ''),
+                    'artifact_path' => $artifactPath,
                     'manifest_path' => $manifestPath,
                     'size_bytes' => $sizeBytes,
                     'encryption_mode' => $encryptionMode,
