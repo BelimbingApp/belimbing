@@ -35,7 +35,12 @@ test("refresh-feature-shard-timings is dispatch-only and never pushes to main", 
     expect(refresh.run).toContain("platform-feature-shards.py --write-balanced");
 
     const openPr = step("Open PR with refreshed timings");
+    expect(workflow.jobs.refresh.permissions["pull-requests"]).toBeUndefined();
+    expect(openPr.env.COVERAGE_BASELINE_RAISE_TOKEN).toBe("${{ secrets.COVERAGE_BASELINE_RAISE_TOKEN }}");
+    expect(openPr.run).toContain("COVERAGE_BASELINE_RAISE_TOKEN is required");
+    expect(openPr.run).toContain('export GH_TOKEN="$COVERAGE_BASELINE_RAISE_TOKEN"');
     expect(openPr.run).toContain("gh pr create");
+    expect(openPr.run).toContain("--label bot-maintenance");
     expect(openPr.run).toContain("ci/refresh-feature-shard-timings");
     expect(openPr.run).not.toMatch(/git push[^\n]*\smain\b/);
     expect(openPr.run).toContain("push --force-with-lease origin");
