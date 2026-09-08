@@ -38,7 +38,7 @@
             "repo": "BelimbingApp/blb-people-connector",
             "path": "app/Domains/PeopleConnector",
             "sonar_project_key": "BelimbingApp_blb-people-connector",
-            "ref": "c7df58445ec9f2d1e05a18e3d6baecdc8e447471"
+            "ref": "d91e2ccbcc0e40dcbb750c28aeebbe9c05729a33"
         }
     }
 }
