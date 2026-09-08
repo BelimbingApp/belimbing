@@ -3,6 +3,7 @@
 namespace App\Base\Schedule\Models;
 
 use App\Base\Schedule\Services\ScheduleHealthService;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -10,6 +11,23 @@ use Illuminate\Database\Eloquent\Model;
  * are written automatically by ScheduleRunRecorder from Laravel scheduler
  * events; other sources surface their runs through ScheduleContributor
  * instead of writing here.
+ *
+ * @property int|null $id
+ * @property string|null $source
+ * @property string|null $trigger
+ * @property int|null $triggered_by_user_id
+ * @property string|null $triggered_by_name
+ * @property string|null $key
+ * @property string|null $name
+ * @property string|null $expression
+ * @property string|null $status
+ * @property CarbonInterface|null $started_at
+ * @property CarbonInterface|null $finished_at
+ * @property int|null $exit_code
+ * @property int|null $runtime_ms
+ * @property string|null $output_excerpt
+ * @property CarbonInterface|null $created_at
+ * @property CarbonInterface|null $updated_at
  */
 class ScheduleRun extends Model
 {
