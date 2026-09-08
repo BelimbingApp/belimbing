@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, resolve, dirname } from "node:path";
 
 const root = resolve(import.meta.dir, "../..");
 test("all descriptor pins and Commerce/Operation routes belong to the composed surface", () => {
@@ -23,13 +23,25 @@ test("all descriptor pins and Commerce/Operation routes belong to the composed s
             domains[name] = { path, ref: pins[name], repo: `fixture/${name}` };
         }
         const names = ["commerce.catalog.index", "it.tickets.index", "people.index", "quality.ncr.index"];
+        // Domain surface membership is live names matching DOMAIN_ROUTE_NAME (#916/#920).
+        const declarations: Record<string, string> = {
+            "commerce.catalog.index": "app/Domains/commerce/Catalog/Routes/web.php",
+            "it.tickets.index": "app/Domains/operation/It/Routes/web.php",
+            "people.index": "app/Domains/people/Workforce/Routes/web.php",
+            "quality.ncr.index": "app/Domains/operation/Quality/Routes/web.php",
+        };
+        for (const [name, rel] of Object.entries(declarations)) {
+            const file = join(fixture, rel);
+            mkdirSync(dirname(file), { recursive: true });
+            writeFileSync(file, `<?php\nRoute::get('${name}', fn () => null)->name('${name}');\n`);
+        }
         const surface = { pins, domain_route_count: names.length, route_names: names };
         const registryPath = join(fixture, "registry.json");
         const surfacePath = join(fixture, "surface.json");
         const routesPath = join(fixture, "routes.json");
         writeFileSync(registryPath, JSON.stringify({ domains }));
         writeFileSync(surfacePath, JSON.stringify(surface));
-        writeFileSync(routesPath, JSON.stringify([...names, "admin.system.index"].map(name => ({ name }))));
+        writeFileSync(routesPath, JSON.stringify([...names, "admin.system.index", "admin.integration.outbound-exchanges.index"].map(name => ({ name }))));
         const run = (...args: string[]) => Bun.spawnSync(["php", join(root, "scripts/ci/composed-smoke.php"), `--root=${fixture}`, `--registry=${registryPath}`, `--surface=${surfacePath}`, `--routes-json=${routesPath}`, ...args]);
         const printed = run("--print-surface");
         expect(printed.exitCode).toBe(0);

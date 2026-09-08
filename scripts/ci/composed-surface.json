@@ -6,10 +6,8 @@
         "operation": "8a21b59ffd37ff4c6a93f135e735926782ea228a",
         "people-connector": "d91e2ccbcc0e40dcbb750c28aeebbe9c05729a33"
     },
-    "domain_route_count": 95,
+    "domain_route_count": 93,
     "route_names": [
-        "admin.integration.outbound-exchanges.index",
-        "admin.integration.outbound-exchanges.show",
         "admin.people-connector.audit.index",
         "admin.people-connector.connections.index",
         "admin.people-connector.reconciliation.index",

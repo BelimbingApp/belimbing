@@ -27,6 +27,7 @@ use App\Core\Company\Models\Company;
 use App\Core\Employee\Models\Employee;
 use App\Core\User\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 
@@ -380,6 +381,86 @@ it('does not expose source history or trace data without audit permission', func
         ->assertSet('traceTimeline', [])
         ->assertDontSee(AUDIT_LOG_UI_HIDDEN_OLD_EMAIL)
         ->assertDontSee(AUDIT_LOG_UI_HIDDEN_NEW_EMAIL);
+});
+
+it('allows local-only source history with the page capability while keeping traces and the full log auditor-only', function (): void {
+    setupAuthzRoles();
+
+    [$company, $viewer, $target] = auditLogUiViewerWithoutAudit('Local History Target');
+
+    PrincipalCapability::query()->create([
+        'company_id' => $company->id,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => $viewer->id,
+        'capability_key' => 'admin.user.view',
+        'is_allowed' => true,
+    ]);
+
+    auditLogUiInsertMutation([
+        'actor_id' => $viewer->id,
+        'auditable_id' => $target->id,
+        'old_values' => ['email' => 'local-old@example.com'],
+        'new_values' => ['email' => 'local-new@example.com'],
+        'trace_id' => 'LOCALH123456',
+    ]);
+
+    $this->actingAs($viewer);
+
+    $params = auditLogUiUserHistoryParams($target);
+    $params['requireAuditListCapability'] = false;
+    $params['allUrl'] = route('admin.audit.mutations', ['search' => AUDIT_LOG_UI_USER_PREFIX.$target->id]);
+
+    Livewire::test(SourceHistory::class, $params)
+        ->assertSeeHtml(AUDIT_LOG_UI_OPEN_WIRE_ACTION)
+        ->call('open')
+        ->assertSet('sourceHistoryDrawerOpen', true)
+        ->assertSet('sourceHistoryAllUrl', '')
+        ->assertSee('local-old@example.com')
+        ->assertSee('local-new@example.com')
+        ->call('openTrace', 'LOCA-LH12-3456')
+        ->assertSet('traceDrawerOpen', false)
+        ->assertSet('selectedTraceId', '')
+        ->assertSet('traceTimeline', []);
+});
+
+it('fails closed when the Blade require-audit-list-capability attribute is unrecognized', function (): void {
+    setupAuthzRoles();
+
+    [$company, $viewer, $target] = auditLogUiViewerWithoutAudit('Blade Coercion Target');
+
+    PrincipalCapability::query()->create([
+        'company_id' => $company->id,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => $viewer->id,
+        'capability_key' => 'admin.user.view',
+        'is_allowed' => true,
+    ]);
+
+    $this->actingAs($viewer);
+
+    $subjects = [
+        ['name' => 'User', 'id' => $target->id],
+    ];
+
+    $typoHtml = Blade::render(
+        '<x-ui.record-history
+            :subjects="$subjects"
+            source-capability="admin.user.view"
+            require-audit-list-capability="yes-required"
+        />',
+        ['subjects' => $subjects]
+    );
+    expect(trim($typoHtml))->toBe('');
+
+    $localHtml = Blade::render(
+        '<x-ui.record-history
+            :subjects="$subjects"
+            source-capability="admin.user.view"
+            :require-audit-list-capability="false"
+        />',
+        ['subjects' => $subjects]
+    );
+    expect($localHtml)->toContain(AUDIT_LOG_UI_OPEN_WIRE_ACTION);
 });
 
 it('requires source page view permission in addition to audit permission', function (): void {

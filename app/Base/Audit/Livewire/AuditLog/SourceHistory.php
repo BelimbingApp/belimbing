@@ -35,6 +35,13 @@ class SourceHistory extends Component
 
     public string $sourceCapability = '';
 
+    /**
+     * When false, only {@see $sourceCapability} is required for local History.
+     * Trace timelines and the full Audit Log URL still require the admin list
+     * capability so maintainers never inherit the broad audit surface.
+     */
+    public bool $requireAuditListCapability = true;
+
     public function open(): void
     {
         if (! $this->canViewAuditHistory()) {
@@ -46,14 +53,16 @@ class SourceHistory extends Component
             subjects: $this->subjects,
             auditableType: $this->auditableType,
             auditableId: $this->auditableId,
-            allUrl: $this->allUrl !== '' ? $this->allUrl : null,
+            allUrl: $this->localHistoryAllUrl(),
             subjectLabel: $this->subjectLabel,
         );
     }
 
     public function openTrace(string $traceId): void
     {
-        if (! $this->canViewAuditHistory()) {
+        // Trace drawers can surface sibling rows in the same request; keep them
+        // on the auditor path even when local History is source-capability-only.
+        if (! $this->canViewAuditHistory() || ! $this->canOpenAuditTraces()) {
             return;
         }
 
@@ -79,7 +88,33 @@ class SourceHistory extends Component
         $authorization = app(AuthorizationService::class);
         $actor = Actor::forUser($authUser);
 
-        return $authorization->can($actor, 'admin.audit.log.list')->allowed
-            && $authorization->can($actor, $this->sourceCapability)->allowed;
+        if (! $authorization->can($actor, $this->sourceCapability)->allowed) {
+            return false;
+        }
+
+        return ! $this->requireAuditListCapability
+            || $authorization->can($actor, 'admin.audit.log.list')->allowed;
+    }
+
+    private function canOpenAuditTraces(): bool
+    {
+        $authUser = auth()->user();
+
+        if ($authUser === null) {
+            return false;
+        }
+
+        return app(AuthorizationService::class)
+            ->can(Actor::forUser($authUser), 'admin.audit.log.list')
+            ->allowed;
+    }
+
+    private function localHistoryAllUrl(): ?string
+    {
+        if (! $this->requireAuditListCapability || $this->allUrl === '') {
+            return null;
+        }
+
+        return $this->allUrl;
     }
 }
