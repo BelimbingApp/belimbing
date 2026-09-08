@@ -66,11 +66,13 @@ Consumers also fail closed on suspended. `Tenant::isActive()` — status `active
 ### Platform async entry-point inventory
 
 Base and Core declare every queued job and every scheduler-registered Artisan
-command in . Tests
-assert the declared job list matches filesystem discovery and that the declared
-schedule list matches the live  facade, then prove each queued entry
-restores the dispatch-time tenant (and refuses a default when none was stamped)
-and each scheduled command leaves ambient tenant null.
+command in [`app/Base/Tenancy/Support/PlatformAsyncEntryPointInventory.php`](../../app/Base/Tenancy/Support/PlatformAsyncEntryPointInventory.php).
+Tests assert the declared job list matches filesystem discovery and that the
+declared schedule list matches the live [`Schedule`](https://laravel.com/docs/scheduling)
+facade scoped to Base and Core (Domain and Extension schedules are owned
+elsewhere), then prove each queued entry restores the dispatch-time tenant
+(and refuses a default when none was stamped) and each scheduled command
+leaves ambient tenant null.
 
 
 
