@@ -3,6 +3,7 @@
 namespace App\Base\Queue\Livewire\FailedJobs;
 
 use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
+use App\Base\Foundation\Contracts\SemanticActionRecorder;
 use App\Base\Foundation\Livewire\TableSearchablePaginatedList;
 use App\Base\Queue\Services\ActionableFailedJobRepository;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
@@ -59,7 +60,15 @@ class Index extends TableSearchablePaginatedList
             return;
         }
 
-        Artisan::call('queue:retry', ['id' => [$uuid]]);
+        $exitCode = Artisan::call('queue:retry', ['id' => [$uuid]]);
+        if ($exitCode !== 0 || ! $this->retryRemovedFailedJob($uuid)) {
+            // queue:retry can exit non-zero, or leave the row when the id is missing (#898).
+            $this->notifyError(__('Failed job could not be retried.'));
+
+            return;
+        }
+
+        $this->recordRetried($uuid);
     }
 
     public function retryAll(): void
@@ -74,7 +83,25 @@ class Index extends TableSearchablePaginatedList
             return;
         }
 
-        Artisan::call('queue:retry', ['id' => $uuids]);
+        $exitCode = Artisan::call('queue:retry', ['id' => $uuids]);
+        if ($exitCode !== 0) {
+            $this->notifyError(__('Failed jobs could not be retried.'));
+
+            return;
+        }
+
+        // One audit row per uuid that actually left failed_jobs; skip partial misses (#898).
+        $retried = 0;
+        foreach ($uuids as $uuid) {
+            if ($this->retryRemovedFailedJob($uuid)) {
+                $this->recordRetried($uuid);
+                $retried++;
+            }
+        }
+
+        if ($retried === 0) {
+            $this->notifyError(__('Failed jobs could not be retried.'));
+        }
     }
 
     public function deleteJob(int $id): void
@@ -83,7 +110,47 @@ class Index extends TableSearchablePaginatedList
             return;
         }
 
-        DB::table('failed_jobs')->where('id', $id)->delete();
+        $uuid = DB::table('failed_jobs')->where('id', $id)->value('uuid');
+        if (! is_string($uuid) || $uuid === '') {
+            return;
+        }
+
+        $deleted = DB::table('failed_jobs')->where('id', $id)->delete();
+        if ($deleted === 0) {
+            return;
+        }
+
+        app(SemanticActionRecorder::class)->record(
+            event: 'queue.failed_job.deleted',
+            summary: __('Deleted failed job :uuid', ['uuid' => $uuid]),
+            source: __('Failed Jobs'),
+            subject: ['name' => 'failed_job', 'id' => $id, 'identifier' => $uuid],
+            surface: 'admin.system.failed-jobs',
+            uiElement: __('Delete row action'),
+            context: ['uuid' => $uuid],
+        );
+    }
+
+    private function recordRetried(string $uuid): void
+    {
+        app(SemanticActionRecorder::class)->record(
+            event: 'queue.failed_job.retried',
+            summary: __('Retried failed job :uuid', ['uuid' => $uuid]),
+            source: __('Failed Jobs'),
+            subject: ['name' => 'failed_job', 'id' => $uuid, 'identifier' => $uuid],
+            surface: 'admin.system.failed-jobs',
+            uiElement: __('Retry'),
+            context: ['uuid' => $uuid],
+        );
+    }
+
+    /**
+     * queue:retry removes a row from failed_jobs only when that id was retried.
+     * Exit code 0 alone is not enough: missing ids are reported while the command continues.
+     */
+    private function retryRemovedFailedJob(string $uuid): bool
+    {
+        return ! DB::table('failed_jobs')->where('uuid', $uuid)->exists();
     }
 
     private function failedJobs(): ActionableFailedJobRepository

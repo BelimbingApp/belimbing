@@ -3,6 +3,7 @@
 namespace App\Base\Log\Livewire\Logs;
 
 use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
+use App\Base\Foundation\Contracts\SemanticActionRecorder;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\File;
 use Livewire\Attributes\Url;
@@ -124,6 +125,19 @@ class Show extends Component
             return;
         }
 
+        app(SemanticActionRecorder::class)->record(
+            event: 'system.log.truncated',
+            summary: __('Truncated :count lines from :file', ['count' => $deleted, 'file' => $this->filename]),
+            source: __('Logs'),
+            subject: ['name' => 'log_file', 'id' => $this->filename, 'identifier' => $this->filename],
+            surface: 'admin.system.logs',
+            uiElement: __('Delete lines from top'),
+            context: [
+                'filename' => $this->filename,
+                'lines_removed' => $deleted,
+            ],
+        );
+
         $this->deleteLines = 10;
         $this->notify(trans_choice('Deleted :count line from the top.|Deleted :count lines from the top.', $deleted, ['count' => $deleted]));
     }
@@ -139,7 +153,29 @@ class Show extends Component
 
         $path = $this->resolvedPath();
         if ($path !== null) {
-            File::delete($path);
+            $bytes = File::size($path);
+            if (! File::delete($path)) {
+                // Do not record a successful deletion when the filesystem refused (#898).
+                session()->flash('error', __('Log file could not be deleted.'));
+                $this->redirect(route('admin.system.logs.index'), navigate: true);
+
+                return;
+            }
+
+            // Record only after a confirmed delete so Operator Activity stays truthful (#898).
+            app(SemanticActionRecorder::class)->record(
+                event: 'system.log.deleted',
+                summary: __('Deleted log file :file', ['file' => $this->filename]),
+                source: __('Logs'),
+                subject: ['name' => 'log_file', 'id' => $this->filename, 'identifier' => $this->filename],
+                surface: 'admin.system.logs',
+                uiElement: __('Delete file'),
+                context: [
+                    'filename' => $this->filename,
+                    'bytes' => $bytes,
+                ],
+            );
+
             session()->flash('success', __('Log file deleted.'));
         } else {
             session()->flash('error', __('Log file could not be found.'));
