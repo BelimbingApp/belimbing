@@ -2,10 +2,28 @@
 
 namespace App\Base\Audit\Models;
 
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\MassPrunable;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @property int|null $id
+ * @property int|null $company_id
+ * @property int|null $tenant_id
+ * @property string|null $actor_type
+ * @property int|null $actor_id
+ * @property string|null $actor_role
+ * @property string|null $ip_address
+ * @property string|null $url
+ * @property string|null $user_agent
+ * @property string|null $event
+ * @property array<string, mixed>|null $payload
+ * @property string|null $trace_id
+ * @property bool|null $is_retained
+ * @property CarbonInterface|null $occurred_at
+ * @property string|null $actor_name
+ */
 class AuditAction extends Model
 {
     use MassPrunable;
@@ -28,7 +46,7 @@ class AuditAction extends Model
     public const UPDATED_AT = null;
 
     /**
-     * @var array<int, string>
+     * @var list<string>
      */
     protected $fillable = [
         'company_id',

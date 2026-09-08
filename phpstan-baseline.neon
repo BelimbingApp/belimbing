@@ -673,12 +673,6 @@ parameters:
 			path: app/Base/Database/Livewire/DataShare/Index.php
 
 		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Base\\Database\\Models\\DataShareTransferOffer\>\:\:map\(\) contains unresolvable type\.$#'
-			identifier: argument.unresolvableType
-			count: 1
-			path: app/Base/Database/Livewire/DataShare/Index.php
-
-		-
 			message: '#^Access to an undefined property App\\Base\\Database\\Livewire\\DataShare\\Settings\:\:\$hasSavedSupabaseAccessToken\.$#'
 			identifier: property.notFound
 			count: 1

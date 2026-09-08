@@ -2,6 +2,7 @@
 
 use App\Base\Tenancy\Console\TenantScopedCommand;
 use App\Base\Tenancy\Contracts\TenantContext;
+use App\Base\Tenancy\Services\DomainCommandTenantAudit;
 use App\Domains\ZzDomainCmd\Fixture\Console\Commands\ZzAllowlistedProbeCommand;
 use App\Domains\ZzDomainCmd\Fixture\Console\Commands\ZzScopedProbeCommand;
 use App\Domains\ZzDomainCmd\Fixture\Console\Commands\ZzUnscopedProbeCommand;
@@ -196,3 +197,54 @@ it('declares a dated, justified allowlist for required-domain commands that are 
             ->and($expiry->isBefore(CarbonImmutable::parse('2026-09-07')->addDays(90)))->toBeTrue();
     }
 });
+
+it('warns only while an active exemption is within the calendar-day window', function (string $today, ?int $daysLeft, int $exit): void {
+    writeDomainCommandAuditFixtures();
+    CarbonImmutable::setTestNow(CarbonImmutable::parse($today.' 12:00:00'));
+    config()->set('domain_commands.tenant_scope.required_domains', ['ZzDomainCmd']);
+    config()->set('domain_commands.tenant_scope.allowlist', [
+        'zz-domain-cmd:unscoped' => 'Not under test.',
+        'zz-domain-cmd:allowlisted' => ['reason' => 'Migration pending.', 'expires' => '2026-10-07'],
+    ]);
+
+    $this->withoutMockingConsoleOutput();
+    expect(Artisan::call('blb:domain-commands', ['--audit' => true, '--json' => true, '--warn-days' => '14']))->toBe($exit);
+    $result = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
+    expect($result['expiring'])->toBe($daysLeft === null ? [] : [[
+        'name' => 'zz-domain-cmd:allowlisted', 'domain' => 'ZzDomainCmd', 'module' => 'Fixture',
+        'expires' => '2026-10-07', 'days_left' => $daysLeft, 'reason' => 'Migration pending.', 'stale' => false,
+    ]]);
+    expect(array_column($result['failures'], 'name'))->toBe($exit === 0 ? [] : ['zz-domain-cmd:allowlisted']);
+})->with([
+    'outside window' => ['2026-09-17', null, 0],
+    'inside window' => ['2026-09-27', 10, 0],
+    'last exempt day' => ['2026-10-07', 0, 0],
+    'lapsed' => ['2026-10-08', null, 1],
+]);
+
+it('lists a stale exemption without failing and omits migrated and malformed entries', function (): void {
+    writeDomainCommandAuditFixtures();
+    CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-09-27'));
+    config()->set('domain_commands.tenant_scope.required_domains', ['ZzDomainCmd']);
+    config()->set('domain_commands.tenant_scope.allowlist', [
+        'zz-domain-cmd:unscoped' => 'Not under test.',
+        'zz-domain-cmd:allowlisted' => 'Not under test.',
+        'zz-domain-cmd:gone' => ['reason' => 'Removed command.', 'expires' => '2026-10-07'],
+        'zz-domain-cmd:scoped' => ['reason' => 'Already migrated.', 'expires' => '2026-10-07'],
+        'invalid' => ['reason' => 'Bad date.', 'expires' => '2026-09-31'],
+    ]);
+    expect(app(DomainCommandTenantAudit::class)->expiring(14))->toBe([[
+        'name' => 'zz-domain-cmd:gone', 'domain' => null, 'module' => null,
+        'expires' => '2026-10-07', 'days_left' => 10, 'reason' => 'Removed command.', 'stale' => true,
+    ]]);
+    $this->artisan('blb:domain-commands', ['--audit' => true])
+        ->expectsOutputToContain('Expiring exemptions')
+        ->expectsOutputToContain('stale')
+        ->assertSuccessful();
+});
+
+it('refuses a non-positive or non-integer warning window', function (string $window): void {
+    $this->artisan('blb:domain-commands', ['--audit' => true, '--warn-days' => $window])
+        ->expectsOutputToContain('--warn-days must be a positive integer.')
+        ->assertFailed();
+})->with(['0', 'abc', '-1', '1.5']);

@@ -2,6 +2,8 @@
 
 namespace App\Base\Foundation\Services;
 
+use App\Base\Authz\Capability\CapabilityCatalog;
+use App\Base\Authz\Capability\CapabilityInventory;
 use App\Base\Foundation\ApplicationTopology;
 use App\Base\Foundation\ModuleManifest\ModuleManifest;
 use App\Base\Foundation\ModuleManifest\ModuleManifestReader;
@@ -23,6 +25,7 @@ final class ModuleCheck
     public function __construct(
         private readonly Application $app,
         private readonly ModuleTableOwnershipScanner $tableOwnership,
+        private readonly CapabilityInventory $capabilityInventory,
     ) {}
 
     /**
@@ -33,6 +36,7 @@ final class ModuleCheck
      *     routes: list<string>,
      *     tables: list<string>,
      *     bindings: list<array{abstract: string, resolved: bool}>,
+     *     capabilities: array{accepted: list<string>, rejected: array<string, string>},
      *     ok: bool
      * }
      */
@@ -57,6 +61,7 @@ final class ModuleCheck
                 'routes' => [],
                 'tables' => [],
                 'bindings' => [],
+                'capabilities' => ['accepted' => [], 'rejected' => []],
                 'ok' => false,
             ];
         }
@@ -79,6 +84,10 @@ final class ModuleCheck
         $refusals = [...$refusals, ...$this->graphRefusals($scopedManifests, $roots)];
         $refusals = [...$refusals, ...$this->tableCollisions($composition, $roots)];
         $refusals = [...$refusals, ...$this->routeCollisions($composition, $roots)];
+        $capabilities = $this->capabilitiesFor($roots[$moduleId]);
+        foreach ($capabilities['rejected'] as $capability => $reason) {
+            $refusals[] = sprintf('capability: %s (%s)', $capability, $reason);
+        }
         $refusals = array_values(array_unique($refusals));
         sort($refusals);
 
@@ -93,6 +102,7 @@ final class ModuleCheck
             'routes' => $routes,
             'tables' => $tables,
             'bindings' => $bindings,
+            'capabilities' => $capabilities,
             'ok' => $refusals === [],
         ];
     }
@@ -143,6 +153,7 @@ final class ModuleCheck
      *     routes: list<string>,
      *     tables: list<string>,
      *     bindings: list<array{abstract: string, resolved: bool}>,
+     *     capabilities: array{accepted: list<string>, rejected: array<string, string>},
      *     ok: bool
      * }  $report
      */
@@ -197,6 +208,15 @@ final class ModuleCheck
             }
         }
 
+        if ($report['capabilities']['accepted'] !== [] || $report['capabilities']['rejected'] !== []) {
+            $lines[] = 'Capabilities:';
+            $lines[] = '  accepted: '.count($report['capabilities']['accepted']);
+            $lines[] = '  rejected: '.count($report['capabilities']['rejected']);
+            foreach ($report['capabilities']['rejected'] as $capability => $reason) {
+                $lines[] = '  - '.$capability.': '.$reason;
+            }
+        }
+
         $lines[] = 'status: '.($report['ok'] ? 'ok' : 'refused');
 
         return implode("\n", $lines)."\n";
@@ -241,6 +261,37 @@ final class ModuleCheck
             ApplicationTopology::domainsRoot(),
             ApplicationTopology::extensionsRoot(),
         ]);
+    }
+
+    /** @return array{accepted: list<string>, rejected: array<string, string>} */
+    private function capabilitiesFor(string $moduleRoot): array
+    {
+        $module = str_replace('\\', '/', substr($moduleRoot, strlen(app_path()) + 1));
+        $declared = array_keys(array_filter(
+            $this->capabilityInventory->declarations(),
+            static fn (array $modules): bool => in_array($module, $modules, true),
+        ));
+        sort($declared);
+
+        if ($declared === []) {
+            return ['accepted' => [], 'rejected' => []];
+        }
+
+        $catalog = CapabilityCatalog::fromConfig((array) config('authz'));
+        $catalog->validate();
+        $accepted = array_fill_keys($catalog->capabilities(), true);
+        $rejected = $catalog->rejected();
+        $report = ['accepted' => [], 'rejected' => []];
+
+        foreach ($declared as $capability) {
+            if (isset($accepted[$capability])) {
+                $report['accepted'][] = $capability;
+            } else {
+                $report['rejected'][$capability] = $rejected[$capability] ?? 'absent from the configured capability catalog';
+            }
+        }
+
+        return $report;
     }
 
     /**

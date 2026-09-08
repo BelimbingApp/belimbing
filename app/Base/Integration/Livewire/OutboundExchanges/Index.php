@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Integration\Livewire\OutboundExchanges;
 
 use App\Base\Authz\Contracts\AuthorizationService;
@@ -52,7 +53,7 @@ class Index extends Component
     {
         $this->requireCapability('admin.system.outbound-exchange.delete');
 
-        $count = $pruner->prunePayloads();
+        $count = $pruner->prunePayloads(OutboundExchange::visibleToCurrentTenant());
         $this->statusMessage = trans_choice('{0} No retained payloads were old enough for cleanup.|{1} Cleaned retained payloads from 1 exchange.|[2,*] Cleaned retained payloads from :count exchanges.', $count, ['count' => $count]);
         $this->statusVariant = $count > 0 ? 'success' : 'info';
     }
@@ -61,14 +62,14 @@ class Index extends Component
     {
         $this->requireCapability('admin.system.outbound-exchange.delete');
 
-        OutboundExchange::query()->whereKey($id)->delete();
+        OutboundExchange::visibleToCurrentTenant()->findOrFail($id)->delete();
         $this->statusMessage = __('Deleted outbound exchange :id.', ['id' => $id]);
         $this->statusVariant = 'success';
     }
 
     public function render(): View
     {
-        $query = OutboundExchange::query()
+        $query = OutboundExchange::visibleToCurrentTenant()
             ->when($this->search !== '', function (Builder $query): void {
                 $query->where(function (Builder $inner): void {
                     $inner->where('id', 'like', '%'.$this->search.'%')
@@ -107,7 +108,7 @@ class Index extends Component
      */
     private function distinct(string $column): array
     {
-        return OutboundExchange::query()
+        return OutboundExchange::visibleToCurrentTenant()
             ->whereNotNull($column)
             ->distinct()
             ->orderBy($column)
