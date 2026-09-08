@@ -49,7 +49,7 @@ it('treats a Workflow with no persisted row as unsaved for audit subject', funct
         ->and($workflow->getAuditSubject())->toBeNull();
 });
 
-it('renders a transition label when the target status has none', function (): void {
+it('falls back to the transition to_code when no target status row exists', function (): void {
     $flow = 'fixture_'.uniqid();
 
     Workflow::query()->create([
@@ -66,7 +66,7 @@ it('renders a transition label when the target status has none', function (): vo
         'is_active' => true,
     ]);
 
-    $transition = StatusTransition::query()->create([
+    $resolved = StatusTransition::query()->create([
         'flow' => $flow,
         'from_code' => 'start',
         'to_code' => 'done',
@@ -75,5 +75,37 @@ it('renders a transition label when the target status has none', function (): vo
         'is_active' => true,
     ]);
 
-    expect($transition->resolveLabel())->toBe('Done');
+    // `base_workflow_status_configs.label` is NOT NULL, so "the target status
+    // has no label" is unreachable and the old test name promised more than it
+    // could deliver. The only reachable fallback is a missing target row.
+    $missing = StatusTransition::query()->create([
+        'flow' => $flow,
+        'from_code' => 'start',
+        'to_code' => 'no_such_status',
+        'label' => null,
+        'position' => 2,
+        'is_active' => true,
+    ]);
+
+    expect($resolved->resolveLabel())->toBe('Done')
+        ->and($missing->resolveLabel())->toBe('no_such_status');
+});
+
+it('keeps the audit subject resolvable after a workflow row is deleted', function (): void {
+    // opus-5-low's Finding 1 on #908. Eloquent clears `exists` before firing
+    // `deleted`, and the global audit MutationListener resolves the subject on
+    // that event, so an `exists` guard wrote a null subject for every delete.
+    // The unsaved case above does not reach this one: its id is null, which the
+    // old guard handled too.
+    $workflow = Workflow::query()->create([
+        'code' => 'deleted_'.uniqid(),
+        'label' => 'Deleted flow',
+        'is_active' => true,
+    ]);
+    $id = (int) $workflow->id;
+
+    $workflow->delete();
+
+    expect($workflow->exists)->toBeFalse()
+        ->and($workflow->getAuditSubject())->toBe(['name' => 'workflow', 'id' => $id]);
 });

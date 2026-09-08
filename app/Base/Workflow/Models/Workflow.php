@@ -74,7 +74,14 @@ class Workflow extends Model
     /** @return array{name: string, id: int}|null */
     public function getAuditSubject(): ?array
     {
-        if (! $this->exists) {
+        // Not `exists`: performDeleteOnModel() clears it before firing
+        // `deleted`, and the global audit MutationListener resolves the subject
+        // on that event -- so guarding on exists writes a null subject_name and
+        // subject_id for every delete. The key survives the delete, which is
+        // exactly what the audit row needs. Guarding on getKey() also keeps
+        // Larastan happy, since `@property int $id` made `$this->id === null`
+        // look dead while it was still reachable for an unsaved model.
+        if ($this->getKey() === null) {
             return null;
         }
 
