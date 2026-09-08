@@ -163,3 +163,145 @@ it('records software.github_token.cleared with the owner and no token material',
         ->and((string) ($payload['summary'] ?? ''))->not->toContain(SOFTWARE_AUDIT_TOKEN)
         ->and((string) $rows[0]->payload)->not->toContain(SOFTWARE_AUDIT_TOKEN);
 });
+
+it('records software.update.launched for all sources when updateAll runs with empty keys', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+    softwareAuditFakeGit();
+    Http::fake();
+
+    $launcher = Mockery::mock(DetachedProcessLauncher::class);
+    $launcher->shouldReceive('launch')->once()->andReturnTrue();
+    app()->instance(DetachedProcessLauncher::class, $launcher);
+
+    try {
+        Livewire::test(DeploymentIndex::class)
+            ->call('updateAll')
+            ->assertDispatched('run-finished', status: 'pending', refresh: false)
+            ->assertHasNoErrors();
+
+        $rows = softwareAuditEvents('software.update.launched');
+        expect($rows)->toHaveCount(1);
+
+        $payload = softwareAuditPayload($rows[0]);
+        $runId = app(DeploymentRunHistory::class)->lastDeploymentRun()['run_id'] ?? null;
+
+        expect($payload['subject']['identifier'] ?? null)->toBe('all')
+            ->and($payload['subject']['id'] ?? null)->toBe('all')
+            ->and($payload['ui_element'] ?? null)->toBe('Update all')
+            ->and($payload['surface'] ?? null)->toBe('admin.system.software.updates')
+            ->and($payload['context']['run_id'] ?? null)->toBe($runId)
+            ->and($payload['context']['source_keys'] ?? null)->toBe([]);
+    } finally {
+        Cache::lock(SoftwareUpdateLauncher::LOCK_KEY)->forceRelease();
+    }
+});
+
+it('records software.rebuild.php when rebuildPhp runs', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+    softwareAuditFakeGit();
+    Http::fake();
+    Process::fake();
+
+    $deployment = Mockery::mock(DeploymentService::class)->makePartial();
+    $deployment->shouldReceive('rebuildPhp')->once()->andReturn(['Installing PHP dependencies…', 'PHP dependencies installed.']);
+    $deployment->shouldReceive('localStatus')->andReturn([]);
+    $deployment->shouldReceive('status')->andReturn([]);
+    $deployment->shouldReceive('frontendPackageManager')->andReturn('bun');
+    app()->instance(DeploymentService::class, $deployment);
+
+    try {
+        Livewire::test(DeploymentIndex::class)
+            ->call('rebuildPhp')
+            ->assertHasNoErrors();
+
+        $rows = softwareAuditEvents('software.rebuild.php');
+        expect($rows)->toHaveCount(1);
+
+        $payload = softwareAuditPayload($rows[0]);
+        expect($payload['subject']['identifier'] ?? null)->toBe('php')
+            ->and($payload['surface'] ?? null)->toBe('admin.system.software.updates')
+            ->and($payload['ui_element'] ?? null)->toBe('Rebuild PHP');
+    } finally {
+        Cache::lock(SoftwareUpdateLauncher::LOCK_KEY)->forceRelease();
+    }
+});
+
+it('records software.rebuild.assets when rebuildAssets runs', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+    softwareAuditFakeGit();
+    Http::fake();
+
+    $deployment = Mockery::mock(DeploymentService::class)->makePartial();
+    $deployment->shouldReceive('rebuildAssets')->once()->andReturn(['Building frontend assets…', 'Done.']);
+    $deployment->shouldReceive('localStatus')->andReturn([]);
+    $deployment->shouldReceive('status')->andReturn([]);
+    $deployment->shouldReceive('frontendPackageManager')->andReturn('bun');
+    app()->instance(DeploymentService::class, $deployment);
+
+    try {
+        Livewire::test(DeploymentIndex::class)
+            ->call('rebuildAssets')
+            ->assertHasNoErrors();
+
+        $rows = softwareAuditEvents('software.rebuild.assets');
+        expect($rows)->toHaveCount(1);
+
+        $payload = softwareAuditPayload($rows[0]);
+        expect($payload['subject']['identifier'] ?? null)->toBe('assets')
+            ->and($payload['surface'] ?? null)->toBe('admin.system.software.updates')
+            ->and($payload['ui_element'] ?? null)->toBe('Rebuild assets');
+    } finally {
+        Cache::lock(SoftwareUpdateLauncher::LOCK_KEY)->forceRelease();
+    }
+});
+
+it('records software.github_token.stored with the owner and no token material', function (): void {
+    app()->instance(DeploymentService::class, new class(app(SoftwareSourceRepository::class), app(DeploymentBuildRunner::class), app(DeploymentAdminEndpointResolver::class), app(DeploymentRunHistory::class)) extends DeploymentService
+    {
+        public function owners(): array
+        {
+            return [
+                ['owner' => 'exampleowner', 'repos' => [['repo' => 'exampleowner/blb-ham', 'visibility' => 'private']], 'has_token' => false, 'all_public' => false],
+            ];
+        }
+
+        public function saveToken(string $owner, string $token): void
+        {
+            app(SettingsService::class)->set('integrations.github.token.'.$owner, $token);
+        }
+
+        public function tokenFor(string $owner): ?string
+        {
+            $value = app(SettingsService::class)->get('integrations.github.token.'.$owner);
+
+            return is_string($value) && $value !== '' ? $value : null;
+        }
+    });
+
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    Livewire::test(GitHubAccessIndex::class)
+        ->set('tokens.exampleowner', SOFTWARE_AUDIT_TOKEN)
+        ->call('save', 'exampleowner')
+        ->assertHasNoErrors();
+
+    expect(app(SettingsService::class)->get('integrations.github.token.exampleowner'))->toBe(SOFTWARE_AUDIT_TOKEN);
+
+    $rows = softwareAuditEvents('software.github_token.stored');
+    expect($rows)->toHaveCount(1);
+
+    $payload = softwareAuditPayload($rows[0]);
+    $encoded = json_encode($payload);
+
+    expect($payload['subject']['identifier'] ?? null)->toBe('exampleowner')
+        ->and($payload['surface'] ?? null)->toBe('admin.system.software.github-access')
+        ->and($payload['ui_element'] ?? null)->toBe('Save token')
+        ->and($payload['context']['owner'] ?? null)->toBe('exampleowner')
+        ->and($encoded)->not->toContain(SOFTWARE_AUDIT_TOKEN)
+        ->and((string) ($payload['summary'] ?? ''))->not->toContain(SOFTWARE_AUDIT_TOKEN)
+        ->and((string) $rows[0]->payload)->not->toContain(SOFTWARE_AUDIT_TOKEN);
+});

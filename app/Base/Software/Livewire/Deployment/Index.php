@@ -130,11 +130,11 @@ class Index extends Component
                 $deployment->rebuildPhp(),
                 $runtimeReloader,
             ),
-            $runtimeReloader,
             event: 'software.rebuild.php',
             summary: (string) __('Rebuilt PHP dependencies'),
             uiElement: (string) __('Rebuild PHP'),
             subject: ['name' => 'software_rebuild', 'id' => 'php', 'identifier' => 'php'],
+            runtimeReloader: $runtimeReloader,
         );
     }
 
@@ -159,17 +159,21 @@ class Index extends Component
      * record so the detached process can close it with the real outcome; without it
      * the box would sit on "in progress" even after the workers came back.
      *
+     * Audit arguments are required: every maintenance action that goes through
+     * here must leave an Operator Activity row (#918). Optional-with-a-guard would
+     * silently drop the trail when a future caller forgets one.
+     *
      * @param  callable(): list<string>  $work
      * @param  array{name?: string, id?: int|string, identifier?: string|null}  $subject
      */
     private function runAction(
         DeploymentRunHistory $history,
         callable $work,
+        string $event,
+        string $summary,
+        string $uiElement,
+        array $subject,
         ?FrankenPhpDomainRuntimeReloader $runtimeReloader = null,
-        ?string $event = null,
-        ?string $summary = null,
-        ?string $uiElement = null,
-        array $subject = [],
     ): void {
         $this->authorizeManage();
         $lock = app(SoftwareUpdateLauncher::class)->maintenanceActionLock();
@@ -195,22 +199,20 @@ class Index extends Component
                 $runId,
             );
 
-            if ($event !== null && $summary !== null && $uiElement !== null && $subject !== []) {
-                $this->recordSemanticAction(
-                    event: $event,
-                    summary: $summary,
-                    uiElement: $uiElement,
-                    subject: [
-                        'name' => (string) ($subject['name'] ?? 'software'),
-                        'id' => $subject['id'] ?? 'unknown',
-                        'identifier' => $subject['identifier'] ?? null,
-                    ],
-                    context: array_filter([
-                        'run_id' => $runId,
-                        'outcome' => $outcome,
-                    ], fn (mixed $value): bool => $value !== null),
-                );
-            }
+            $this->recordSemanticAction(
+                event: $event,
+                summary: $summary,
+                uiElement: $uiElement,
+                subject: [
+                    'name' => (string) ($subject['name'] ?? 'software'),
+                    'id' => $subject['id'] ?? 'unknown',
+                    'identifier' => $subject['identifier'] ?? null,
+                ],
+                context: array_filter([
+                    'run_id' => $runId,
+                    'outcome' => $outcome,
+                ], fn (mixed $value): bool => $value !== null),
+            );
 
             if ($outcome !== 'pending') {
                 $this->streamRunRecordedMarker($outcome);
