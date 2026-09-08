@@ -47,15 +47,15 @@ declare(strict_types=1);
  * Production runs never pass it.
  */
 /**
- * Route names the pinned Domains own; everything else is platform surface.
+ * Naming prefixes Domain Routes files may declare (#870, #916).
  *
- * `people-connector.` covers the signed webhook and any other non-admin
- * connector routes (#870). `admin.people-connector.` remains for the operator
- * UI. A Domain Routes file that declares a name matching none of these is
- * refused by {@see unmatchedDeclaredDomainRouteNames()} so a new prefix is a
- * loud failure instead of a silent surface miss.
+ * Domain surface membership is the intersection of the live route table with
+ * {@see declaredDomainRouteNames()} — not this prefix scan. The prefix list
+ * only refuses a Domain Routes declaration that would otherwise be invisible
+ * to operators who expect conventional names. Base Integration routes use
+ * `admin.integration.*` and must never appear here (#916).
  */
-const DOMAIN_ROUTE_NAME = '/^(people\.|people-connector\.|admin\.people-connector\.|admin\.integration\.|commerce\.|it\.|quality\.)/';
+const DOMAIN_ROUTE_NAME = '/^(people\.|people-connector\.|admin\.people-connector\.|commerce\.|it\.|quality\.)/';
 
 function fail(string $message): never
 {
@@ -293,11 +293,15 @@ if ($options['routes'] !== null) {
 }
 $names = array_values(array_filter(array_map(fn (array $route): ?string => $route['name'] ?? null, $routes)));
 sort($names);
-$domainNames = array_values(array_filter($names, fn (string $name): bool => preg_match(DOMAIN_ROUTE_NAME, $name) === 1));
+$declared = declaredDomainRouteNames($root);
+$declaredSet = array_fill_keys($declared, true);
+// Domain surface = live names that Domain Routes files actually declare (#916).
+// Prefix matching alone mis-counted Base `admin.integration.*` as Domain surface.
+$domainNames = array_values(array_filter($names, static fn (string $name): bool => isset($declaredSet[$name])));
 
 // A Domain Routes declaration outside DOMAIN_ROUTE_NAME is invisible to the
 // surface count: refuse it here so a new prefix is a decision, not silence (#870).
-$unmatchedDeclared = unmatchedDeclaredDomainRouteNames(declaredDomainRouteNames($root));
+$unmatchedDeclared = unmatchedDeclaredDomainRouteNames($declared);
 if ($unmatchedDeclared !== []) {
     $failures[] = 'Domain Routes declare names outside DOMAIN_ROUTE_NAME (add a prefix or rename): '.implode(', ', $unmatchedDeclared);
 }
