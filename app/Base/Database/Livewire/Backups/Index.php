@@ -76,6 +76,8 @@ class Index extends Component
                 diskName: $diskName,
                 trigger: $this->resolveTrigger(),
                 dryRun: false,
+                surface: BackupService::SURFACE_ADMIN,
+                uiElement: 'run-backup',
             );
         } catch (BackupException $e) {
             $this->flash($e->getMessage(), 'danger');
@@ -108,31 +110,21 @@ class Index extends Component
         $diskName = (string) ($config['disk'] ?? 'local');
         $disk = $filesystemManager->disk($diskName);
 
-        if (! $disk->exists($manifestPath)) {
-            $this->flash(__('Manifest not found: :path', ['path' => $manifestPath]), 'danger');
+        try {
+            $ok = $service->verifyIntegrity(
+                disk: $disk,
+                manifestPath: $manifestPath,
+                surface: BackupService::SURFACE_ADMIN,
+                uiElement: 'verify',
+            );
+        } catch (BackupException $e) {
+            $this->flash($e->getMessage(), 'danger');
+            $this->loadRows($service, $filesystemManager);
 
             return;
         }
 
-        $manifestData = json_decode((string) $disk->get($manifestPath), true);
-        if (! is_array($manifestData)) {
-            $this->flash(__('Manifest is not valid JSON.'), 'danger');
-
-            return;
-        }
-
-        $artifactPath = (string) ($manifestData['artifact_path'] ?? '');
-        $expectedHash = (string) ($manifestData['sha256'] ?? '');
-
-        if (! $disk->exists($artifactPath)) {
-            $this->flash(__('Artifact missing: :path', ['path' => $artifactPath]), 'danger');
-
-            return;
-        }
-
-        $actualHash = $this->hashRemoteArtifact($disk, $artifactPath);
-
-        if ($actualHash === $expectedHash && $expectedHash !== '') {
+        if ($ok) {
             $this->flash(__('Integrity OK: SHA-256 matches manifest.'), 'success');
         } else {
             $this->flash(__('Integrity FAILED: artifact hash differs from manifest.'), 'danger');
@@ -156,14 +148,13 @@ class Index extends Component
             return;
         }
 
-        $manifestData = json_decode((string) $disk->get($manifestPath), true);
-        $artifactPath = is_array($manifestData) ? (string) ($manifestData['artifact_path'] ?? '') : '';
-
         try {
-            if ($artifactPath !== '' && $disk->exists($artifactPath)) {
-                $disk->delete($artifactPath);
-            }
-            $disk->delete($manifestPath);
+            $service->deleteBackup(
+                diskName: $diskName,
+                manifestPath: $manifestPath,
+                surface: BackupService::SURFACE_ADMIN,
+                uiElement: 'delete',
+            );
         } catch (Throwable $e) {
             $this->flash(__('Delete failed: :reason', ['reason' => $e->getMessage()]), 'danger');
 
@@ -229,31 +220,6 @@ class Index extends Component
         }
 
         $this->rows = $rows;
-    }
-
-    private function hashRemoteArtifact($disk, string $path): string
-    {
-        $stream = $disk->readStream($path);
-        if (! is_resource($stream)) {
-            return '';
-        }
-
-        $ctx = hash_init('sha256');
-        try {
-            while (! feof($stream)) {
-                $chunk = fread($stream, 65536);
-                if ($chunk === false || $chunk === '') {
-                    break;
-                }
-                hash_update($ctx, $chunk);
-            }
-        } finally {
-            if (is_resource($stream)) {
-                fclose($stream);
-            }
-        }
-
-        return hash_final($ctx);
     }
 
     private function flash(string $message, string $variant): void
