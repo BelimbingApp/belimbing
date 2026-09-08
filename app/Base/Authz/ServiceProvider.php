@@ -4,12 +4,14 @@ namespace App\Base\Authz;
 
 use App\Base\Authz\Capability\CapabilityCatalog;
 use App\Base\Authz\Capability\CapabilityRegistry;
+use App\Base\Authz\Console\Commands\PruneDecisionLogsCommand;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\Contracts\DecisionLogger;
 use App\Base\Authz\Contracts\TenantDirectory;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\Policies\ActorContextPolicy;
 use App\Base\Authz\Policies\CompanyScopePolicy;
+use App\Base\Authz\Policies\DelegationPolicy;
 use App\Base\Authz\Policies\GrantPolicy;
 use App\Base\Authz\Policies\KnownCapabilityPolicy;
 use App\Base\Authz\Policies\TenantScopePolicy;
@@ -22,6 +24,7 @@ use App\Base\Authz\Support\NullTenantDirectory;
 use App\Base\Foundation\ApplicationTopology;
 use App\Base\Foundation\Services\DomainState;
 use App\Base\Menu\Contracts\MenuAccessChecker;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
@@ -64,6 +67,7 @@ class ServiceProvider extends BaseServiceProvider
                 new KnownCapabilityPolicy($app->make(CapabilityRegistry::class)),
                 new TenantScopePolicy,
                 new CompanyScopePolicy,
+                new DelegationPolicy($app->make(GrantPolicy::class)),
                 $app->make(GrantPolicy::class),
             ], $app->make(TenantDirectory::class));
         });
@@ -74,6 +78,17 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(MenuAccessChecker::class, AuthzMenuAccessChecker::class);
 
         $this->app->singleton(ImpersonationManager::class);
+
+        $this->commands([
+            PruneDecisionLogsCommand::class,
+        ]);
+
+        $this->app->booted(function (): void {
+            $this->app->make(Schedule::class)
+                ->command('blb:authz:decision-logs:prune')
+                ->dailyAt('01:45')
+                ->withoutOverlapping();
+        });
     }
 
     /**

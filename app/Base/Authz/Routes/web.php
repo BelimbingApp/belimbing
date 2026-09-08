@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\Authz\Exceptions\ImpersonationRefusedException;
 use App\Base\Authz\Livewire\Capabilities\Index as CapabilitiesIndex;
 use App\Base\Authz\Livewire\DecisionLogs\Index as DecisionLogsIndex;
 use App\Base\Authz\Livewire\PrincipalCapabilities\Index as PrincipalCapabilitiesIndex;
@@ -25,7 +26,11 @@ Route::middleware('auth')->group(function () {
             404,
         );
 
-        $manager->start(auth()->user(), $user);
+        try {
+            $manager->start(auth()->user(), $user);
+        } catch (ImpersonationRefusedException $refusal) {
+            abort(403, $refusal->getMessage());
+        }
 
         return redirect()->route('dashboard');
     })

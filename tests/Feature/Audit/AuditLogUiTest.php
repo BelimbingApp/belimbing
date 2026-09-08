@@ -15,6 +15,7 @@ use App\Base\Authz\Models\PrincipalCapability;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
 use App\Base\Integration\Models\OutboundExchange;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Base\Workflow\DTO\TransitionContext;
 use App\Base\Workflow\Models\StatusConfig;
 use App\Base\Workflow\Models\StatusTransition;
@@ -26,6 +27,7 @@ use App\Core\Company\Models\Company;
 use App\Core\Employee\Models\Employee;
 use App\Core\User\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 
@@ -48,11 +50,23 @@ const AUDIT_LOG_UI_WORKFLOW_SUMMARY_SUFFIX = ' from Pending Review to Active';
 const AUDIT_LOG_UI_ADDRESS_PHONE = '03-77862444';
 const AUDIT_LOG_UI_ADDRESS_PREFIX = 'Address#';
 
+beforeEach(function (): void {
+    if (app(TenantContext::class)->currentTenantId() !== null) {
+        return;
+    }
+
+    $company = Company::factory()->create();
+    app(TenantContext::class)->set((int) $company->tenant_id);
+});
+
 function auditLogUiActor(): User
 {
-    return MutationListener::withoutAuditing(
+    $user = MutationListener::withoutAuditing(
         fn (): User => User::factory()->create(['name' => 'Audit Actor'])
     );
+    app(TenantContext::class)->set((int) $user->tenant_id);
+
+    return $user;
 }
 
 function auditLogUiFlushBuffer(): void
@@ -81,6 +95,8 @@ function auditLogUiViewerWithoutAudit(string $targetName): array
         'principal_id' => $viewer->id,
         'role_id' => $viewerRole->id,
     ]);
+
+    app(TenantContext::class)->set((int) $company->tenant_id);
 
     return [$company, $viewer, $target];
 }
@@ -112,6 +128,7 @@ function auditLogUiInsertAction(array $overrides = []): int
 
     return (int) DB::table('base_audit_actions')->insertGetId(array_replace([
         'company_id' => null,
+        'tenant_id' => app(TenantContext::class)->currentTenantId(),
         'actor_type' => PrincipalType::USER->value,
         'actor_id' => 1,
         'actor_role' => 'core_admin',
@@ -136,6 +153,7 @@ function auditLogUiInsertMutation(array $overrides = []): int
 
     return (int) DB::table('base_audit_mutations')->insertGetId(array_replace([
         'company_id' => null,
+        'tenant_id' => app(TenantContext::class)->currentTenantId(),
         'actor_type' => PrincipalType::USER->value,
         'actor_id' => 1,
         'actor_role' => 'core_admin',
@@ -363,6 +381,86 @@ it('does not expose source history or trace data without audit permission', func
         ->assertSet('traceTimeline', [])
         ->assertDontSee(AUDIT_LOG_UI_HIDDEN_OLD_EMAIL)
         ->assertDontSee(AUDIT_LOG_UI_HIDDEN_NEW_EMAIL);
+});
+
+it('allows local-only source history with the page capability while keeping traces and the full log auditor-only', function (): void {
+    setupAuthzRoles();
+
+    [$company, $viewer, $target] = auditLogUiViewerWithoutAudit('Local History Target');
+
+    PrincipalCapability::query()->create([
+        'company_id' => $company->id,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => $viewer->id,
+        'capability_key' => 'admin.user.view',
+        'is_allowed' => true,
+    ]);
+
+    auditLogUiInsertMutation([
+        'actor_id' => $viewer->id,
+        'auditable_id' => $target->id,
+        'old_values' => ['email' => 'local-old@example.com'],
+        'new_values' => ['email' => 'local-new@example.com'],
+        'trace_id' => 'LOCALH123456',
+    ]);
+
+    $this->actingAs($viewer);
+
+    $params = auditLogUiUserHistoryParams($target);
+    $params['requireAuditListCapability'] = false;
+    $params['allUrl'] = route('admin.audit.mutations', ['search' => AUDIT_LOG_UI_USER_PREFIX.$target->id]);
+
+    Livewire::test(SourceHistory::class, $params)
+        ->assertSeeHtml(AUDIT_LOG_UI_OPEN_WIRE_ACTION)
+        ->call('open')
+        ->assertSet('sourceHistoryDrawerOpen', true)
+        ->assertSet('sourceHistoryAllUrl', '')
+        ->assertSee('local-old@example.com')
+        ->assertSee('local-new@example.com')
+        ->call('openTrace', 'LOCA-LH12-3456')
+        ->assertSet('traceDrawerOpen', false)
+        ->assertSet('selectedTraceId', '')
+        ->assertSet('traceTimeline', []);
+});
+
+it('fails closed when the Blade require-audit-list-capability attribute is unrecognized', function (): void {
+    setupAuthzRoles();
+
+    [$company, $viewer, $target] = auditLogUiViewerWithoutAudit('Blade Coercion Target');
+
+    PrincipalCapability::query()->create([
+        'company_id' => $company->id,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => $viewer->id,
+        'capability_key' => 'admin.user.view',
+        'is_allowed' => true,
+    ]);
+
+    $this->actingAs($viewer);
+
+    $subjects = [
+        ['name' => 'User', 'id' => $target->id],
+    ];
+
+    $typoHtml = Blade::render(
+        '<x-ui.record-history
+            :subjects="$subjects"
+            source-capability="admin.user.view"
+            require-audit-list-capability="yes-required"
+        />',
+        ['subjects' => $subjects]
+    );
+    expect(trim($typoHtml))->toBe('');
+
+    $localHtml = Blade::render(
+        '<x-ui.record-history
+            :subjects="$subjects"
+            source-capability="admin.user.view"
+            :require-audit-list-capability="false"
+        />',
+        ['subjects' => $subjects]
+    );
+    expect($localHtml)->toContain(AUDIT_LOG_UI_OPEN_WIRE_ACTION);
 });
 
 it('requires source page view permission in addition to audit permission', function (): void {

@@ -5,6 +5,7 @@ namespace App\Base\Audit\Livewire\AuditLog;
 use App\Base\Audit\Livewire\AuditLog\Concerns\InteractsWithTraceTimeline;
 use App\Base\Audit\Models\AuditAction;
 use App\Base\Audit\Services\AuditLogPresenter;
+use App\Base\Audit\Services\AuditTenantScope;
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
@@ -12,6 +13,7 @@ use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -32,6 +34,9 @@ class Actions extends Component
     public string $filterResult = '';
 
     public string $filterDiagnostics = 'hide';
+
+    /** Platform-operator cross-tenant view (#873). Ignored for non-operators. */
+    public bool $allTenants = false;
 
     public string $sortBy = 'occurred_at';
 
@@ -83,36 +88,82 @@ class Actions extends Component
         $this->resetPage();
     }
 
+    public function updatedAllTenants(): void
+    {
+        $this->resetPage();
+    }
+
     public function toggleRetain(int $id): void
     {
         if (! $this->checkCapability('admin.audit.log.manage')) {
             return;
         }
 
-        $action = AuditAction::query()->findOrFail($id);
+        $action = app(AuditTenantScope::class)->apply(
+            AuditAction::query(),
+            'base_audit_actions',
+            $this->allTenants,
+        )->findOrFail($id);
         $action->is_retained = ! $action->is_retained;
         $action->save();
     }
 
     public function render(): View
     {
+        $scope = app(AuditTenantScope::class);
+
         return view('livewire.admin.audit.actions', [
             'actions' => $this->getActions(),
             'actorTypeOptions' => PrincipalType::orderedCases(),
             'presenter' => app(AuditLogPresenter::class),
+            'canViewAllTenants' => $scope->ambientIsPlatformOperator(),
+            'scopeCaption' => $this->scopeCaption($scope),
+        ]);
+    }
+
+    private function scopeCaption(AuditTenantScope $scope): string
+    {
+        $scopeLabel = $scope->ambientIsPlatformOperator() && $this->allTenants
+            ? __('Audit action log (all tenants)')
+            : __('Audit action log (current tenant)');
+
+        $days = (int) config('audit.action_retention_days', 90);
+        $oldest = $scope->apply(
+            AuditAction::query(),
+            'base_audit_actions',
+            $this->allTenants,
+        )->min('occurred_at');
+        $lastPrune = $scope->apply(
+            AuditAction::query()
+                ->where('event', 'console.command')
+                ->where('url', 'like', '%blb:audit:actions:prune%')
+                ->orderByDesc('occurred_at'),
+            'base_audit_actions',
+            $this->allTenants,
+        )->value('occurred_at');
+
+        return $scopeLabel.' — '.__('Retention :days days, oldest row :oldest, last prune :prune', [
+            'days' => $days,
+            'oldest' => $oldest !== null ? Carbon::parse($oldest)->toDateString() : __('none'),
+            'prune' => $lastPrune !== null ? Carbon::parse($lastPrune)->format('Y-m-d H:i') : __('never'),
         ]);
     }
 
     private function getActions(): LengthAwarePaginator
     {
         $sortColumn = self::SORTABLE[$this->sortBy] ?? 'base_audit_actions.occurred_at';
+        $scope = app(AuditTenantScope::class);
 
-        return AuditAction::query()
-            ->leftJoin('users', function ($join): void {
-                $join->on('base_audit_actions.actor_id', '=', 'users.id')
-                    ->where('base_audit_actions.actor_type', '=', PrincipalType::USER->value);
-            })
-            ->select('base_audit_actions.*', 'users.name as actor_name')
+        return $scope->apply(
+            AuditAction::query()
+                ->leftJoin('users', function ($join): void {
+                    $join->on('base_audit_actions.actor_id', '=', 'users.id')
+                        ->where('base_audit_actions.actor_type', '=', PrincipalType::USER->value);
+                })
+                ->select('base_audit_actions.*', 'users.name as actor_name'),
+            'base_audit_actions',
+            $this->allTenants,
+        )
             ->when($this->search, function ($query, $search): void {
                 $query->where(function ($q) use ($search): void {
                     $like = '%'.strtolower($search).'%';

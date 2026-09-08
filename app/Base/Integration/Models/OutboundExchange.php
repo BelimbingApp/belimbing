@@ -2,6 +2,8 @@
 
 namespace App\Base\Integration\Models;
 
+use App\Base\Audit\Services\AuditTenantScope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -9,6 +11,7 @@ use Illuminate\Support\Str;
 /**
  * Durable audit record for one outbound external-system exchange.
  *
+ * @property int|null $tenant_id
  * @property string $id
  * @property string $system
  * @property string|null $provider
@@ -20,14 +23,37 @@ use Illuminate\Support\Str;
  * @property string|null $owner_type
  * @property int|null $owner_id
  * @property string|null $correlation_id
+ * @property string|null $traceparent
+ * @property string|null $tracestate
+ * @property array<string, mixed>|null $request_headers
+ * @property array<string, mixed>|null $request_body
+ * @property bool $request_body_truncated
+ * @property int|null $request_body_original_bytes
  * @property int|null $response_status
+ * @property array<string, mixed>|null $response_headers
+ * @property array<string, mixed>|null $response_body
+ * @property bool $response_body_truncated
+ * @property int|null $response_body_original_bytes
+ * @property int|null $duration_ms
+ * @property int|null $retry_count
  * @property string $outcome
+ * @property string|null $error_class
+ * @property string|null $error_message
  * @property bool $fallback_used
  * @property string|null $fallback_reason
+ * @property array<string, mixed>|null $metadata
  * @property Carbon $occurred_at
+ * @property Carbon|null $updated_at
+ * @property Carbon|null $created_at
  */
 class OutboundExchange extends Model
 {
+    /** @return Builder<static> */
+    public static function visibleToCurrentTenant(): Builder
+    {
+        return app(AuditTenantScope::class)->apply(static::query(), 'base_integration_outbound_exchanges', allTenants: true);
+    }
+
     public const ID_PREFIX = 'ix_';
 
     protected $table = 'base_integration_outbound_exchanges';
@@ -62,6 +88,7 @@ class OutboundExchange extends Model
      */
     protected $fillable = [
         'id',
+        'tenant_id',
         'system',
         'provider',
         'operation',

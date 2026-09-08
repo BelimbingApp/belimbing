@@ -46,13 +46,67 @@ declare(strict_types=1);
  * deliberate missing-name and wrong-count mutations that must turn red.
  * Production runs never pass it.
  */
-/** Route names the pinned Domains own; everything else is platform surface. */
-const DOMAIN_ROUTE_NAME = '/^(people\.|admin\.people-connector\.|admin\.integration\.|commerce\.|it\.|quality\.)/';
+/**
+ * Naming prefixes that mark a live route as Domain surface (#870, #916).
+ *
+ * Domain surface membership is the live route table filtered by this prefix
+ * list — not a text scan of `->name()` literals. Assembled names from
+ * `Route::name()->group` / `Route::resource` never appear as one literal in
+ * Routes files; counting only literals silently under-counts and lets new
+ * Domain routes ride in without a surface bump (#920). Base Integration uses
+ * `admin.integration.*` and must never appear here (#916).
+ * {@see declaredDomainRouteNames()} still refuses Domain Routes declarations
+ * outside this list so an unconventional prefix fails loudly (#870).
+ */
+const DOMAIN_ROUTE_NAME = '/^(people\.|people-connector\.|admin\.people-connector\.|commerce\.|it\.|quality\.)/';
 
 function fail(string $message): never
 {
     fwrite(STDERR, "composed-smoke: {$message}\n");
     exit(1);
+}
+
+/**
+ * Every `->name('…')` / `->name("…")` declared under Domain Routes trees.
+ *
+ * @return list<string>
+ */
+function declaredDomainRouteNames(string $root): array
+{
+    $names = [];
+
+    foreach (glob($root.'/app/Domains/*/*/Routes/*.php') ?: [] as $file) {
+        $contents = (string) file_get_contents($file);
+        if (preg_match_all("/->name\\('([^']+)'\\)/", $contents, $single) > 0) {
+            foreach ($single[1] as $name) {
+                $names[] = $name;
+            }
+        }
+        if (preg_match_all('/->name\\("([^"]+)"\\)/', $contents, $double) > 0) {
+            foreach ($double[1] as $name) {
+                $names[] = $name;
+            }
+        }
+    }
+
+    $names = array_values(array_unique($names));
+    sort($names);
+
+    return $names;
+}
+
+/**
+ * Declared Domain route names the prefix filter does not own (#870).
+ *
+ * @param  list<string>  $declared
+ * @return list<string>
+ */
+function unmatchedDeclaredDomainRouteNames(array $declared): array
+{
+    return array_values(array_filter(
+        $declared,
+        static fn (string $name): bool => preg_match(DOMAIN_ROUTE_NAME, $name) !== 1,
+    ));
 }
 
 /** @return array<string, string> */
@@ -242,7 +296,30 @@ if ($options['routes'] !== null) {
 }
 $names = array_values(array_filter(array_map(fn (array $route): ?string => $route['name'] ?? null, $routes)));
 sort($names);
-$domainNames = array_values(array_filter($names, fn (string $name): bool => preg_match(DOMAIN_ROUTE_NAME, $name) === 1));
+$declared = declaredDomainRouteNames($root);
+// Domain surface = live names matching DOMAIN_ROUTE_NAME (#916, #920).
+// Do not intersect with literal ->name() declarations: Route::name()->group and
+// Route::resource assemble names the text scan never sees, and under-counting
+// lets Domain routes land without failing the pin. Excluding admin.integration
+// from DOMAIN_ROUTE_NAME is what keeps Base Integration off this count (#916).
+$domainNames = array_values(array_filter(
+    $names,
+    static fn (string $name): bool => preg_match(DOMAIN_ROUTE_NAME, $name) === 1,
+));
+
+// A Domain Routes declaration outside DOMAIN_ROUTE_NAME is invisible to the
+// surface count: refuse it here so a new prefix is a decision, not silence (#870).
+$unmatchedDeclared = unmatchedDeclaredDomainRouteNames($declared);
+if ($unmatchedDeclared !== []) {
+    $failures[] = 'Domain Routes declare names outside DOMAIN_ROUTE_NAME (add a prefix or rename): '.implode(', ', $unmatchedDeclared);
+}
+
+// Pin/count mismatches are why --print-surface exists (advance-domain-pin
+// regenerates while the surface is stale). Only refuse names the filter would
+// otherwise silence — those cannot be fixed by rewriting the surface file.
+if ($unmatchedDeclared !== [] && $options['print-surface']) {
+    fail('Domain Routes declare names outside DOMAIN_ROUTE_NAME (add a prefix or rename): '.implode(', ', $unmatchedDeclared));
+}
 
 if ($options['print-surface']) {
     echo json_encode([

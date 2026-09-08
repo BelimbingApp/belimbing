@@ -355,7 +355,20 @@ jobs:
           gh pr merge "$existing" --repo "$GITHUB_REPOSITORY" --auto --squash
           echo "Opened/updated baseline raise PR #$existing with auto-merge."
 
+      # Dependabot PRs receive the Dependabot secrets store, not Actions
+      # secrets (#910). secrets.SONAR_TOKEN is empty there, so the scanner
+      # authenticates anonymously against a private project and fails the
+      # required `ci` job. Skip the scan for that actor only — say so in the
+      # log — until SONAR_TOKEN is also present under Dependabot secrets.
+      - name: Skip SonarCloud for Dependabot (missing Dependabot SONAR_TOKEN)
+        if: github.actor == 'dependabot[bot]'
+        run: |
+          echo 'Skipping SonarCloud Scan: github.actor is dependabot[bot].'
+          echo 'Dependabot workflows cannot read Actions secrets.SONAR_TOKEN.'
+          echo 'Add the same token under Settings → Secrets → Dependabot to restore analysis on dependency bumps.'
+
       - name: SonarCloud Scan
+        if: github.actor != 'dependabot[bot]'
         uses: SonarSource/sonarqube-scan-action@v8 # NOSONAR — official SonarSource scanner action; tag pinning is acceptable for internal projects
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -537,6 +550,7 @@ jobs:
             tests/Feature/Audit/AuditLogUiTest.php \
             tests/Feature/Core/Geonames \
             tests/Unit/Base/Database/DatabaseConnectionConfigurationTest.php \
+            tests/Feature/Base/Typing/ModelPropertyHydrationProbeTest.php \
             tests/Unit/Core/AI/Services/TaskModelRecommendationServiceTest.php
 
   notify-people-connector:

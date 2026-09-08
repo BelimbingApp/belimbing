@@ -6,6 +6,7 @@ use App\Base\Audit\Livewire\AuditLog\Concerns\InteractsWithTraceTimeline;
 use App\Base\Audit\Models\AuditMutation;
 use App\Base\Audit\Services\AuditLogPresenter;
 use App\Base\Audit\Services\AuditSearchSql;
+use App\Base\Audit\Services\AuditTenantScope;
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\SelectsPerPage;
@@ -29,6 +30,9 @@ class Mutations extends Component
     public string $search = '';
 
     public string $filterEvent = '';
+
+    /** Platform-operator cross-tenant view (#873). Ignored for non-operators. */
+    public bool $allTenants = false;
 
     public string $sortBy = 'occurred_at';
 
@@ -79,6 +83,11 @@ class Mutations extends Component
         $this->resetPage();
     }
 
+    public function updatedAllTenants(): void
+    {
+        $this->resetPage();
+    }
+
     /**
      * Override ResetsPaginationOnSearch to use the default paginator.
      */
@@ -89,22 +98,40 @@ class Mutations extends Component
 
     public function render(): View
     {
+        $scope = app(AuditTenantScope::class);
+
         return view('livewire.admin.audit.mutations', [
             'mutations' => $this->getMutations(),
             'presenter' => app(AuditLogPresenter::class),
+            'canViewAllTenants' => $scope->ambientIsPlatformOperator(),
+            'scopeCaption' => $this->scopeCaption($scope),
         ]);
+    }
+
+    private function scopeCaption(AuditTenantScope $scope): string
+    {
+        if ($scope->ambientIsPlatformOperator() && $this->allTenants) {
+            return __('Data mutation audit log (all tenants)');
+        }
+
+        return __('Data mutation audit log (current tenant)');
     }
 
     private function getMutations(): LengthAwarePaginator
     {
         $sortColumn = self::SORTABLE[$this->sortBy] ?? 'base_audit_mutations.occurred_at';
+        $scope = app(AuditTenantScope::class);
 
-        return AuditMutation::query()
-            ->leftJoin('users', function ($join): void {
-                $join->on('base_audit_mutations.actor_id', '=', 'users.id')
-                    ->where('base_audit_mutations.actor_type', '=', PrincipalType::USER->value);
-            })
-            ->select('base_audit_mutations.*', 'users.name as actor_name')
+        return $scope->apply(
+            AuditMutation::query()
+                ->leftJoin('users', function ($join): void {
+                    $join->on('base_audit_mutations.actor_id', '=', 'users.id')
+                        ->where('base_audit_mutations.actor_type', '=', PrincipalType::USER->value);
+                })
+                ->select('base_audit_mutations.*', 'users.name as actor_name'),
+            'base_audit_mutations',
+            $this->allTenants,
+        )
             ->when($this->search, function ($query, $search): void {
                 $query->where(function ($q) use ($search): void {
                     $like = '%'.strtolower($search).'%';
