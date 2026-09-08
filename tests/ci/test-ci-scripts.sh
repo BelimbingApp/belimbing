@@ -681,46 +681,97 @@ import json, sys
 json.dump({"pins": {"people": sys.argv[2], "people-connector": sys.argv[3]}, "domain_route_count": int(sys.argv[4]), "route_names": sys.argv[5].split(",")}, open(sys.argv[1], "w"))
 PY
     }
-    # Two Domain routes, one platform route and one unnamed route: only the Domain routes count.
-    printf '[{"name":"people.index","uri":"people"},{"name":"admin.integration.index","uri":"admin/integration"},{"name":"admin.system.info.index","uri":"admin/system/info"},{"name":null,"uri":"livewire/update"}]' > "$smoke_root/routes.json"
+    # Domain surface is live names matching DOMAIN_ROUTE_NAME (#916/#920). Base
+    # admin.integration.* may appear in the table without counting as Domain.
+    mkdir -p "$smoke_root/app/Domains/People/Workforce/Routes" \
+        "$smoke_root/app/Domains/PeopleConnector/Connector/Routes"
+    printf "%s\n" "<?php" "Route::get('people', fn () => null)->name('people.index');" \
+        > "$smoke_root/app/Domains/People/Workforce/Routes/web.php"
+    printf "%s\n" "<?php" "Route::get('admin/people-connector', fn () => null)->name('admin.people-connector.index');" \
+        > "$smoke_root/app/Domains/PeopleConnector/Connector/Routes/web.php"
+    printf '[{"name":"people.index","uri":"people"},{"name":"admin.people-connector.index","uri":"admin/people-connector"},{"name":"admin.integration.outbound-exchanges.index","uri":"admin/integration/outbound-exchanges"},{"name":"admin.system.info.index","uri":"admin/system/info"},{"name":null,"uri":"livewire/update"}]' > "$smoke_root/routes.json"
     smoke() {
         php scripts/ci/composed-smoke.php --root="$smoke_root" --routes-json="$smoke_root/routes.json" \
             --registry="$smoke_root/scripts/ci/domain-repos.json" --surface="$smoke_root/scripts/ci/composed-surface.json" "$@"
     }
     smoke_descriptor "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}"
-    smoke_surface "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}" 2 'admin.integration.index,people.index'
+    smoke_surface "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}" 2 'admin.people-connector.index,people.index'
     smoke 2>/dev/null
-    smoke_surface "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}" 2 'admin.integration.index,people.index,people.missing'
+    smoke_surface "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}" 2 'admin.people-connector.index,people.index,people.missing'
     if smoke >/dev/null 2>&1; then
         echo 'composed-smoke accepted a table missing an expected route name' >&2; exit 1
     fi
-    smoke_surface "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}" 3 'admin.integration.index,people.index'
+    smoke_surface "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}" 3 'admin.people-connector.index,people.index'
     if smoke >/dev/null 2>&1; then
         echo 'composed-smoke accepted a domain route count that does not match the surface' >&2; exit 1
     fi
-    smoke_surface "${smoke_sha[People]}" 0123456789abcdef0123456789abcdef01234567 2 'admin.integration.index,people.index'
+    smoke_surface "${smoke_sha[People]}" 0123456789abcdef0123456789abcdef01234567 2 'admin.people-connector.index,people.index'
     if smoke >/dev/null 2>&1; then
         echo 'composed-smoke accepted a surface whose pins disagree with the descriptor' >&2; exit 1
     fi
     smoke_descriptor 0123456789abcdef0123456789abcdef01234567 "${smoke_sha[PeopleConnector]}"
-    smoke_surface 0123456789abcdef0123456789abcdef01234567 "${smoke_sha[PeopleConnector]}" 2 'admin.integration.index,people.index'
+    smoke_surface 0123456789abcdef0123456789abcdef01234567 "${smoke_sha[PeopleConnector]}" 2 'admin.people-connector.index,people.index'
     if smoke >/dev/null 2>&1; then
         echo 'composed-smoke accepted a mount whose HEAD is not the pinned ref' >&2; exit 1
     fi
 
+    # #916: adding a Base-owned admin.integration.* name must stay green and
+    # leave domain_route_count unchanged.
+    smoke_descriptor "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}"
+    smoke_surface "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}" 2 'admin.people-connector.index,people.index'
+    printf '[{"name":"people.index","uri":"people"},{"name":"admin.people-connector.index","uri":"admin/people-connector"},{"name":"admin.integration.outbound-exchanges.index","uri":"admin/integration/outbound-exchanges"},{"name":"admin.integration.outbound-exchanges.show","uri":"admin/integration/outbound-exchanges/1"}]' \
+        > "$smoke_root/routes.json"
+    smoke 2>/dev/null || {
+        echo 'composed-smoke turned red when only a Base admin.integration.* route was added' >&2
+        smoke 2>&1 || true
+        exit 1
+    }
+
+    # A genuinely Domain-declared name appearing in the table without a surface
+    # bump still turns red — the count guard remains load-bearing.
+    printf "%s\n" "<?php" "Route::get('people', fn () => null)->name('people.index');" \
+        "Route::get('people/extra', fn () => null)->name('people.extra');" \
+        > "$smoke_root/app/Domains/People/Workforce/Routes/web.php"
+    printf '[{"name":"people.index","uri":"people"},{"name":"people.extra","uri":"people/extra"},{"name":"admin.people-connector.index","uri":"admin/people-connector"},{"name":"admin.integration.outbound-exchanges.index","uri":"admin/integration/outbound-exchanges"}]' \
+        > "$smoke_root/routes.json"
+    if smoke >/dev/null 2>&1; then
+        echo 'composed-smoke accepted an extra Domain-declared route without a surface bump' >&2; exit 1
+    fi
+    domain_err=$(smoke 2>&1 || true)
+    grep -q 'domain route count is 3, expected 2' <<< "$domain_err"
+    # Restore the two-route declaration for later cases.
+    printf "%s\n" "<?php" "Route::get('people', fn () => null)->name('people.index');" \
+        > "$smoke_root/app/Domains/People/Workforce/Routes/web.php"
+
+    # #920: Route::name()->group + Route::resource assembled names never appear as
+    # one literal ->name() string. They must still move the Domain surface count.
+    printf "%s\n" "<?php" "Route::get('people', fn () => null)->name('people.index');" \
+        "Route::name('people.')->group(function () {" \
+        "    Route::resource('things', ThingController::class)->only(['index', 'store']);" \
+        "});" \
+        > "$smoke_root/app/Domains/People/Workforce/Routes/web.php"
+    printf '[{"name":"people.index","uri":"people"},{"name":"people.things.index","uri":"people/things"},{"name":"people.things.store","uri":"people/things"},{"name":"admin.people-connector.index","uri":"admin/people-connector"},{"name":"admin.integration.outbound-exchanges.index","uri":"admin/integration/outbound-exchanges"}]' \
+        > "$smoke_root/routes.json"
+    if smoke >/dev/null 2>&1; then
+        echo 'composed-smoke accepted Route::resource group names without a surface bump' >&2; exit 1
+    fi
+    resource_err=$(smoke 2>&1 || true)
+    grep -q 'domain route count is 4, expected 2' <<< "$resource_err"
+    printf "%s\n" "<?php" "Route::get('people', fn () => null)->name('people.index');" \
+        > "$smoke_root/app/Domains/People/Workforce/Routes/web.php"
+
     # #870: DOMAIN_ROUTE_NAME must own people-connector.* (signed webhook) and
     # refuse a Domain Routes declaration outside the prefix list.
     smoke_descriptor "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}"
-    mkdir -p "$smoke_root/app/Domains/PeopleConnector/Connector/Routes"
     printf "%s\n" "<?php" "Route::post('webhooks/people-connector/{id}', fn () => null)->name('people-connector.webhook');" \
         > "$smoke_root/app/Domains/PeopleConnector/Connector/Routes/web.php"
-    printf '[{"name":"people.index","uri":"people"},{"name":"people-connector.webhook","uri":"webhooks/people-connector/1"},{"name":"admin.integration.index","uri":"admin/integration"}]' \
+    printf '[{"name":"people.index","uri":"people"},{"name":"people-connector.webhook","uri":"webhooks/people-connector/1"},{"name":"admin.integration.outbound-exchanges.index","uri":"admin/integration/outbound-exchanges"}]' \
         > "$smoke_root/routes.json"
-    smoke_surface "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}" 3 'admin.integration.index,people-connector.webhook,people.index'
+    smoke_surface "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}" 2 'people-connector.webhook,people.index'
     smoke 2>/dev/null
 
     # Narrowing the filter by dropping people-connector. must turn red: the
-    # Routes declaration is then unmatched and the live name falls out of the count.
+    # Routes declaration is then unmatched (#870).
     narrowed="$smoke_root/composed-smoke-narrowed.php"
     cp scripts/ci/composed-smoke.php "$narrowed"
     python3 - "$narrowed" <<'PY'
@@ -728,8 +779,8 @@ from pathlib import Path
 import sys
 path = Path(sys.argv[1])
 text = path.read_text()
-old = "const DOMAIN_ROUTE_NAME = '/^(people\\.|people-connector\\.|admin\\.people-connector\\.|admin\\.integration\\.|commerce\\.|it\\.|quality\\.)/';"
-new = "const DOMAIN_ROUTE_NAME = '/^(people\\.|admin\\.people-connector\\.|admin\\.integration\\.|commerce\\.|it\\.|quality\\.)/';"
+old = "const DOMAIN_ROUTE_NAME = '/^(people\\.|people-connector\\.|admin\\.people-connector\\.|commerce\\.|it\\.|quality\\.)/';"
+new = "const DOMAIN_ROUTE_NAME = '/^(people\\.|admin\\.people-connector\\.|commerce\\.|it\\.|quality\\.)/';"
 assert old in text, 'DOMAIN_ROUTE_NAME const missing for the #870 mutant'
 path.write_text(text.replace(old, new, 1))
 PY
@@ -745,9 +796,9 @@ PY
     # An undeclared prefix in Domain Routes is refused even when the route table is empty of it.
     printf "%s\n" "<?php" "Route::get('odd', fn () => null)->name('odd.domain.route');" \
         > "$smoke_root/app/Domains/PeopleConnector/Connector/Routes/web.php"
-    printf '[{"name":"people.index","uri":"people"},{"name":"admin.integration.index","uri":"admin/integration"}]' \
+    printf '[{"name":"people.index","uri":"people"},{"name":"admin.integration.outbound-exchanges.index","uri":"admin/integration/outbound-exchanges"}]' \
         > "$smoke_root/routes.json"
-    smoke_surface "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}" 2 'admin.integration.index,people.index'
+    smoke_surface "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}" 1 'people.index'
     if smoke >/dev/null 2>&1; then
         echo 'composed-smoke accepted a Domain Routes name outside DOMAIN_ROUTE_NAME' >&2
         exit 1
@@ -759,10 +810,10 @@ PY
     # intermediate state) but still refuse unmatched Domain Routes names (#871).
     printf "%s\n" "<?php" "Route::post('webhooks/people-connector/{id}', fn () => null)->name('people-connector.webhook');" \
         > "$smoke_root/app/Domains/PeopleConnector/Connector/Routes/web.php"
-    printf '[{"name":"people.index","uri":"people"},{"name":"people-connector.webhook","uri":"webhooks/people-connector/1"},{"name":"admin.integration.index","uri":"admin/integration"}]' \
+    printf '[{"name":"people.index","uri":"people"},{"name":"people-connector.webhook","uri":"webhooks/people-connector/1"},{"name":"admin.integration.outbound-exchanges.index","uri":"admin/integration/outbound-exchanges"}]' \
         > "$smoke_root/routes.json"
     smoke_descriptor "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}"
-    smoke_surface "${smoke_sha[People]}" 1111111111111111111111111111111111111111 3 'admin.integration.index,people-connector.webhook,people.index'
+    smoke_surface "${smoke_sha[People]}" 1111111111111111111111111111111111111111 2 'people-connector.webhook,people.index'
     printed=$(smoke --print-surface 2>/dev/null) || {
         echo 'composed-smoke --print-surface failed while only the surface pin was stale' >&2
         exit 1
