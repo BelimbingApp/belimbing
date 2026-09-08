@@ -2,6 +2,8 @@
 
 namespace App\Base\FeatureFlags\Services;
 
+use App\Base\FeatureFlags\Exceptions\FeatureFlagStillDeclaredException;
+use App\Base\FeatureFlags\Exceptions\UndeclaredFeatureFlagException;
 use App\Base\FeatureFlags\Models\FeatureFlagOverride;
 use App\Base\Tenancy\Contracts\TenantContext;
 use Illuminate\Support\Facades\Schema;
@@ -50,18 +52,43 @@ final class FeatureFlags
         FeatureFlagOverride::query()
             ->where('tenant_id', $this->tenants->requireTenantId())
             ->where('flag', $flag)
-            ->delete();
+            ->get()
+            ->each(fn (FeatureFlagOverride $row): bool => $row->delete());
     }
 
     /**
-     * @return list<array{flag: string, module: string, description: string, default: bool, enabled: bool, overridden: bool}>
+     * Delete an override whose flag is not declared by any enabled module.
+     *
+     * Declared names still clear through clearOverride() so the two paths
+     * cannot be confused.
+     */
+    public function purgeOrphanedOverride(string $flag): void
+    {
+        try {
+            $this->registry->get($flag);
+            throw FeatureFlagStillDeclaredException::forFlag($flag);
+        } catch (UndeclaredFeatureFlagException) {
+            // Expected: only undeclared names may be purged here.
+        }
+
+        FeatureFlagOverride::query()
+            ->where('tenant_id', $this->tenants->requireTenantId())
+            ->where('flag', $flag)
+            ->get()
+            ->each(fn (FeatureFlagOverride $row): bool => $row->delete());
+    }
+
+    /**
+     * @return list<array{flag: string, module: string|null, description: string, default: bool|null, enabled: bool, overridden: bool, orphaned: bool}>
      */
     public function listForCurrentTenant(): array
     {
         $tenantId = $this->tenants->requireTenantId();
         $rows = [];
+        $declared = [];
 
         foreach ($this->registry->all() as $definition) {
+            $declared[$definition->flag] = true;
             $override = $this->overrideFor($definition->flag, $tenantId);
             $rows[] = [
                 'flag' => $definition->flag,
@@ -70,7 +97,28 @@ final class FeatureFlags
                 'default' => $definition->default,
                 'enabled' => $override ?? $definition->default,
                 'overridden' => $override !== null,
+                'orphaned' => false,
             ];
+        }
+
+        if ($this->overridesTableReady()) {
+            $orphans = FeatureFlagOverride::query()
+                ->where('tenant_id', $tenantId)
+                ->when($declared !== [], fn ($query) => $query->whereNotIn('flag', array_keys($declared)))
+                ->orderBy('flag')
+                ->get(['flag', 'enabled']);
+
+            foreach ($orphans as $orphan) {
+                $rows[] = [
+                    'flag' => (string) $orphan->flag,
+                    'module' => null,
+                    'description' => '',
+                    'default' => null,
+                    'enabled' => (bool) $orphan->enabled,
+                    'overridden' => true,
+                    'orphaned' => true,
+                ];
+            }
         }
 
         return $rows;

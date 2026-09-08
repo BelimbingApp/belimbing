@@ -10,20 +10,13 @@ return [
         // TenantScopedCommand, 'expires' => YYYY-MM-DD]. A blank reason or a
         // missing or past expiry does not exempt a command (#710): the audit
         // goes red on the day the exemption lapses.
+        //
+        // People (#833 / blb-people#347) no longer needs entries — every
+        // Domain command extends TenantScopedCommand. Connector entries stay
+        // as dated rollout exemptions until they expire; the composed-smoke
+        // audit (#912) is not proof that this allowlist is correct — see
+        // DomainCommandTenantAudit::isAllowlisted().
         'allowlist' => [
-            'blb:attendance:policy:simulate' => ['reason' => 'Rollout exemption: migrated onto TenantScopedCommand in blb-people#316.', 'expires' => '2026-10-07'],
-            'blb:attendance:policy:validate' => ['reason' => 'Rollout exemption: migrated onto TenantScopedCommand in blb-people#316.', 'expires' => '2026-10-07'],
-            'blb:attendance:roster' => ['reason' => 'Rollout exemption: migrated onto TenantScopedCommand in blb-people#316.', 'expires' => '2026-10-07'],
-            'blb:claim:policy:simulate' => ['reason' => 'Rollout exemption: migrated onto TenantScopedCommand in blb-people#316.', 'expires' => '2026-10-07'],
-            'blb:claim:policy:validate' => ['reason' => 'Rollout exemption: migrated onto TenantScopedCommand in blb-people#316.', 'expires' => '2026-10-07'],
-            'blb:leave:carry-forward' => ['reason' => 'Rollout exemption: migrated onto TenantScopedCommand in blb-people#316.', 'expires' => '2026-10-07'],
-            'blb:leave:expire-replacement' => ['reason' => 'Rollout exemption: migrated onto TenantScopedCommand in blb-people#316.', 'expires' => '2026-10-07'],
-            'blb:leave:seed-sbg-pack' => ['reason' => 'Rollout exemption: migrated onto TenantScopedCommand in blb-people#316.', 'expires' => '2026-10-07'],
-            'blb:payroll:materialize-pending' => ['reason' => 'Rollout exemption: migrated onto TenantScopedCommand in blb-people#316.', 'expires' => '2026-10-07'],
-            'people:performance:overdue' => ['reason' => 'Rollout exemption: migrated onto TenantScopedCommand in blb-people#316.', 'expires' => '2026-10-07'],
-            'people:reminders-due' => ['reason' => 'Rollout exemption: migrated onto TenantScopedCommand in blb-people#316.', 'expires' => '2026-10-07'],
-            'people:skills-workbook-dry-run' => ['reason' => 'Rollout exemption: migrated onto TenantScopedCommand in blb-people#316.', 'expires' => '2026-10-07'],
-            'people:training:effectiveness-due' => ['reason' => 'Rollout exemption: migrated onto TenantScopedCommand in blb-people#316.', 'expires' => '2026-10-07'],
             'connector:capability:verify' => ['reason' => 'Rollout exemption: migrated onto TenantScopedCommand in blb-people-connector#249.', 'expires' => '2026-10-07'],
             'connector:doctor' => ['reason' => 'Rollout exemption: migrated onto TenantScopedCommand in blb-people-connector#249.', 'expires' => '2026-10-07'],
             'connector:health:check' => ['reason' => 'Rollout exemption: migrated onto TenantScopedCommand in blb-people-connector#249.', 'expires' => '2026-10-07'],

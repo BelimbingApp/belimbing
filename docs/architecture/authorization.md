@@ -240,7 +240,7 @@ Logging is **deferred and batched**:
 2. A `terminating` callback flushes all buffered entries in a single batch `INSERT` (chunked at 500 rows) after the response is sent.
 3. Log persistence failure is caught and reported via `logger()->error()` without affecting the authorization decision.
 
-The `DecisionLog` model includes `MassPrunable` with a configurable retention period (`authz.decision_log_retention_days`, default 90 days). Run `php artisan model:prune --model=App\\Base\\Authz\\Models\\DecisionLog` to clean old entries.
+The `DecisionLog` model includes `MassPrunable` with a configurable retention period (`authz.decision_log_retention_days`, default 90 days). The scheduled command `blb:authz:decision-logs:prune` runs daily at 01:45 (override with `--days` / `--dry-run`).
 
 ---
 
@@ -441,9 +441,10 @@ Implemented as a composable policy pipeline (not hardcoded):
 
 1. **Actor validity** — `ActorContextPolicy`
 2. **Capability registry** — `KnownCapabilityPolicy`
-3. **Company scope gate** — `CompanyScopePolicy`
-4. **Delegation gate** — `DelegationPolicy`
-5. **Grant evaluation** — `GrantPolicy` (RBAC + direct grants)
+3. **Tenant scope gate** — `TenantScopePolicy`
+4. **Company scope gate** — `CompanyScopePolicy`
+5. **Delegation gate** — `DelegationPolicy`
+6. **Grant evaluation** — `GrantPolicy` (RBAC + direct grants)
 
 Future policies (resource ownership, workflow state) can be inserted into the pipeline without modifying existing code.
 
@@ -537,7 +538,10 @@ Routes are auto-discovered from `app/Base/Authz/Routes/web.php`.
 ### 12.4 Constraints (v1)
 
 - Cannot impersonate yourself.
-- No nested impersonation (buttons hidden while impersonating).
+- No nested impersonation: `ImpersonationManager::start()` refuses when a session is already impersonating (HTTP 403); UI buttons stay hidden as a convenience, not the enforcement.
+- Cross-tenant targets are refused in the manager (and still 404 at the route when the ambient tenant does not own the user).
+- Each start and stop records a retained semantic action (`impersonation.started` / `impersonation.stopped`) naming the real admin as `impersonator_id` before the auth swap.
+- While impersonating, audit actor payloads carry `impersonator_id` so mutation and action rows answer who was really acting.
 - Impersonation guard is `admin.user.impersonate`, included in `core_admin` role.
 
 ---

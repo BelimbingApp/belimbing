@@ -66,11 +66,13 @@ Consumers also fail closed on suspended. `Tenant::isActive()` — status `active
 ### Platform async entry-point inventory
 
 Base and Core declare every queued job and every scheduler-registered Artisan
-command in . Tests
-assert the declared job list matches filesystem discovery and that the declared
-schedule list matches the live  facade, then prove each queued entry
-restores the dispatch-time tenant (and refuses a default when none was stamped)
-and each scheduled command leaves ambient tenant null.
+command in [`app/Base/Tenancy/Support/PlatformAsyncEntryPointInventory.php`](../../app/Base/Tenancy/Support/PlatformAsyncEntryPointInventory.php).
+Tests assert the declared job list matches filesystem discovery and that the
+declared schedule list matches the live [`Schedule`](https://laravel.com/docs/scheduling)
+facade scoped to Base and Core (Domain and Extension schedules are owned
+elsewhere), then prove each queued entry restores the dispatch-time tenant
+(and refuses a default when none was stamped) and each scheduled command
+leaves ambient tenant null.
 
 
 
@@ -126,6 +128,8 @@ Chat agent selection resolves the employee through a company in the current tena
 ### Operator surface
 
 Admin tenant management (list, create with optional parent, suspend/reactivate) lives at `admin/tenancy/tenants` behind the `admin.tenancy.tenant.*` capabilities. The menu surface is gated by the `tenancy.visible` menu condition: more than one tenant, or `tenancy.show_management` set true.
+
+Audit log pages (mutations, actions, source history, and the trace timeline) read only the ambient tenant through `AuditTenantScope`; the platform-operator tenant may widen mutations and actions with an explicit all-tenants toggle. Null-tenant rows stay visible only in that operator view.
 
 Two writers of `tenants.status` exist: the create form sets the initial value, and the per-row Suspend / Reactivate action changes an existing one. That action is a separate authority from creating a tenant — `admin.tenancy.tenant.manage`, not `admin.tenancy.tenant.create` — because it takes a live tenant off every entry point above; without it the column is hidden and a direct component call is refused. Each change records one `base_audit_actions` row (`tenancy.tenant.suspended` / `tenancy.tenant.reactivated`) carrying the actor, the tenant and the status it moved between.
 

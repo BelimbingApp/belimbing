@@ -536,6 +536,107 @@ if command -v php >/dev/null; then
     fi
     php scripts/ci/validate-php-syntax.php scripts/ci/domain-ci.php scripts/ci/compose-domain.php scripts/ci/filter-domain-coverage-clover.php scripts/ci/validate-extension-manifest.php scripts/ci/composed-smoke.php
 
+    # validate-php-syntax.php (#856): the Extension syntax gate
+    # (extension-conformance.sh) fails an Extension whose PHP does not parse.
+    # The happy path above only feeds known-good files; without an invalid-file
+    # case, exit(1) and the path-in-stderr message can be deleted unnoticed.
+    syntax_fixture=$(mktemp -d)
+    printf '<?php\n' > "$syntax_fixture/good.php"
+    printf '<?php\n function (\n' > "$syntax_fixture/bad.php"
+    printf '<?php\n function (\n' > "$syntax_fixture/also-bad.php"
+    if ! php scripts/ci/validate-php-syntax.php "$syntax_fixture/good.php" 2>"$syntax_fixture/good.err"; then
+        echo 'validate-php-syntax.php refused a valid PHP file' >&2
+        cat "$syntax_fixture/good.err" >&2
+        rm -rf "$syntax_fixture"
+        exit 1
+    fi
+    if [[ -s "$syntax_fixture/good.err" ]]; then
+        echo 'validate-php-syntax.php wrote stderr for a valid PHP file' >&2
+        cat "$syntax_fixture/good.err" >&2
+        rm -rf "$syntax_fixture"
+        exit 1
+    fi
+    if php scripts/ci/validate-php-syntax.php "$syntax_fixture/good.php" "$syntax_fixture/bad.php" "$syntax_fixture/also-bad.php" 2>"$syntax_fixture/bad.err"; then
+        echo 'validate-php-syntax.php accepted invalid PHP syntax' >&2
+        rm -rf "$syntax_fixture"
+        exit 1
+    fi
+    if ! grep -qF "extension-conformance: invalid PHP syntax in $syntax_fixture/bad.php" "$syntax_fixture/bad.err"; then
+        echo 'validate-php-syntax.php did not name the offending path on stderr' >&2
+        cat "$syntax_fixture/bad.err" >&2
+        rm -rf "$syntax_fixture"
+        exit 1
+    fi
+    if grep -qF "$syntax_fixture/also-bad.php" "$syntax_fixture/bad.err"; then
+        echo 'validate-php-syntax.php continued past the first invalid file' >&2
+        cat "$syntax_fixture/bad.err" >&2
+        rm -rf "$syntax_fixture"
+        exit 1
+    fi
+    rm -rf "$syntax_fixture"
+
+    # setup-sonar.php (#856): hermetic refusals before any SonarCloud/network
+    # call. SONAR_TOKEN=placeholder keeps resolveSonarToken off the checkout
+    # .env; --registry= points at a temp file so loadRegistry never reads the
+    # live domain registry. These three exits are the testable contract.
+    sonar_fixture=$(mktemp -d)
+    unknown_rc=0
+    SONAR_TOKEN=placeholder php scripts/ci/setup-sonar.php --not-a-real-flag 2>"$sonar_fixture/unknown.err" || unknown_rc=$?
+    if [[ "$unknown_rc" -ne 1 ]]; then
+        echo "setup-sonar.php exited $unknown_rc (expected 1) for an unknown argument; it must stop before any SonarCloud call" >&2
+        cat "$sonar_fixture/unknown.err" >&2
+        rm -rf "$sonar_fixture"
+        exit 1
+    fi
+    if ! grep -qF 'Unknown argument:' "$sonar_fixture/unknown.err"; then
+        echo 'setup-sonar.php did not report Unknown argument:' >&2
+        cat "$sonar_fixture/unknown.err" >&2
+        rm -rf "$sonar_fixture"
+        exit 1
+    fi
+    if SONAR_TOKEN=placeholder php scripts/ci/setup-sonar.php --registry="$sonar_fixture/missing.json" 2>"$sonar_fixture/missing.err"; then
+        echo 'setup-sonar.php accepted a missing registry' >&2
+        rm -rf "$sonar_fixture"
+        exit 1
+    fi
+    if ! grep -qF "Registry not found: $sonar_fixture/missing.json" "$sonar_fixture/missing.err"; then
+        echo 'setup-sonar.php did not report Registry not found:' >&2
+        cat "$sonar_fixture/missing.err" >&2
+        rm -rf "$sonar_fixture"
+        exit 1
+    fi
+    if grep -qF 'Invalid registry:' "$sonar_fixture/missing.err"; then
+        echo 'setup-sonar.php fell past the unreadable-registry exit into the invalid-registry guard' >&2
+        cat "$sonar_fixture/missing.err" >&2
+        rm -rf "$sonar_fixture"
+        exit 1
+    fi
+    printf '{"foo":1}\n' > "$sonar_fixture/invalid.json"
+    if SONAR_TOKEN=placeholder php scripts/ci/setup-sonar.php --registry="$sonar_fixture/invalid.json" 2>"$sonar_fixture/invalid.err"; then
+        echo 'setup-sonar.php accepted a registry without domains' >&2
+        rm -rf "$sonar_fixture"
+        exit 1
+    fi
+    if ! grep -qF "Invalid registry: $sonar_fixture/invalid.json" "$sonar_fixture/invalid.err"; then
+        echo 'setup-sonar.php did not report Invalid registry:' >&2
+        cat "$sonar_fixture/invalid.err" >&2
+        rm -rf "$sonar_fixture"
+        exit 1
+    fi
+    printf '{"domains":1}\n' > "$sonar_fixture/scalar.json"
+    if SONAR_TOKEN=placeholder php scripts/ci/setup-sonar.php --registry="$sonar_fixture/scalar.json" 2>"$sonar_fixture/scalar.err"; then
+        echo 'setup-sonar.php accepted a registry with a scalar domains value' >&2
+        rm -rf "$sonar_fixture"
+        exit 1
+    fi
+    if ! grep -qF "Invalid registry: $sonar_fixture/scalar.json" "$sonar_fixture/scalar.err"; then
+        echo 'setup-sonar.php did not report Invalid registry: for a scalar domains' >&2
+        cat "$sonar_fixture/scalar.err" >&2
+        rm -rf "$sonar_fixture"
+        exit 1
+    fi
+    rm -rf "$sonar_fixture"
+
     # The composed-application smoke test (#600) judges a boot against a
     # checked-in surface; without a network only its migration scan and the
     # surface/descriptor pin agreement can be proven here. The workflow
@@ -606,6 +707,77 @@ PY
     if smoke >/dev/null 2>&1; then
         echo 'composed-smoke accepted a mount whose HEAD is not the pinned ref' >&2; exit 1
     fi
+
+    # #870: DOMAIN_ROUTE_NAME must own people-connector.* (signed webhook) and
+    # refuse a Domain Routes declaration outside the prefix list.
+    smoke_descriptor "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}"
+    mkdir -p "$smoke_root/app/Domains/PeopleConnector/Connector/Routes"
+    printf "%s\n" "<?php" "Route::post('webhooks/people-connector/{id}', fn () => null)->name('people-connector.webhook');" \
+        > "$smoke_root/app/Domains/PeopleConnector/Connector/Routes/web.php"
+    printf '[{"name":"people.index","uri":"people"},{"name":"people-connector.webhook","uri":"webhooks/people-connector/1"},{"name":"admin.integration.index","uri":"admin/integration"}]' \
+        > "$smoke_root/routes.json"
+    smoke_surface "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}" 3 'admin.integration.index,people-connector.webhook,people.index'
+    smoke 2>/dev/null
+
+    # Narrowing the filter by dropping people-connector. must turn red: the
+    # Routes declaration is then unmatched and the live name falls out of the count.
+    narrowed="$smoke_root/composed-smoke-narrowed.php"
+    cp scripts/ci/composed-smoke.php "$narrowed"
+    python3 - "$narrowed" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+text = path.read_text()
+old = "const DOMAIN_ROUTE_NAME = '/^(people\\.|people-connector\\.|admin\\.people-connector\\.|admin\\.integration\\.|commerce\\.|it\\.|quality\\.)/';"
+new = "const DOMAIN_ROUTE_NAME = '/^(people\\.|admin\\.people-connector\\.|admin\\.integration\\.|commerce\\.|it\\.|quality\\.)/';"
+assert old in text, 'DOMAIN_ROUTE_NAME const missing for the #870 mutant'
+path.write_text(text.replace(old, new, 1))
+PY
+    narrowed_err=$(php "$narrowed" --root="$smoke_root" --routes-json="$smoke_root/routes.json" \
+        --registry="$smoke_root/scripts/ci/domain-repos.json" --surface="$smoke_root/scripts/ci/composed-surface.json" \
+        2>&1 || true)
+    if ! grep -q 'people-connector.webhook' <<< "$narrowed_err"; then
+        echo 'composed-smoke accepted people-connector.webhook after DOMAIN_ROUTE_NAME dropped people-connector.' >&2
+        echo "$narrowed_err" >&2
+        exit 1
+    fi
+
+    # An undeclared prefix in Domain Routes is refused even when the route table is empty of it.
+    printf "%s\n" "<?php" "Route::get('odd', fn () => null)->name('odd.domain.route');" \
+        > "$smoke_root/app/Domains/PeopleConnector/Connector/Routes/web.php"
+    printf '[{"name":"people.index","uri":"people"},{"name":"admin.integration.index","uri":"admin/integration"}]' \
+        > "$smoke_root/routes.json"
+    smoke_surface "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}" 2 'admin.integration.index,people.index'
+    if smoke >/dev/null 2>&1; then
+        echo 'composed-smoke accepted a Domain Routes name outside DOMAIN_ROUTE_NAME' >&2
+        exit 1
+    fi
+    smoke_err=$(smoke 2>&1 || true)
+    grep -q 'odd.domain.route' <<< "$smoke_err"
+
+    # --print-surface must still regenerate when pins disagree (advance-domain-pin
+    # intermediate state) but still refuse unmatched Domain Routes names (#871).
+    printf "%s\n" "<?php" "Route::post('webhooks/people-connector/{id}', fn () => null)->name('people-connector.webhook');" \
+        > "$smoke_root/app/Domains/PeopleConnector/Connector/Routes/web.php"
+    printf '[{"name":"people.index","uri":"people"},{"name":"people-connector.webhook","uri":"webhooks/people-connector/1"},{"name":"admin.integration.index","uri":"admin/integration"}]' \
+        > "$smoke_root/routes.json"
+    smoke_descriptor "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}"
+    smoke_surface "${smoke_sha[People]}" 1111111111111111111111111111111111111111 3 'admin.integration.index,people-connector.webhook,people.index'
+    printed=$(smoke --print-surface 2>/dev/null) || {
+        echo 'composed-smoke --print-surface failed while only the surface pin was stale' >&2
+        exit 1
+    }
+    python3 -c 'import json,sys; d=json.load(sys.stdin); assert "pins" in d and "route_names" in d' <<< "$printed"
+
+    printf "%s\n" "<?php" "Route::get('odd', fn () => null)->name('odd.domain.route');" \
+        > "$smoke_root/app/Domains/PeopleConnector/Connector/Routes/web.php"
+    if smoke --print-surface >/dev/null 2>&1; then
+        echo 'composed-smoke --print-surface accepted a Domain Routes name outside DOMAIN_ROUTE_NAME' >&2
+        exit 1
+    fi
+    print_err=$(smoke --print-surface 2>&1 || true)
+    grep -q 'odd.domain.route' <<< "$print_err"
+
     rm -rf "$smoke_root"
     trap - EXIT
     php scripts/ci/validate-extension-manifest.php tests/Fixtures/ci/extensions/conventional/Example/composer.json
