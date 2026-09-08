@@ -12,6 +12,7 @@ final class AuditTraceTimeline
 {
     public function __construct(
         private readonly AuditLogPresenter $presenter,
+        private readonly AuditTenantScope $tenantScope,
     ) {}
 
     /**
@@ -112,12 +113,15 @@ final class AuditTraceTimeline
     /** @return Collection<int, AuditAction> */
     private function actions(string $traceId): Collection
     {
-        return AuditAction::query()
-            ->leftJoin('users', function ($join): void {
-                $join->on('base_audit_actions.actor_id', '=', 'users.id')
-                    ->where('base_audit_actions.actor_type', '=', PrincipalType::USER->value);
-            })
-            ->select('base_audit_actions.*', 'users.name as actor_name')
+        return $this->tenantScope->apply(
+            AuditAction::query()
+                ->leftJoin('users', function ($join): void {
+                    $join->on('base_audit_actions.actor_id', '=', 'users.id')
+                        ->where('base_audit_actions.actor_type', '=', PrincipalType::USER->value);
+                })
+                ->select('base_audit_actions.*', 'users.name as actor_name'),
+            'base_audit_actions',
+        )
             ->where('base_audit_actions.trace_id', $traceId)
             ->orderBy('base_audit_actions.occurred_at')
             ->orderBy('base_audit_actions.id')
@@ -127,12 +131,15 @@ final class AuditTraceTimeline
     /** @return Collection<int, AuditMutation> */
     private function mutations(string $traceId): Collection
     {
-        return AuditMutation::query()
-            ->leftJoin('users', function ($join): void {
-                $join->on('base_audit_mutations.actor_id', '=', 'users.id')
-                    ->where('base_audit_mutations.actor_type', '=', PrincipalType::USER->value);
-            })
-            ->select('base_audit_mutations.*', 'users.name as actor_name')
+        return $this->tenantScope->apply(
+            AuditMutation::query()
+                ->leftJoin('users', function ($join): void {
+                    $join->on('base_audit_mutations.actor_id', '=', 'users.id')
+                        ->where('base_audit_mutations.actor_type', '=', PrincipalType::USER->value);
+                })
+                ->select('base_audit_mutations.*', 'users.name as actor_name'),
+            'base_audit_mutations',
+        )
             ->where('base_audit_mutations.trace_id', $traceId)
             ->orderBy('base_audit_mutations.occurred_at')
             ->orderBy('base_audit_mutations.id')

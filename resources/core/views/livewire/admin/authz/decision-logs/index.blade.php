@@ -19,7 +19,7 @@
                 </x-ui.select>
             </div>
 
-            <x-ui.table container="flush" :caption="__('Authorization decision logs')">
+            <x-ui.table container="flush" :caption="$retentionCaption ?? __('Authorization decision logs')">
                 <x-slot name="head">
                         <tr>
                             <x-ui.sortable-th

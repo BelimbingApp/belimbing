@@ -4,6 +4,7 @@ namespace App\Base\Audit\Services;
 
 use App\Base\Audit\DTO\RequestContext;
 use App\Base\Authz\Enums\PrincipalType;
+use App\Base\Authz\Services\ImpersonationManager;
 use Illuminate\Contracts\Auth\Authenticatable;
 
 final class AuditActorResolver
@@ -13,7 +14,7 @@ final class AuditActorResolver
     ) {}
 
     /**
-     * @return array{type: string, id: int, company_id: int|null, tenant_id: int|null, name: string|null, email: string|null}
+     * @return array{type: string, id: int, company_id: int|null, tenant_id: int|null, name: string|null, email: string|null, impersonator_id?: int}
      */
     public function currentActor(): array
     {
@@ -34,7 +35,7 @@ final class AuditActorResolver
     }
 
     /**
-     * @return array{type: string, id: int, company_id: int|null, tenant_id: int|null, name: string|null, email: string|null}
+     * @return array{type: string, id: int, company_id: int|null, tenant_id: int|null, name: string|null, email: string|null, impersonator_id?: int}
      */
     private function authenticatedActor(Authenticatable $user): array
     {
@@ -49,7 +50,7 @@ final class AuditActorResolver
             $tenantId = $userTenantId !== null ? (int) $userTenantId : null;
         }
 
-        return [
+        $actor = [
             'type' => method_exists($user, 'principalType')
                 ? $user->principalType()->value
                 : PrincipalType::USER->value,
@@ -59,6 +60,13 @@ final class AuditActorResolver
             'name' => $this->stringOrNull(data_get($user, 'name')),
             'email' => $this->stringOrNull(data_get($user, 'email')),
         ];
+
+        $impersonatorId = app(ImpersonationManager::class)->getImpersonatorId();
+        if ($impersonatorId !== null) {
+            $actor['impersonator_id'] = $impersonatorId;
+        }
+
+        return $actor;
     }
 
     private function stringOrNull(mixed $value): ?string

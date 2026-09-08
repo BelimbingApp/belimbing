@@ -30,6 +30,35 @@ test("composed-smoke materializes every Domain from the descriptor", () => {
     expect(hold.id).toBe("boot");
 });
 
+test("composed-smoke audits Domain command tenant scope after a successful boot (#912)", () => {
+    const steps = workflow.jobs["composed-smoke"].steps as any[];
+    const audit = steps.find(
+        (step: any) => step.name === "Audit composed Domain command tenant scope",
+    );
+    expect(audit).toBeDefined();
+    expect(audit.run).toBe("php artisan blb:domain-commands --audit");
+    expect(audit.if).toContain("steps.boot.outputs.exit_code == '0'");
+    expect(audit["continue-on-error"]).toBeUndefined();
+
+    const bootIndex = steps.findIndex(
+        (step: any) => step.name === "Boot the composed application and hold it to the surface",
+    );
+    const refuseIndex = steps.findIndex(
+        (step: any) => step.name === "Fail when the composed boot refused",
+    );
+    const auditIndex = steps.findIndex(
+        (step: any) => step.name === "Audit composed Domain command tenant scope",
+    );
+    expect(auditIndex).toBeGreaterThan(bootIndex);
+    expect(auditIndex).toBeGreaterThan(refuseIndex);
+
+    const yaml = readFileSync(join(root, ".github/workflows/composed-smoke.yml"), "utf8");
+    expect(yaml).toContain("unconverted command fails here on");
+    expect(yaml).toContain("isAllowlisted()");
+    expect(yaml).toContain("this step is not");
+    expect(yaml).toContain("proof that the allowlisted set is correct or empty");
+});
+
 test("validates pins after boot and reports stale pins only on nightly or dispatch runs", () => {
     const validation = workflow.jobs["composed-smoke"].steps.find(
         (step: any) => step.name === "Validate pinned Domain freshness",

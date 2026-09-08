@@ -3,6 +3,7 @@
 use App\Base\Tenancy\Contracts\TenantContext;
 use App\Base\Tenancy\Exceptions\TenantContextMissingException;
 use App\Base\Tenancy\Support\PlatformAsyncEntryPointInventory;
+use App\Domains\ZzScheduleProbe\Fixture\Console\Commands\ZzScheduleProbeCommand;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Contracts\Queue\Job as QueueJob;
@@ -11,6 +12,7 @@ use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\File;
 
 it('keeps the declared platform queued-job inventory identical to Base/Core discovery', function (): void {
     PlatformAsyncEntryPointInventory::assertJobsMatchDiscovery();
@@ -22,27 +24,60 @@ it('keeps the declared platform queued-job inventory identical to Base/Core disc
 it('keeps the declared platform schedule inventory identical to the live Schedule', function (): void {
     app()->make(Kernel::class)->bootstrap();
 
-    $scheduled = [];
-    foreach (app(Schedule::class)->events() as $event) {
-        $command = (string) ($event->command ?? '');
-        if ($command === '' && isset($event->description)) {
-            $command = (string) $event->description;
-        }
-
-        if (preg_match("/artisan['\"]?\s+(\S+)/", $command, $matches) === 1) {
-            $scheduled[] = $matches[1];
-        } elseif ($command !== '' && ! str_contains($command, ' ')) {
-            $scheduled[] = $command;
-        }
-    }
-
-    $scheduled = array_values(array_unique($scheduled));
-    sort($scheduled);
-
+    $scheduled = PlatformAsyncEntryPointInventory::liveScheduledCommandSignatures();
     $declared = PlatformAsyncEntryPointInventory::scheduledCommandSignatures();
     sort($declared);
 
     expect($declared)->toEqual($scheduled);
+});
+
+it('excludes Domain-scheduled commands from the live Schedule inventory comparison', function (): void {
+    $probeRoot = base_path('app/Domains/ZzScheduleProbe');
+    File::deleteDirectory($probeRoot);
+
+    try {
+        $commands = $probeRoot.'/Fixture/Console/Commands';
+        File::ensureDirectoryExists($commands);
+        File::put($commands.'/ZzScheduleProbeCommand.php', <<<'PHP'
+<?php
+
+namespace App\Domains\ZzScheduleProbe\Fixture\Console\Commands;
+
+use Illuminate\Console\Command;
+
+final class ZzScheduleProbeCommand extends Command
+{
+    protected $signature = 'zz-schedule-probe:noop';
+
+    protected $description = 'Fixture: Domain command registered on the live Schedule';
+
+    public function handle(): int
+    {
+        return self::SUCCESS;
+    }
+}
+PHP);
+        require_once $commands.'/ZzScheduleProbeCommand.php';
+
+        Artisan::registerCommand(app(ZzScheduleProbeCommand::class));
+        app(Schedule::class)->command('zz-schedule-probe:noop')->daily();
+
+        $live = PlatformAsyncEntryPointInventory::liveScheduledCommandSignatures();
+        expect($live)->not->toContain('zz-schedule-probe:noop')
+            ->and($live)->toEqualCanonicalizing(PlatformAsyncEntryPointInventory::scheduledCommandSignatures());
+
+        // Without the Base/Core root filter the Domain probe pollutes the comparison.
+        $unfiltered = [];
+        foreach (app(Schedule::class)->events() as $event) {
+            $command = (string) ($event->command ?? '');
+            if (preg_match("/artisan['\"]?\s+(\S+)/", $command, $matches) === 1) {
+                $unfiltered[] = $matches[1];
+            }
+        }
+        expect($unfiltered)->toContain('zz-schedule-probe:noop');
+    } finally {
+        File::deleteDirectory($probeRoot);
+    }
 });
 
 it('stamps tenant A on every platform queued job and restores A over ambient tenant B', function (string $class, object $job): void {

@@ -15,6 +15,7 @@ use App\Base\Authz\Models\PrincipalCapability;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
 use App\Base\Integration\Models\OutboundExchange;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Base\Workflow\DTO\TransitionContext;
 use App\Base\Workflow\Models\StatusConfig;
 use App\Base\Workflow\Models\StatusTransition;
@@ -48,11 +49,23 @@ const AUDIT_LOG_UI_WORKFLOW_SUMMARY_SUFFIX = ' from Pending Review to Active';
 const AUDIT_LOG_UI_ADDRESS_PHONE = '03-77862444';
 const AUDIT_LOG_UI_ADDRESS_PREFIX = 'Address#';
 
+beforeEach(function (): void {
+    if (app(TenantContext::class)->currentTenantId() !== null) {
+        return;
+    }
+
+    $company = Company::factory()->create();
+    app(TenantContext::class)->set((int) $company->tenant_id);
+});
+
 function auditLogUiActor(): User
 {
-    return MutationListener::withoutAuditing(
+    $user = MutationListener::withoutAuditing(
         fn (): User => User::factory()->create(['name' => 'Audit Actor'])
     );
+    app(TenantContext::class)->set((int) $user->tenant_id);
+
+    return $user;
 }
 
 function auditLogUiFlushBuffer(): void
@@ -81,6 +94,8 @@ function auditLogUiViewerWithoutAudit(string $targetName): array
         'principal_id' => $viewer->id,
         'role_id' => $viewerRole->id,
     ]);
+
+    app(TenantContext::class)->set((int) $company->tenant_id);
 
     return [$company, $viewer, $target];
 }
@@ -112,6 +127,7 @@ function auditLogUiInsertAction(array $overrides = []): int
 
     return (int) DB::table('base_audit_actions')->insertGetId(array_replace([
         'company_id' => null,
+        'tenant_id' => app(TenantContext::class)->currentTenantId(),
         'actor_type' => PrincipalType::USER->value,
         'actor_id' => 1,
         'actor_role' => 'core_admin',
@@ -136,6 +152,7 @@ function auditLogUiInsertMutation(array $overrides = []): int
 
     return (int) DB::table('base_audit_mutations')->insertGetId(array_replace([
         'company_id' => null,
+        'tenant_id' => app(TenantContext::class)->currentTenantId(),
         'actor_type' => PrincipalType::USER->value,
         'actor_id' => 1,
         'actor_role' => 'core_admin',

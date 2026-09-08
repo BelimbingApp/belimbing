@@ -3,18 +3,21 @@
 namespace App\Base\Integration\Services;
 
 use App\Base\Integration\Models\OutboundExchange;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 
 class OutboundExchangePruner
 {
     /**
+     * @param  Builder<OutboundExchange>|null  $query
+     *
      * Remove retained payload previews whose operation-class TTL has elapsed.
      */
-    public function prunePayloads(): int
+    public function prunePayloads(?Builder $query = null): int
     {
         $pruned = 0;
 
-        OutboundExchange::query()
+        ($query ?? OutboundExchange::query())
             ->where(function ($query): void {
                 $query->whereNotNull('request_body')
                     ->orWhereNotNull('response_body')
