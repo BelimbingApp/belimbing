@@ -6,9 +6,11 @@ name: composed-smoke
 # dependencies, so nothing else proves that the pins in
 # scripts/ci/domain-repos.json compose into one application: no route
 # collision (#570), no duplicate migration name (#117), the expected route
-# table, and Domain commands extend TenantScopedCommand (#912). A pin
-# advance that breaks composition or pulls an unconverted Domain command
-# fails here, on the PR that advances it (#627 / #912). Do not add
+# table, Domain commands extend TenantScopedCommand (#912), Domain routes
+# carry tenant/authz middleware (#917), and cross-Domain ownership holds
+# (#917). A pin advance that breaks composition, pulls an unconverted
+# Domain command, or introduces a bare Domain route / ownership collision
+# fails here, on the PR that advances it (#627 / #912 / #917). Do not add
 # pull_request paths: filters: a required check that only runs on descriptor
 # edits leaves every other PR missing that status. The nightly schedule
 # (#663) re-runs the same assertion against the pins on main and opens or
@@ -190,3 +192,33 @@ jobs:
       - name: Audit composed Domain command tenant scope
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) && steps.boot.outcome == 'success' && steps.boot.outputs.exit_code == '0' }}
         run: php artisan blb:domain-commands --audit
+
+      # Domain route middleware audit over the composed pin set (#917). Domain
+      # CI still runs blb:domain-routes --audit against one Domain plus its
+      # exact dependencies; this step answers what that cannot: do the pins
+      # in domain-repos.json, composed together, leave every required Domain
+      # route with tenant assertion and authorization middleware? A pin
+      # advance that introduces a bare Domain route fails here on the
+      # advancing PR — intentional, not a flake. middleware_audit.allowlist
+      # short-circuits before the missing-middleware check, so an allowlisted
+      # route passes regardless; this step is not proof that the allowlisted
+      # set is correct or empty.
+      - name: Audit composed Domain route middleware
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) && steps.boot.outcome == 'success' && steps.boot.outputs.exit_code == '0' }}
+        run: php artisan blb:domain-routes --audit
+
+      # Cross-Domain table and route ownership over the composed pin set
+      # (#917). Domain CI's module-ownership run sees one Domain plus its
+      # dependency closure; this step sees every pin together so an unrelated
+      # Domain pair cannot collide on a pin advance without redding the
+      # advancing PR.
+      - name: Check composed Domain ownership
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) && steps.boot.outcome == 'success' && steps.boot.outputs.exit_code == '0' }}
+        run: php artisan blb:module-ownership
+
+      # blb:module-check is intentionally not composed here (#917). It is
+      # loop-driven per module id in domain-ci.yml and validates one Module's
+      # declared capabilities against the catalog — a solo-Domain concern,
+      # not a multi-Domain composition one. Domain repositories already run
+      # it via workflow_call on their own PRs before a pin advances; routes
+      # and ownership are the composed gaps this job closes.
