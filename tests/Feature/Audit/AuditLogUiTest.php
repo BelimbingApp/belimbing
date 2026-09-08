@@ -382,6 +382,46 @@ it('does not expose source history or trace data without audit permission', func
         ->assertDontSee(AUDIT_LOG_UI_HIDDEN_NEW_EMAIL);
 });
 
+it('allows local-only source history with the page capability while keeping traces and the full log auditor-only', function (): void {
+    setupAuthzRoles();
+
+    [$company, $viewer, $target] = auditLogUiViewerWithoutAudit('Local History Target');
+
+    PrincipalCapability::query()->create([
+        'company_id' => $company->id,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => $viewer->id,
+        'capability_key' => 'admin.user.view',
+        'is_allowed' => true,
+    ]);
+
+    auditLogUiInsertMutation([
+        'actor_id' => $viewer->id,
+        'auditable_id' => $target->id,
+        'old_values' => ['email' => 'local-old@example.com'],
+        'new_values' => ['email' => 'local-new@example.com'],
+        'trace_id' => 'LOCALH1234567',
+    ]);
+
+    $this->actingAs($viewer);
+
+    $params = auditLogUiUserHistoryParams($target);
+    $params['requireAuditListCapability'] = false;
+    $params['allUrl'] = route('admin.audit.mutations', ['search' => AUDIT_LOG_UI_USER_PREFIX.$target->id]);
+
+    Livewire::test(SourceHistory::class, $params)
+        ->assertSeeHtml(AUDIT_LOG_UI_OPEN_WIRE_ACTION)
+        ->call('open')
+        ->assertSet('sourceHistoryDrawerOpen', true)
+        ->assertSet('sourceHistoryAllUrl', '')
+        ->assertSee('local-old@example.com')
+        ->assertSee('local-new@example.com')
+        ->call('openTrace', 'LOCALH-1234-567')
+        ->assertSet('traceDrawerOpen', false)
+        ->assertSet('selectedTraceId', '')
+        ->assertSet('traceTimeline', []);
+});
+
 it('requires source page view permission in addition to audit permission', function (): void {
     setupAuthzRoles();
 
