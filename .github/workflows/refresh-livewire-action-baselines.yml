@@ -1,0 +1,130 @@
+name: refresh-livewire-action-baselines
+
+# Manual refresh of Livewire action-debt baselines from a composed pin set (#775).
+# Measures the platform scope before Domains are mounted, then each pinned Domain
+# after composition. Applies each snapshot through the never-raise helper so a
+# higher count never rewrites a baseline. Opens one bot-maintenance PR; never
+# pushes to main (Protect Main).
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: refresh-livewire-action-baselines
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      PLATFORM_OPERATOR_COMPANY_NAME: Belimbing CI
+      PLATFORM_OPERATOR_COMPANY_CODE: belimbing_ci
+      APP_ENV: testing
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v7 # NOSONAR — GitHub-maintained action
+        with:
+          ref: main
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2 # NOSONAR — established project action
+        with:
+          php-version: '8.5'
+          extensions: pdo_sqlite, sqlite3
+          tools: composer:v2
+          coverage: none
+
+      - name: Restore dependency cache
+        uses: actions/cache@v6 # NOSONAR — official GitHub action
+        with:
+          path: vendor
+          key: deps-v1-${{ runner.os }}-${{ runner.arch }}-php8.5-composer-${{ hashFiles('composer.lock', 'composer.json') }}
+
+      - name: Install Dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Configure the application
+        run: |
+          cp .env.example .env
+          sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=sqlite/' .env
+          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=:memory:/' .env
+          php artisan key:generate --force
+
+      - name: Refresh platform baseline before Domains mount
+        run: |
+          set -euo pipefail
+          measured="${RUNNER_TEMP}/livewire-platform.json"
+          php artisan blb:livewire-actions --write-baseline="$measured"
+          python3 scripts/ci/refresh-livewire-action-baselines.py \
+            --baseline tests/ci/livewire-actions-baselines/platform.json \
+            --measured "$measured"
+
+      - name: Compose the pinned Domains
+        run: |
+          set -euo pipefail
+          php scripts/ci/composed-smoke.php --scan-only
+          for id in $(jq -r '.domains | keys[]' scripts/ci/domain-repos.json); do
+            repo=$(jq -r --arg id "$id" '.domains[$id].repo' scripts/ci/domain-repos.json)
+            ref=$(jq -r --arg id "$id" '.domains[$id].ref' scripts/ci/domain-repos.json)
+            path=$(jq -r --arg id "$id" '.domains[$id].path' scripts/ci/domain-repos.json)
+            [[ "$ref" =~ ^[0-9a-f]{40}$ ]]
+            echo "Materializing $repo@$ref -> $path"
+            git clone --filter=blob:none --no-checkout "https://github.com/${repo}.git" "$path"
+            git -C "$path" checkout --detach "$ref"
+          done
+          composer dump-autoload --optimize
+
+      - name: Refresh Domain baselines
+        run: |
+          set -euo pipefail
+          for id in $(jq -r '.domains | keys[]' scripts/ci/domain-repos.json); do
+            path=$(jq -r --arg id "$id" '.domains[$id].path' scripts/ci/domain-repos.json)
+            domain_name="${path##*/}"
+            baseline="tests/ci/livewire-actions-baselines/${id}.json"
+            measured="${RUNNER_TEMP}/livewire-${id}.json"
+            if [ ! -f "$baseline" ]; then
+              echo "::error::Missing Livewire action baseline $baseline for $id"
+              exit 1
+            fi
+            php artisan blb:livewire-actions --domain="$domain_name" --write-baseline="$measured"
+            python3 scripts/ci/refresh-livewire-action-baselines.py \
+              --baseline "$baseline" \
+              --measured "$measured"
+          done
+
+      # Org policy refuses GITHUB_TOKEN createPullRequest (#686 / #853). Push stays on
+      # github.token; PR open uses COVERAGE_BASELINE_RAISE_TOKEN.
+      - name: Open baseline PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COVERAGE_BASELINE_RAISE_TOKEN: ${{ secrets.COVERAGE_BASELINE_RAISE_TOKEN }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- tests/ci/livewire-actions-baselines; then
+            echo "Livewire action-debt baselines unchanged."
+            exit 0
+          fi
+          if [[ -z "${COVERAGE_BASELINE_RAISE_TOKEN:-}" ]]; then
+            echo '::error::COVERAGE_BASELINE_RAISE_TOKEN is required to open the baseline raise PR (org disables Actions PR creation with GITHUB_TOKEN).'
+            exit 1
+          fi
+          # Protect Main refuses direct pushes; open a PR and never push to main.
+          branch="ci/refresh-livewire-action-baselines-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          git switch -c "$branch"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/ci/livewire-actions-baselines
+          git commit -m "ci: refresh Livewire action-debt baselines"
+          git push origin "HEAD:refs/heads/$branch"
+          export GH_TOKEN="$COVERAGE_BASELINE_RAISE_TOKEN"
+          printf '%s\n' \
+            'Refresh Livewire action-debt baselines from a composed pin run.' \
+            'Counts only fall or stay; a higher measured count leaves that file untouched (#775).' \
+            '' \
+            'AI-Team-Lane-Issue: none' > "$RUNNER_TEMP/livewire-baselines-pr.md"
+          gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
+            --title "ci: refresh Livewire action-debt baselines" \
+            --body-file "$RUNNER_TEMP/livewire-baselines-pr.md" \
+            --label bot-maintenance

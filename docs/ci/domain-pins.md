@@ -200,7 +200,7 @@ to report success from their configured integrations. It excludes agent lanes,
 forks, drafts, and holds. Repository merge settings, active rulesets, and classic
 protection determine the merge method; GitHub still enforces approval and other
 merge rules. The final merge is bound to the checked SHA and uses
-`COVERAGE_BASELINE_RAISE_TOKEN`. If policy cannot be read, the workflow refuses.
+`COVERAGE_BASELINE_RAISE_TOKEN`. The same raise token also opens bot-maintenance PRs from `tests.yml` (coverage baseline), `refresh-pest-timing-baseline`, `refresh-feature-shard-timings`, and `refresh-livewire-action-baselines` (#853). If policy cannot be read, the workflow refuses.
 Applying `bot-maintenance` also authorizes a Domain descriptor/surface pin advance
 to land on green required checks without an independent reviewer; it is not limited
 to numeric baseline refreshes. The label is the authorization, not the PR author's identity.
@@ -218,7 +218,9 @@ defaults to all descriptor entries; `--domains` is only an explicit subset overr
 The surface counts the owning route prefixes (`people`, `commerce`, `it`, `quality`,
 and the connector's admin prefixes); add a new Domain's prefixes to the smoke
 classifier when introducing it. The `advance-domain-pin` dispatch accepts all four
-Domains and regenerates the complete surface before opening its maintenance PR.
+Domains and regenerates the complete surface before opening its maintenance PR
+with `COVERAGE_BASELINE_RAISE_TOKEN` (push stays on `GITHUB_TOKEN`; the raise token
+opens and labels the PR, matching the coverage-baseline path in `tests.yml`).
 
 Every pull request to `main` runs that check, including a pin-advance PR that edits the
 descriptor ([issue #627](https://github.com/BelimbingApp/belimbing/issues/627)). The workflow does

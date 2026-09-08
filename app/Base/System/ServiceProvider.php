@@ -2,6 +2,9 @@
 
 namespace App\Base\System;
 
+use App\Base\Authz\Contracts\AuthorizationService;
+use App\Base\Authz\DTO\Actor;
+use App\Base\Menu\Services\MenuConditionRegistry;
 use App\Base\System\Console\Commands\KeyGenerateCommand;
 use App\Base\System\Console\Commands\KeyRotateCommand;
 use App\Base\System\Console\Commands\MutateCommand;
@@ -15,6 +18,8 @@ use App\Base\System\Services\RuntimeConfigurationApplier;
 use App\Base\System\Services\StatusBarDiagnostics;
 use App\Base\System\Services\SystemHealthProbe;
 use App\Base\System\Services\SystemHealthStatusDiagnosticProvider;
+use App\Base\System\Services\SystemOverviewPageData;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Foundation\Console\KeyGenerateCommand as LaravelKeyGenerateCommand;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
@@ -36,6 +41,7 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(ReportedErrorStatusDiagnosticProvider::class);
         $this->app->singleton(RuntimeConfigurationApplier::class);
         $this->app->tag(ReportedErrorStatusDiagnosticProvider::class, StatusBarDiagnosticProvider::CONTAINER_TAG);
+        $this->app->singleton(SystemOverviewPageData::class);
 
         $this->commands([
             KeyRotateCommand::class,
@@ -55,5 +61,23 @@ class ServiceProvider extends BaseServiceProvider
             'laravel-exceptions-renderer',
             resource_path('core/views/vendor/laravel-exceptions-renderer'),
         );
+
+        $this->app->afterResolving(MenuConditionRegistry::class, function (MenuConditionRegistry $registry): void {
+            $registry->register(
+                'admin.system.overview.any',
+                static function (Authenticatable $user): bool {
+                    $actor = Actor::forUser($user);
+                    $authz = app(AuthorizationService::class);
+
+                    foreach (SystemOverviewPageData::VIEW_CAPABILITIES as $capability) {
+                        if ($authz->can($actor, $capability)->allowed) {
+                            return true;
+                        }
+                    }
+
+                    return false;
+                },
+            );
+        });
     }
 }

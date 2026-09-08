@@ -6,6 +6,13 @@ use App\Base\Authz\Enums\PrincipalType;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property int $id
+ * @property int|null $company_id
+ * @property string $principal_type
+ * @property int|null $principal_id
+ * @property int $role_id
+ */
 class PrincipalRole extends Model
 {
     /**
@@ -14,7 +21,7 @@ class PrincipalRole extends Model
     protected $table = 'base_authz_principal_roles';
 
     /**
-     * @var array<int, string>
+     * @var list<string>
      */
     protected $fillable = [
         'company_id',

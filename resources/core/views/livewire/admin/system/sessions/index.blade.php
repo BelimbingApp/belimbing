@@ -7,14 +7,21 @@
         <x-ui.session-flash />
 
         <x-ui.card>
-            <div class="mb-2">
+            <div class="mb-2 flex flex-wrap items-center gap-3">
                 <x-ui.search-input
                     wire:model.live.debounce.300ms="search"
                     placeholder="{{ __('Search by IP address or user agent...') }}"
                 />
+
+                @if ($canViewAllTenants)
+                    <label class="inline-flex items-center gap-2 text-sm whitespace-nowrap">
+                        <input type="checkbox" wire:model.live="allTenants" class="rounded border-input">
+                        <span>{{ __('All tenants') }}</span>
+                    </label>
+                @endif
             </div>
 
-            <x-ui.table container="flush" :caption="__('Active sessions')">
+            <x-ui.table container="flush" :caption="$scopeCaption">
                 <x-slot name="head">
                         <tr>
                             <x-ui.sortable-th

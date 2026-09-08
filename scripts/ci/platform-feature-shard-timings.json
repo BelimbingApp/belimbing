@@ -67,6 +67,10 @@
       "wall_seconds": 13.274,
       "test_files": 3
     },
+    "Session": {
+      "wall_seconds": 2.19,
+      "test_files": 1
+    },
     "Settings": {
       "wall_seconds": 2.797,
       "test_files": 6

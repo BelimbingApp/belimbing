@@ -7,6 +7,7 @@ use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Tenancy\Console\Commands\DomainCommandsCommand;
 use App\Base\Tenancy\Console\Commands\TenantMissesCommand;
 use App\Base\Tenancy\Contracts\TenantContext;
+use App\Base\Tenancy\Exceptions\TenantInactiveException;
 use App\Base\Tenancy\Models\Tenant;
 use App\Base\Tenancy\Services\ApplicationTenantContext;
 use App\Base\Tenancy\Services\PlatformOperatorTenantAccess;
@@ -101,9 +102,28 @@ class ServiceProvider extends BaseServiceProvider
         $events = $this->app['events'];
 
         $events->listen(JobProcessing::class, function (JobProcessing $event): void {
-            $tenantId = $event->job->payload()['tenantId'] ?? null;
+            $stamped = $event->job->payload()['tenantId'] ?? null;
+            $tenantId = $stamped !== null ? (int) $stamped : null;
+            $context = $this->app->make(TenantContext::class);
 
-            $this->app->make(TenantContext::class)->set($tenantId !== null ? (int) $tenantId : null);
+            // A tenant the operator suspended must not keep draining its
+            // backlog. An ID with no row is left alone: that is the unknown
+            // tenant, not an inactive one.
+            $tenant = $tenantId === null ? null : Tenant::withTrashed()->find($tenantId);
+
+            if ($tenant !== null && ! $tenant->isActive()) {
+                $context->clear();
+
+                // fail(), not release(): a suspended tenant's job must not come
+                // back on the next tick. Failing here deletes the job, and
+                // Worker::process checks isDeleted() before it calls fire(), so
+                // handle() never runs.
+                $event->job->fail(new TenantInactiveException($tenantId, (string) $tenant->status));
+
+                return;
+            }
+
+            $context->set($tenantId);
         });
 
         $clear = fn (): null => $this->app->make(TenantContext::class)->clear();
