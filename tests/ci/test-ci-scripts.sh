@@ -681,7 +681,7 @@ import json, sys
 json.dump({"pins": {"people": sys.argv[2], "people-connector": sys.argv[3]}, "domain_route_count": int(sys.argv[4]), "route_names": sys.argv[5].split(",")}, open(sys.argv[1], "w"))
 PY
     }
-    # Domain surface is declared Domain Routes ∩ live table (#916). Base
+    # Domain surface is live names matching DOMAIN_ROUTE_NAME (#916/#920). Base
     # admin.integration.* may appear in the table without counting as Domain.
     mkdir -p "$smoke_root/app/Domains/People/Workforce/Routes" \
         "$smoke_root/app/Domains/PeopleConnector/Connector/Routes"
@@ -740,6 +740,23 @@ PY
     domain_err=$(smoke 2>&1 || true)
     grep -q 'domain route count is 3, expected 2' <<< "$domain_err"
     # Restore the two-route declaration for later cases.
+    printf "%s\n" "<?php" "Route::get('people', fn () => null)->name('people.index');" \
+        > "$smoke_root/app/Domains/People/Workforce/Routes/web.php"
+
+    # #920: Route::name()->group + Route::resource assembled names never appear as
+    # one literal ->name() string. They must still move the Domain surface count.
+    printf "%s\n" "<?php" "Route::get('people', fn () => null)->name('people.index');" \
+        "Route::name('people.')->group(function () {" \
+        "    Route::resource('things', ThingController::class)->only(['index', 'store']);" \
+        "});" \
+        > "$smoke_root/app/Domains/People/Workforce/Routes/web.php"
+    printf '[{"name":"people.index","uri":"people"},{"name":"people.things.index","uri":"people/things"},{"name":"people.things.store","uri":"people/things"},{"name":"admin.people-connector.index","uri":"admin/people-connector"},{"name":"admin.integration.outbound-exchanges.index","uri":"admin/integration/outbound-exchanges"}]' \
+        > "$smoke_root/routes.json"
+    if smoke >/dev/null 2>&1; then
+        echo 'composed-smoke accepted Route::resource group names without a surface bump' >&2; exit 1
+    fi
+    resource_err=$(smoke 2>&1 || true)
+    grep -q 'domain route count is 4, expected 2' <<< "$resource_err"
     printf "%s\n" "<?php" "Route::get('people', fn () => null)->name('people.index');" \
         > "$smoke_root/app/Domains/People/Workforce/Routes/web.php"
 

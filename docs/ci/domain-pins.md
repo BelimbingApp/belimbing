@@ -215,9 +215,10 @@ platform with every pinned Domain (People, Commerce, Operation, and PeopleConnec
 
 Both smoke and pin-advance workflows enumerate descriptor keys. The smoke script
 defaults to all descriptor entries; `--domains` is only an explicit subset override.
-The surface is the intersection of the live route table with names Domain
-Routes files declare (not a whole-table prefix scan — Base `admin.integration.*`
-must not count). Domain Routes names still need a known prefix in
+The surface is live route names matching `DOMAIN_ROUTE_NAME` (not a whole-table
+scan and not a literal `->name()` text scan — Base `admin.integration.*` must
+not count, and `Route::name()->group` / `Route::resource` assembled names must
+still move the count). Domain Routes files still need a known prefix in
 `DOMAIN_ROUTE_NAME` so an unconventional declaration fails loudly; add a new
 Domain's prefixes there when introducing it. The `advance-domain-pin` dispatch accepts all four
 Domains and regenerates the complete surface before opening its maintenance PR

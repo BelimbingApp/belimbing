@@ -23,7 +23,7 @@ test("all descriptor pins and Commerce/Operation routes belong to the composed s
             domains[name] = { path, ref: pins[name], repo: `fixture/${name}` };
         }
         const names = ["commerce.catalog.index", "it.tickets.index", "people.index", "quality.ncr.index"];
-        // Domain surface membership is declaration ∩ live table (#916); declare each name.
+        // Domain surface membership is live names matching DOMAIN_ROUTE_NAME (#916/#920).
         const declarations: Record<string, string> = {
             "commerce.catalog.index": "app/Domains/commerce/Catalog/Routes/web.php",
             "it.tickets.index": "app/Domains/operation/It/Routes/web.php",
