@@ -3,12 +3,20 @@
 namespace App\Base\Schedule\Models;
 
 use App\Base\Schedule\Services\ScheduleHealthService;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 
 /**
  * A paused schedule entry, keyed by source + stable task key.
  * Row present = the entry is skipped at run time (see ServiceProvider's
  * CommandStarting hook); deleting the row resumes it.
+ *
+ * @property int|null $id
+ * @property string|null $source
+ * @property string|null $key
+ * @property string|null $name
+ * @property CarbonInterface|null $created_at
+ * @property CarbonInterface|null $updated_at
  */
 class ScheduleSuppression extends Model
 {

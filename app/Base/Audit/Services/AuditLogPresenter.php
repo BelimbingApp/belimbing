@@ -158,17 +158,7 @@ final class AuditLogPresenter
     /** @return array<string, mixed> */
     public function payload(AuditAction $action): array
     {
-        if (is_array($action->payload)) {
-            return $action->payload;
-        }
-
-        if (is_string($action->payload)) {
-            $decoded = json_decode($action->payload, true);
-
-            return is_array($decoded) ? $decoded : [];
-        }
-
-        return [];
+        return is_array($action->payload) ? $action->payload : [];
     }
 
     public function payloadJson(AuditAction $action): string

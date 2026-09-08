@@ -2,6 +2,8 @@
 
 namespace App\Base\Integration\Models;
 
+use App\Base\Audit\Services\AuditTenantScope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -9,6 +11,7 @@ use Illuminate\Support\Str;
 /**
  * Durable audit record for one outbound external-system exchange.
  *
+ * @property int|null $tenant_id
  * @property string $id
  * @property string $system
  * @property string|null $provider
@@ -45,6 +48,12 @@ use Illuminate\Support\Str;
  */
 class OutboundExchange extends Model
 {
+    /** @return Builder<static> */
+    public static function visibleToCurrentTenant(): Builder
+    {
+        return app(AuditTenantScope::class)->apply(static::query(), 'base_integration_outbound_exchanges', allTenants: true);
+    }
+
     public const ID_PREFIX = 'ix_';
 
     protected $table = 'base_integration_outbound_exchanges';
@@ -79,6 +88,7 @@ class OutboundExchange extends Model
      */
     protected $fillable = [
         'id',
+        'tenant_id',
         'system',
         'provider',
         'operation',

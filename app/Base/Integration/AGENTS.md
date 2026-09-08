@@ -38,3 +38,10 @@ app/Base/Integration/
 ## Current Boundary
 
 AI LLM calls remain on the existing AI WireLogger for now. Non-LLM AI provider communication, such as provider model discovery, belongs behind the Integration gateway.
+
+Outbound exchange inspection requires an ambient tenant. Ordinary tenants see
+and mutate only their rows, including filter choices and manual payload cleanup.
+The platform-operator tenant may inspect all exchanges, including legacy rows
+with unknown ownership. The gateway stamps the current tenant when available;
+tenantless system traffic remains null and operator-only. Scheduled retention
+continues to prune globally, independently of the scoped manual cleanup path.

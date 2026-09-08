@@ -61,7 +61,17 @@ class AuthorizationEngine implements AuthorizationService
                 AuthorizationReasonCode::DENIED_MISSING_CAPABILITY,
                 $appliedPolicies
             );
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
+            $failedPolicy = $appliedPolicies === [] ? null : $appliedPolicies[array_key_last($appliedPolicies)];
+
+            logger()->error('Authorization policy evaluation failed.', [
+                'exception' => $exception::class,
+                'message' => $exception->getMessage(),
+                'policy' => $failedPolicy,
+                'capability' => $capability,
+                'actor_type' => $actor->type->value,
+            ]);
+
             return AuthorizationDecision::deny(
                 AuthorizationReasonCode::DENIED_POLICY_ENGINE_ERROR,
                 $appliedPolicies

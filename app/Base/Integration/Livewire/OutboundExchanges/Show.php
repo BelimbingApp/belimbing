@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Integration\Livewire\OutboundExchanges;
 
 use App\Base\Authz\Contracts\AuthorizationService;
@@ -14,12 +15,12 @@ class Show extends Component
 
     public function mount(OutboundExchange $exchange): void
     {
-        $this->exchange = $exchange;
+        $this->exchange = OutboundExchange::visibleToCurrentTenant()->findOrFail($exchange->getKey());
     }
 
     public function render(): View
     {
-        $exchange = $this->exchange;
+        $exchange = OutboundExchange::visibleToCurrentTenant()->findOrFail($this->exchange->getKey());
 
         return view('livewire.admin.integration.outbound-exchanges.show', [
             'exchange' => $exchange,
