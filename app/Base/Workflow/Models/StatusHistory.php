@@ -42,7 +42,7 @@ class StatusHistory extends Model
     protected $table = 'base_workflow_status_history';
 
     /**
-     * @var array<int, string>
+     * @var list<string>
      */
     protected $fillable = [
         'flow',

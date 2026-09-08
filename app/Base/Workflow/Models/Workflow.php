@@ -34,7 +34,7 @@ class Workflow extends Model
     protected $table = 'base_workflow';
 
     /**
-     * @var array<int, string>
+     * @var list<string>
      */
     protected $fillable = [
         'code',
@@ -74,7 +74,7 @@ class Workflow extends Model
     /** @return array{name: string, id: int}|null */
     public function getAuditSubject(): ?array
     {
-        if ($this->id === null) {
+        if (! $this->exists) {
             return null;
         }
 

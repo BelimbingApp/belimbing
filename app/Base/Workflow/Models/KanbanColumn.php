@@ -33,7 +33,7 @@ class KanbanColumn extends Model
     protected $table = 'base_workflow_kanban_columns';
 
     /**
-     * @var array<int, string>
+     * @var list<string>
      */
     protected $fillable = [
         'flow',

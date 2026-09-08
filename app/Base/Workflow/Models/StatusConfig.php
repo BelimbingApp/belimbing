@@ -40,7 +40,7 @@ class StatusConfig extends Model
     protected $table = 'base_workflow_status_configs';
 
     /**
-     * @var array<int, string>
+     * @var list<string>
      */
     protected $fillable = [
         'flow',

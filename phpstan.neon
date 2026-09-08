@@ -5,6 +5,7 @@ includes:
 parameters:
     paths:
         - app/Base
+        - tests/Unit/Base/Workflow/Fixtures
     level: 5
     # Unmatched ignores are allowed so fixing debt can shrink the baseline
     # without a separate PR chore; growth is refused by the count gate.

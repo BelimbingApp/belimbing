@@ -132,7 +132,7 @@ class TransitionOutboxDispatcher
 
         if (is_array($modelSnapshot)) {
             $model = $prototype->newInstance();
-            $this->fromSnapshot($model, $modelSnapshot);
+            $this->hydrateFromSnapshot($model, $modelSnapshot);
         } else {
             // Compatibility for outbox rows written before model snapshots were
             // persisted. New rows always preserve the post-transition state.
@@ -193,26 +193,15 @@ class TransitionOutboxDispatcher
         );
     }
 
-    /** @template TModel of Model @param TModel $model @param mixed $snapshot @return TModel */
-    private function fromSnapshot(Model $model, mixed $snapshot): Model
-    {
-        if (! is_array($snapshot)) {
-            throw new TransitionOutboxException('Transition outbox contains an invalid record snapshot.');
-        }
-
-        $model->setRawAttributes($snapshot, true);
-        $model->exists = true;
-
-        return $model;
-    }
-
     /** @param array<string, mixed> $stored */
     private function rehydrateTransition(array $stored): StatusTransition
     {
         $snapshot = $stored['transition_snapshot'] ?? null;
 
         if (is_array($snapshot) && $snapshot !== []) {
-            return $this->fromSnapshot(new StatusTransition, $snapshot);
+            $this->hydrateFromSnapshot($transition = new StatusTransition, $snapshot);
+
+            return $transition;
         }
 
         return StatusTransition::query()->find($stored['transition_id'] ?? null)
@@ -225,10 +214,19 @@ class TransitionOutboxDispatcher
         $snapshot = $stored['history_snapshot'] ?? null;
 
         if (is_array($snapshot) && $snapshot !== []) {
-            return $this->fromSnapshot(new StatusHistory, $snapshot);
+            $this->hydrateFromSnapshot($history = new StatusHistory, $snapshot);
+
+            return $history;
         }
 
         return StatusHistory::query()->find($stored['history_id'] ?? null)
             ?? throw new TransitionOutboxException('Transition outbox cannot resolve its workflow history.');
+    }
+
+    /** @param array<string, mixed> $snapshot */
+    private function hydrateFromSnapshot(Model $model, array $snapshot): void
+    {
+        $model->setRawAttributes($snapshot, true);
+        $model->exists = true;
     }
 }

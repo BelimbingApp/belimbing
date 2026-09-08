@@ -5,6 +5,7 @@ namespace App\Base\Tenancy\Models;
 use App\Base\Tenancy\Exceptions\PlatformOperatorTenantDeletionException;
 use App\Base\Tenancy\Exceptions\PlatformOperatorTenantInvariantViolationException;
 use App\Base\Tenancy\Exceptions\PlatformOperatorTenantNotProvisionedException;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -17,6 +18,9 @@ use Illuminate\Support\Facades\DB;
  * @property string $name
  * @property string $status
  * @property bool $is_platform_operator
+ * @property CarbonInterface|null $created_at
+ * @property CarbonInterface|null $updated_at
+ * @property CarbonInterface|null $deleted_at
  *
  * A tenant is the platform's outer data-isolation and subscription boundary.
  * Companies remain the inner organizational boundary inside a tenant.
@@ -48,7 +52,7 @@ class Tenant extends Model
     protected $table = 'tenants';
 
     /**
-     * @var array<int, string>
+     * @var list<string>
      */
     protected $fillable = [
         'parent_id',
