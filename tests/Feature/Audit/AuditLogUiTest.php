@@ -400,7 +400,7 @@ it('allows local-only source history with the page capability while keeping trac
         'auditable_id' => $target->id,
         'old_values' => ['email' => 'local-old@example.com'],
         'new_values' => ['email' => 'local-new@example.com'],
-        'trace_id' => 'LOCALH1234567',
+        'trace_id' => 'LOCALH123456',
     ]);
 
     $this->actingAs($viewer);
@@ -416,7 +416,7 @@ it('allows local-only source history with the page capability while keeping trac
         ->assertSet('sourceHistoryAllUrl', '')
         ->assertSee('local-old@example.com')
         ->assertSee('local-new@example.com')
-        ->call('openTrace', 'LOCALH-1234-567')
+        ->call('openTrace', 'LOCA-LH12-3456')
         ->assertSet('traceDrawerOpen', false)
         ->assertSet('selectedTraceId', '')
         ->assertSet('traceTimeline', []);
