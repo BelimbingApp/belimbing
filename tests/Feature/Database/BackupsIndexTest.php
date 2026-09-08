@@ -355,6 +355,44 @@ it('records database.backup.verify_failed with result failed when bytes differ',
     expect($payload['result'] ?? null)->toBe('failed');
 });
 
+it('records database.backup.verified with result succeeded when the hash matches', function (): void {
+    $this->actingAs(createAdminUser());
+
+    $disk = Storage::disk(BACKUPS_TEST_DISK);
+    $artifactPath = BACKUPS_TEST_PREFIX.'/intact.bak';
+    $manifestPath = BACKUPS_TEST_PREFIX.'/intact'.BACKUPS_TEST_MANIFEST_SUFFIX;
+    $artifactBytes = 'intact-bytes';
+    $disk->put($artifactPath, $artifactBytes);
+    $disk->put($manifestPath, json_encode(makeBackupManifestPayload('bk-good', $artifactPath, $artifactBytes)));
+
+    Livewire::test(Index::class)
+        ->call('verify', $manifestPath)
+        ->assertSet('statusVariant', 'success');
+
+    $rows = backupsAuditEvents('database.backup.verified');
+    expect($rows)->toHaveCount(1);
+    $payload = json_decode((string) $rows[0]->payload, true);
+    expect($payload['result'] ?? null)->toBe('succeeded')
+        ->and($payload['subject']['identifier'] ?? null)->toBe($manifestPath)
+        ->and($payload['subject']['id'] ?? null)->toBe(substr(hash('sha256', $artifactBytes), 0, 12));
+});
+
+it('records nothing when deleteBackup finds the manifest already gone', function (): void {
+    $this->actingAs(createAdminUser());
+
+    $manifestPath = BACKUPS_TEST_PREFIX.'/already-gone'.BACKUPS_TEST_MANIFEST_SUFFIX;
+    expect(Storage::disk(BACKUPS_TEST_DISK)->exists($manifestPath))->toBeFalse();
+
+    app(BackupService::class)->deleteBackup(
+        diskName: BACKUPS_TEST_DISK,
+        manifestPath: $manifestPath,
+        surface: 'admin.system.database.backups',
+        uiElement: 'Delete',
+    );
+
+    expect(backupsAuditEvents('database.backup.deleted'))->toBe([]);
+});
+
 it('records nothing when the capability check refuses delete', function (): void {
     setupAuthzRoles();
     $user = User::factory()->create();
