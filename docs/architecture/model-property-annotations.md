@@ -48,8 +48,8 @@ numeric column because one driver once returned a string.
 ## Hydration measurements (2026-09-07)
 
 Probe: `tests/Feature/Base/Typing/ModelPropertyHydrationProbeTest.php` creates
-representative Data Share and Audit rows, reloads them, and records
-`get_debug_type` for annotated columns.
+a Data Share transfer offer, receipt, plan, and plan action, reloads them, and
+records `get_debug_type` for annotated columns.
 
 | Driver | Result |
 |--------|--------|
