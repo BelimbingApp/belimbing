@@ -6,6 +6,9 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\MassPrunable;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @property int|null $tenant_id
+ */
 class DecisionLog extends Model
 {
     use MassPrunable;
@@ -25,6 +28,7 @@ class DecisionLog extends Model
      */
     protected $fillable = [
         'company_id',
+        'tenant_id',
         'actor_type',
         'actor_id',
         'acting_for_user_id',

@@ -129,7 +129,7 @@ Chat agent selection resolves the employee through a company in the current tena
 
 Admin tenant management (list, create with optional parent, suspend/reactivate) lives at `admin/tenancy/tenants` behind the `admin.tenancy.tenant.*` capabilities. The menu surface is gated by the `tenancy.visible` menu condition: more than one tenant, or `tenancy.show_management` set true.
 
-Audit log pages (mutations, actions, source history, and the trace timeline) read only the ambient tenant through `AuditTenantScope`; the platform-operator tenant may widen mutations and actions with an explicit all-tenants toggle. Null-tenant rows stay visible only in that operator view.
+Audit log pages (mutations, actions, source history, and the trace timeline) and the Authz Decision Logs page read only the ambient tenant through `AuditTenantScope`; the platform-operator tenant may widen mutations, actions, and decision logs with an explicit all-tenants toggle. Null-tenant rows stay visible only in that operator view.
 
 Two writers of `tenants.status` exist: the create form sets the initial value, and the per-row Suspend / Reactivate action changes an existing one. That action is a separate authority from creating a tenant — `admin.tenancy.tenant.manage`, not `admin.tenancy.tenant.create` — because it takes a live tenant off every entry point above; without it the column is hidden and a direct component call is refused. Each change records one `base_audit_actions` row (`tenancy.tenant.suspended` / `tenancy.tenant.reactivated`) carrying the actor, the tenant and the status it moved between.
 

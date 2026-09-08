@@ -3,11 +3,13 @@
 namespace App\Base\Authz\Services;
 
 use App\Base\Authz\Contracts\DecisionLogger;
+use App\Base\Authz\Contracts\TenantDirectory;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\DTO\AuthorizationDecision;
 use App\Base\Authz\DTO\ResourceContext;
 use App\Base\Authz\Models\DecisionLog;
 use App\Base\Support\TraceId;
+use App\Base\Tenancy\Contracts\TenantContext;
 use Throwable;
 
 use function Illuminate\Support\defer;
@@ -25,6 +27,11 @@ class DatabaseDecisionLogger implements DecisionLogger
 
     private bool $flushRegistered = false;
 
+    public function __construct(
+        private readonly TenantContext $tenants,
+        private readonly TenantDirectory $tenantDirectory,
+    ) {}
+
     /**
      * Buffer a decision log entry for deferred persistence.
      *
@@ -41,6 +48,7 @@ class DatabaseDecisionLogger implements DecisionLogger
 
         $this->pendingLogs[] = [
             'company_id' => $actor->companyId,
+            'tenant_id' => $this->resolveTenantId($actor),
             'actor_type' => $actor->type->value,
             'actor_id' => $actor->id,
             'acting_for_user_id' => $actor->actingForUserId,
@@ -88,5 +96,19 @@ class DatabaseDecisionLogger implements DecisionLogger
                 'count' => count($logs),
             ]);
         }
+    }
+
+    /**
+     * Ambient tenant first, then the actor's company tenant.
+     *
+     * Returns null only when neither is available. Historical rows written
+     * before tenant_id existed were backfilled to the licensee tenant in
+     * migration 0100_01_11_000006; leftover nulls (this path) stay invisible
+     * to ordinary tenant admins under AuditTenantScope's exact match.
+     */
+    private function resolveTenantId(Actor $actor): ?int
+    {
+        return $this->tenants->currentTenantId()
+            ?? $this->tenantDirectory->tenantIdForCompany($actor->companyId);
     }
 }

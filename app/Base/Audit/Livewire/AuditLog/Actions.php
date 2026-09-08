@@ -13,7 +13,6 @@ use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Carbon;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -123,30 +122,15 @@ class Actions extends Component
 
     private function scopeCaption(AuditTenantScope $scope): string
     {
-        $scopeLabel = $scope->ambientIsPlatformOperator() && $this->allTenants
-            ? __('Audit action log (all tenants)')
-            : __('Audit action log (current tenant)');
-
-        $days = (int) config('audit.action_retention_days', 90);
-        $oldest = $scope->apply(
-            AuditAction::query(),
-            'base_audit_actions',
-            $this->allTenants,
-        )->min('occurred_at');
-        $lastPrune = $scope->apply(
-            AuditAction::query()
-                ->where('event', 'console.command')
-                ->where('url', 'like', '%blb:audit:actions:prune%')
-                ->orderByDesc('occurred_at'),
-            'base_audit_actions',
-            $this->allTenants,
-        )->value('occurred_at');
-
-        return $scopeLabel.' — '.__('Retention :days days, oldest row :oldest, last prune :prune', [
-            'days' => $days,
-            'oldest' => $oldest !== null ? Carbon::parse($oldest)->toDateString() : __('none'),
-            'prune' => $lastPrune !== null ? Carbon::parse($lastPrune)->format('Y-m-d H:i') : __('never'),
-        ]);
+        return $scope->retentionCaption(
+            allTenantsLabel: __('Audit action log (all tenants)'),
+            currentTenantLabel: __('Audit action log (current tenant)'),
+            allTenants: $this->allTenants,
+            retentionDays: (int) config('audit.action_retention_days', 90),
+            oldestSource: AuditAction::query(),
+            oldestTable: 'base_audit_actions',
+            pruneCommandNeedle: 'blb:audit:actions:prune',
+        );
     }
 
     private function getActions(): LengthAwarePaginator

@@ -240,6 +240,7 @@ Logging is **deferred and batched**:
 1. Decisions are buffered in memory during the request.
 2. A `terminating` callback flushes all buffered entries in a single batch `INSERT` (chunked at 500 rows) after the response is sent.
 3. Log persistence failure is caught and reported via `logger()->error()` without affecting the authorization decision.
+4. Each row stamps `tenant_id` from the ambient `TenantContext`, falling back to `TenantDirectory::tenantIdForCompany($actor->companyId)`. The Decision Logs page scopes through `AuditTenantScope` like the audit pages (#894).
 
 The `DecisionLog` model includes `MassPrunable` with a configurable retention period (`authz.decision_log_retention_days`, default 90 days). The scheduled command `blb:authz:decision-logs:prune` runs daily at 01:45 (override with `--days` / `--dry-run`).
 
