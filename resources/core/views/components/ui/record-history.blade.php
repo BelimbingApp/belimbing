@@ -16,7 +16,14 @@
 @php
     $authUser = auth()->user();
     $resolvedSourceCapability = (string) $sourceCapability;
-    $requiresAuditList = filter_var($requireAuditListCapability, FILTER_VALIDATE_BOOLEAN);
+    // Fail closed: unrecognized values keep the admin.audit.log.list gate.
+    // FILTER_VALIDATE_BOOLEAN without FILTER_NULL_ON_FAILURE treats typos as false
+    // (the permissive side) and would silently widen History to page capability alone.
+    $requiresAuditList = filter_var(
+        $requireAuditListCapability,
+        FILTER_VALIDATE_BOOLEAN,
+        FILTER_NULL_ON_FAILURE
+    ) !== false;
     $canRenderRecordHistory = false;
 
     if ($authUser !== null && $resolvedSourceCapability !== '') {
