@@ -5,11 +5,28 @@ namespace App\Core\AI\Models;
 use App\Core\AI\Enums\AuthType;
 use App\Core\Company\Models\Company;
 use App\Core\User\Models\User;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property int $id
+ * @property int $company_id
+ * @property string $name
+ * @property string $family
+ * @property string $display_name
+ * @property string $base_url
+ * @property AuthType $auth_type
+ * @property array<string, mixed>|null $credentials
+ * @property array<string, mixed>|null $connection_config
+ * @property bool $is_active
+ * @property int $priority
+ * @property int|null $created_by_user_id
+ * @property CarbonInterface|null $created_at
+ * @property CarbonInterface|null $updated_at
+ */
 class AiProvider extends Model
 {
     public const FAMILY_LLM = 'llm';

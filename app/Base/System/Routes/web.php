@@ -8,6 +8,7 @@ use App\Base\System\Livewire\Info\Index;
 use App\Base\System\Livewire\IntegrationParameters\Index as IntegrationParametersIndex;
 use App\Base\System\Livewire\Localization\Index as LocalizationIndex;
 use App\Base\System\Livewire\MenuInspector\Index as MenuInspectorIndex;
+use App\Base\System\Livewire\Overview\Index as OverviewIndex;
 use App\Base\System\Livewire\Settings\General as SystemSettings;
 use App\Base\System\Livewire\TestTransport\Index as TestTransportIndex;
 use App\Base\System\Livewire\UiReference\Index as UiReferenceIndex;
@@ -16,6 +17,11 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['auth'])->group(function () {
     Route::get('admin/system/info', Index::class)
         ->name('admin.system.info.index');
+
+    // Gate is OR of the four operator-surface view capabilities inside the
+    // component — AuthorizeCapability only accepts one key.
+    Route::get('admin/system/overview', OverviewIndex::class)
+        ->name('admin.system.overview.index');
 
     Route::get('admin/system/capabilities', CapabilitiesIndex::class)
         ->middleware('authz:'.CapabilitiesIndex::VIEW_CAPABILITY)

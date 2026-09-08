@@ -1,6 +1,10 @@
 <?php
-/** @var \App\Base\Audit\Livewire\AuditLog\Mutations $this */
-/** @var \App\Base\Audit\Services\AuditLogPresenter $presenter */
+
+use App\Base\Audit\Livewire\AuditLog\Mutations;
+use App\Base\Audit\Services\AuditLogPresenter;
+
+/** @var Mutations $this */
+/** @var AuditLogPresenter $presenter */
 ?>
 
 <div>
@@ -24,9 +28,15 @@
                     <option value="updated">{{ __('Updated') }}</option>
                     <option value="deleted">{{ __('Deleted') }}</option>
                 </x-ui.select>
+                @if ($canViewAllTenants)
+                    <label class="inline-flex items-center gap-2 text-sm whitespace-nowrap">
+                        <input type="checkbox" wire:model.live="allTenants" class="rounded border-input">
+                        <span>{{ __('All tenants') }}</span>
+                    </label>
+                @endif
             </div>
 
-            <x-ui.table container="flush" :caption="__('Data mutation audit log')">
+            <x-ui.table container="flush" :caption="$scopeCaption">
                 <x-slot name="head">
                     <tr>
                         <x-ui.sortable-th

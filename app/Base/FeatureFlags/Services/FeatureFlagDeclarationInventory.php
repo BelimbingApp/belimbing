@@ -4,6 +4,7 @@ namespace App\Base\FeatureFlags\Services;
 
 use App\Base\FeatureFlags\Models\FeatureFlagOverride;
 use App\Base\Tenancy\Contracts\TenantContext;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -59,6 +60,38 @@ final class FeatureFlagDeclarationInventory
         }
 
         return $rows;
+    }
+
+    /**
+     * Override rows for the ambient tenant whose flag no enabled module declares.
+     *
+     * @return list<array{flag: string, enabled: bool, updated_at: ?CarbonInterface}>
+     */
+    public function orphanedOverridesForCurrentTenant(): array
+    {
+        $tenantId = $this->tenants->requireTenantId();
+        if (! Schema::hasTable((new FeatureFlagOverride)->getTable())) {
+            return [];
+        }
+
+        $declared = array_keys($this->registry->declarations());
+
+        $query = FeatureFlagOverride::query()
+            ->where('tenant_id', $tenantId)
+            ->orderBy('flag');
+
+        if ($declared !== []) {
+            $query->whereNotIn('flag', $declared);
+        }
+
+        return $query
+            ->get(['flag', 'enabled', 'updated_at'])
+            ->map(static fn (FeatureFlagOverride $override): array => [
+                'flag' => (string) $override->flag,
+                'enabled' => (bool) $override->enabled,
+                'updated_at' => $override->updated_at,
+            ])
+            ->all();
     }
 
     /**

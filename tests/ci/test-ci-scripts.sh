@@ -4,8 +4,8 @@ set -euo pipefail
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 python3 tests/ci/test-domain-pins.py
-bash -n scripts/ci/changed-authorable-php.sh scripts/ci/extension-conformance.sh scripts/ci/mount-guard.sh scripts/ci/phpstan-baseline-gate.sh scripts/ci/record-pest-timing.sh
-python3 -m py_compile scripts/ci/aggregate-pest-timing.py scripts/ci/pest-timing-ratchet.py
+bash -n scripts/ci/changed-authorable-php.sh scripts/ci/extension-conformance.sh scripts/ci/mount-guard.sh scripts/ci/phpstan-baseline-gate.sh scripts/ci/record-pest-timing.sh scripts/ci/token-audit.sh
+python3 -m py_compile scripts/ci/aggregate-pest-timing.py scripts/ci/pest-timing-ratchet.py scripts/ci/refresh-livewire-action-baselines.py
 
 # Timing aggregator (#614): one table from per-suite JSON, fail-closed on empty.
 timing_fixture=$(mktemp -d)
@@ -536,6 +536,107 @@ if command -v php >/dev/null; then
     fi
     php scripts/ci/validate-php-syntax.php scripts/ci/domain-ci.php scripts/ci/compose-domain.php scripts/ci/filter-domain-coverage-clover.php scripts/ci/validate-extension-manifest.php scripts/ci/composed-smoke.php
 
+    # validate-php-syntax.php (#856): the Extension syntax gate
+    # (extension-conformance.sh) fails an Extension whose PHP does not parse.
+    # The happy path above only feeds known-good files; without an invalid-file
+    # case, exit(1) and the path-in-stderr message can be deleted unnoticed.
+    syntax_fixture=$(mktemp -d)
+    printf '<?php\n' > "$syntax_fixture/good.php"
+    printf '<?php\n function (\n' > "$syntax_fixture/bad.php"
+    printf '<?php\n function (\n' > "$syntax_fixture/also-bad.php"
+    if ! php scripts/ci/validate-php-syntax.php "$syntax_fixture/good.php" 2>"$syntax_fixture/good.err"; then
+        echo 'validate-php-syntax.php refused a valid PHP file' >&2
+        cat "$syntax_fixture/good.err" >&2
+        rm -rf "$syntax_fixture"
+        exit 1
+    fi
+    if [[ -s "$syntax_fixture/good.err" ]]; then
+        echo 'validate-php-syntax.php wrote stderr for a valid PHP file' >&2
+        cat "$syntax_fixture/good.err" >&2
+        rm -rf "$syntax_fixture"
+        exit 1
+    fi
+    if php scripts/ci/validate-php-syntax.php "$syntax_fixture/good.php" "$syntax_fixture/bad.php" "$syntax_fixture/also-bad.php" 2>"$syntax_fixture/bad.err"; then
+        echo 'validate-php-syntax.php accepted invalid PHP syntax' >&2
+        rm -rf "$syntax_fixture"
+        exit 1
+    fi
+    if ! grep -qF "extension-conformance: invalid PHP syntax in $syntax_fixture/bad.php" "$syntax_fixture/bad.err"; then
+        echo 'validate-php-syntax.php did not name the offending path on stderr' >&2
+        cat "$syntax_fixture/bad.err" >&2
+        rm -rf "$syntax_fixture"
+        exit 1
+    fi
+    if grep -qF "$syntax_fixture/also-bad.php" "$syntax_fixture/bad.err"; then
+        echo 'validate-php-syntax.php continued past the first invalid file' >&2
+        cat "$syntax_fixture/bad.err" >&2
+        rm -rf "$syntax_fixture"
+        exit 1
+    fi
+    rm -rf "$syntax_fixture"
+
+    # setup-sonar.php (#856): hermetic refusals before any SonarCloud/network
+    # call. SONAR_TOKEN=placeholder keeps resolveSonarToken off the checkout
+    # .env; --registry= points at a temp file so loadRegistry never reads the
+    # live domain registry. These three exits are the testable contract.
+    sonar_fixture=$(mktemp -d)
+    unknown_rc=0
+    SONAR_TOKEN=placeholder php scripts/ci/setup-sonar.php --not-a-real-flag 2>"$sonar_fixture/unknown.err" || unknown_rc=$?
+    if [[ "$unknown_rc" -ne 1 ]]; then
+        echo "setup-sonar.php exited $unknown_rc (expected 1) for an unknown argument; it must stop before any SonarCloud call" >&2
+        cat "$sonar_fixture/unknown.err" >&2
+        rm -rf "$sonar_fixture"
+        exit 1
+    fi
+    if ! grep -qF 'Unknown argument:' "$sonar_fixture/unknown.err"; then
+        echo 'setup-sonar.php did not report Unknown argument:' >&2
+        cat "$sonar_fixture/unknown.err" >&2
+        rm -rf "$sonar_fixture"
+        exit 1
+    fi
+    if SONAR_TOKEN=placeholder php scripts/ci/setup-sonar.php --registry="$sonar_fixture/missing.json" 2>"$sonar_fixture/missing.err"; then
+        echo 'setup-sonar.php accepted a missing registry' >&2
+        rm -rf "$sonar_fixture"
+        exit 1
+    fi
+    if ! grep -qF "Registry not found: $sonar_fixture/missing.json" "$sonar_fixture/missing.err"; then
+        echo 'setup-sonar.php did not report Registry not found:' >&2
+        cat "$sonar_fixture/missing.err" >&2
+        rm -rf "$sonar_fixture"
+        exit 1
+    fi
+    if grep -qF 'Invalid registry:' "$sonar_fixture/missing.err"; then
+        echo 'setup-sonar.php fell past the unreadable-registry exit into the invalid-registry guard' >&2
+        cat "$sonar_fixture/missing.err" >&2
+        rm -rf "$sonar_fixture"
+        exit 1
+    fi
+    printf '{"foo":1}\n' > "$sonar_fixture/invalid.json"
+    if SONAR_TOKEN=placeholder php scripts/ci/setup-sonar.php --registry="$sonar_fixture/invalid.json" 2>"$sonar_fixture/invalid.err"; then
+        echo 'setup-sonar.php accepted a registry without domains' >&2
+        rm -rf "$sonar_fixture"
+        exit 1
+    fi
+    if ! grep -qF "Invalid registry: $sonar_fixture/invalid.json" "$sonar_fixture/invalid.err"; then
+        echo 'setup-sonar.php did not report Invalid registry:' >&2
+        cat "$sonar_fixture/invalid.err" >&2
+        rm -rf "$sonar_fixture"
+        exit 1
+    fi
+    printf '{"domains":1}\n' > "$sonar_fixture/scalar.json"
+    if SONAR_TOKEN=placeholder php scripts/ci/setup-sonar.php --registry="$sonar_fixture/scalar.json" 2>"$sonar_fixture/scalar.err"; then
+        echo 'setup-sonar.php accepted a registry with a scalar domains value' >&2
+        rm -rf "$sonar_fixture"
+        exit 1
+    fi
+    if ! grep -qF "Invalid registry: $sonar_fixture/scalar.json" "$sonar_fixture/scalar.err"; then
+        echo 'setup-sonar.php did not report Invalid registry: for a scalar domains' >&2
+        cat "$sonar_fixture/scalar.err" >&2
+        rm -rf "$sonar_fixture"
+        exit 1
+    fi
+    rm -rf "$sonar_fixture"
+
     # The composed-application smoke test (#600) judges a boot against a
     # checked-in surface; without a network only its migration scan and the
     # surface/descriptor pin agreement can be proven here. The workflow
@@ -606,18 +707,242 @@ PY
     if smoke >/dev/null 2>&1; then
         echo 'composed-smoke accepted a mount whose HEAD is not the pinned ref' >&2; exit 1
     fi
+
+    # #870: DOMAIN_ROUTE_NAME must own people-connector.* (signed webhook) and
+    # refuse a Domain Routes declaration outside the prefix list.
+    smoke_descriptor "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}"
+    mkdir -p "$smoke_root/app/Domains/PeopleConnector/Connector/Routes"
+    printf "%s\n" "<?php" "Route::post('webhooks/people-connector/{id}', fn () => null)->name('people-connector.webhook');" \
+        > "$smoke_root/app/Domains/PeopleConnector/Connector/Routes/web.php"
+    printf '[{"name":"people.index","uri":"people"},{"name":"people-connector.webhook","uri":"webhooks/people-connector/1"},{"name":"admin.integration.index","uri":"admin/integration"}]' \
+        > "$smoke_root/routes.json"
+    smoke_surface "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}" 3 'admin.integration.index,people-connector.webhook,people.index'
+    smoke 2>/dev/null
+
+    # Narrowing the filter by dropping people-connector. must turn red: the
+    # Routes declaration is then unmatched and the live name falls out of the count.
+    narrowed="$smoke_root/composed-smoke-narrowed.php"
+    cp scripts/ci/composed-smoke.php "$narrowed"
+    python3 - "$narrowed" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+text = path.read_text()
+old = "const DOMAIN_ROUTE_NAME = '/^(people\\.|people-connector\\.|admin\\.people-connector\\.|admin\\.integration\\.|commerce\\.|it\\.|quality\\.)/';"
+new = "const DOMAIN_ROUTE_NAME = '/^(people\\.|admin\\.people-connector\\.|admin\\.integration\\.|commerce\\.|it\\.|quality\\.)/';"
+assert old in text, 'DOMAIN_ROUTE_NAME const missing for the #870 mutant'
+path.write_text(text.replace(old, new, 1))
+PY
+    narrowed_err=$(php "$narrowed" --root="$smoke_root" --routes-json="$smoke_root/routes.json" \
+        --registry="$smoke_root/scripts/ci/domain-repos.json" --surface="$smoke_root/scripts/ci/composed-surface.json" \
+        2>&1 || true)
+    if ! grep -q 'people-connector.webhook' <<< "$narrowed_err"; then
+        echo 'composed-smoke accepted people-connector.webhook after DOMAIN_ROUTE_NAME dropped people-connector.' >&2
+        echo "$narrowed_err" >&2
+        exit 1
+    fi
+
+    # An undeclared prefix in Domain Routes is refused even when the route table is empty of it.
+    printf "%s\n" "<?php" "Route::get('odd', fn () => null)->name('odd.domain.route');" \
+        > "$smoke_root/app/Domains/PeopleConnector/Connector/Routes/web.php"
+    printf '[{"name":"people.index","uri":"people"},{"name":"admin.integration.index","uri":"admin/integration"}]' \
+        > "$smoke_root/routes.json"
+    smoke_surface "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}" 2 'admin.integration.index,people.index'
+    if smoke >/dev/null 2>&1; then
+        echo 'composed-smoke accepted a Domain Routes name outside DOMAIN_ROUTE_NAME' >&2
+        exit 1
+    fi
+    smoke_err=$(smoke 2>&1 || true)
+    grep -q 'odd.domain.route' <<< "$smoke_err"
+
+    # --print-surface must still regenerate when pins disagree (advance-domain-pin
+    # intermediate state) but still refuse unmatched Domain Routes names (#871).
+    printf "%s\n" "<?php" "Route::post('webhooks/people-connector/{id}', fn () => null)->name('people-connector.webhook');" \
+        > "$smoke_root/app/Domains/PeopleConnector/Connector/Routes/web.php"
+    printf '[{"name":"people.index","uri":"people"},{"name":"people-connector.webhook","uri":"webhooks/people-connector/1"},{"name":"admin.integration.index","uri":"admin/integration"}]' \
+        > "$smoke_root/routes.json"
+    smoke_descriptor "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}"
+    smoke_surface "${smoke_sha[People]}" 1111111111111111111111111111111111111111 3 'admin.integration.index,people-connector.webhook,people.index'
+    printed=$(smoke --print-surface 2>/dev/null) || {
+        echo 'composed-smoke --print-surface failed while only the surface pin was stale' >&2
+        exit 1
+    }
+    python3 -c 'import json,sys; d=json.load(sys.stdin); assert "pins" in d and "route_names" in d' <<< "$printed"
+
+    printf "%s\n" "<?php" "Route::get('odd', fn () => null)->name('odd.domain.route');" \
+        > "$smoke_root/app/Domains/PeopleConnector/Connector/Routes/web.php"
+    if smoke --print-surface >/dev/null 2>&1; then
+        echo 'composed-smoke --print-surface accepted a Domain Routes name outside DOMAIN_ROUTE_NAME' >&2
+        exit 1
+    fi
+    print_err=$(smoke --print-surface 2>&1 || true)
+    grep -q 'odd.domain.route' <<< "$print_err"
+
     rm -rf "$smoke_root"
     trap - EXIT
     php scripts/ci/validate-extension-manifest.php tests/Fixtures/ci/extensions/conventional/Example/composer.json
     if php scripts/ci/validate-extension-manifest.php tests/Fixtures/ci/extensions/invalid/Example/composer.json >/dev/null 2>&1; then
         echo 'invalid Extension manifest was accepted' >&2; exit 1
     fi
+
+    # extension-conformance.sh (#822): hermetic refusals + happy path.
+    ext_root=$(mktemp -d)
+    trap 'rm -rf "$ext_root"' EXIT
+    cp -a tests/Fixtures/ci/extensions/conventional/. "$ext_root/"
+    conf_out=$(scripts/ci/extension-conformance.sh "$ext_root")
+    grep -q 'extension-conformance: passed 1 Module manifest(s)' <<< "$conf_out"
+
+    empty_ext=$(mktemp -d)
+    if scripts/ci/extension-conformance.sh "$empty_ext" >/dev/null 2>&1; then
+        echo 'extension-conformance accepted an empty Extension root' >&2; exit 1
+    fi
+    empty_err=$(scripts/ci/extension-conformance.sh "$empty_ext" 2>&1 || true)
+    grep -q 'no Module composer.json found' <<< "$empty_err"
+    rm -rf "$empty_ext"
+
+    bad_ext=$(mktemp -d)
+    cp -a tests/Fixtures/ci/extensions/invalid/. "$bad_ext/"
+    if scripts/ci/extension-conformance.sh "$bad_ext" >/dev/null 2>&1; then
+        echo 'extension-conformance accepted an invalid Extension manifest' >&2; exit 1
+    fi
+    rm -rf "$bad_ext"
+
+    assets_ext=$(mktemp -d)
+    cp -a tests/Fixtures/ci/extensions/conventional/. "$assets_ext/"
+    mkdir -p "$assets_ext/Example/Assets"
+    printf 'console.log(1)\n' > "$assets_ext/Example/Assets/app.js"
+    if scripts/ci/extension-conformance.sh "$assets_ext" >/dev/null 2>&1; then
+        echo 'extension-conformance accepted owned assets without package.json and bun.lock' >&2; exit 1
+    fi
+    assets_err=$(scripts/ci/extension-conformance.sh "$assets_ext" 2>&1 || true)
+    grep -q 'owned assets require package.json and bun.lock' <<< "$assets_err"
+    rm -rf "$assets_ext"
+
+    # Tracked migrations are excluded from Pint; the same untracked file fails.
+    mig_ext=$(mktemp -d)
+    cp -a tests/Fixtures/ci/extensions/conventional/. "$mig_ext/"
+    mkdir -p "$mig_ext/Example/Database/Migrations"
+    # Deliberately unformatted so Pint --test fails when the file is authorable.
+    cat > "$mig_ext/Example/Database/Migrations/0330_01_01_000000_probe.php" <<'PHP'
+<?php
+return new class {
+public function up(): void
+{
+$x=1;
+}
+};
+PHP
+    git -C "$mig_ext" init -q
+    git -C "$mig_ext" config user.name 'ci'
+    git -C "$mig_ext" config user.email 'ci@example.invalid'
+    git -C "$mig_ext" add Example/composer.json Example/Example.php Example/Database/Migrations/0330_01_01_000000_probe.php
+    git -C "$mig_ext" commit -qm 'tracked migration'
+    scripts/ci/extension-conformance.sh "$mig_ext" >/dev/null
+    # A never-tracked sibling must still face Pint (tracked exclusion is path+git).
+    cat > "$mig_ext/Example/Database/Migrations/0330_01_01_000001_untracked_probe.php" <<'PHP'
+<?php
+return new class {
+public function up(): void
+{
+$x=1;
+}
+};
+PHP
+    if scripts/ci/extension-conformance.sh "$mig_ext" >/dev/null 2>&1; then
+        echo 'extension-conformance accepted an untracked migration that fails Pint' >&2; exit 1
+    fi
+    rm -rf "$mig_ext"
+
+    rm -rf "$ext_root"
+    trap - EXIT
     rendered=$(php scripts/ci/domain-ci.php render --domain-id=people --workflow-ref=0123456789abcdef0123456789abcdef01234567)
     grep -q 'domain-id: people' <<< "$rendered"
     grep -q 'platform-ref: 0123456789abcdef0123456789abcdef01234567' <<< "$rendered"
     if php scripts/ci/domain-ci.php render --domain-id=people --workflow-ref=main >/dev/null 2>&1; then
         echo 'mutable workflow ref was accepted' >&2; exit 1
     fi
+
+    # filter-domain-coverage-clover.php (#842): Domain CI attributes Sonar
+    # coverage only to the mount under test. Sibling domains, platform files,
+    # and a path that merely contains the domain name as a substring must be
+    # stripped; relative and absolute Clover paths under the mount must stay.
+    clover_fixture=$(mktemp -d)
+    trap 'rm -rf "$clover_fixture"' EXIT
+    cp tests/ci/fixtures/domain-coverage-clover/mixed.xml "$clover_fixture/clover.xml"
+    clover_err=$(
+        php scripts/ci/filter-domain-coverage-clover.php \
+            --domain-path=app/Domains/People \
+            --coverage="$clover_fixture/clover.xml" 2>&1 >/dev/null
+    )
+    if ! grep -qF 'kept 2 file(s), removed 3' <<< "$clover_err"; then
+        echo "filter-domain-coverage-clover.php summary mismatch: $clover_err" >&2
+        exit 1
+    fi
+    python3 - "$clover_fixture/clover.xml" <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+
+tree = ET.parse(sys.argv[1])
+root = tree.getroot()
+assert root.tag == 'coverage', root.tag
+project = root.find('project')
+assert project is not None, 'missing <project> root'
+names = sorted(f.get('name') for f in project.findall('file'))
+expected = sorted([
+    'app/Domains/People/Skills/Foo.php',
+    '/home/runner/work/blb-people/blb-people/app/Domains/People/Skills/Bar.php',
+])
+assert names == expected, names
+forbidden = (
+    'app/Domains/PeopleConnector/Services/Sync.php',
+    'app/Base/Tenancy/Tenant.php',
+    'app/Domains/PeopleX/Ghost.php',
+)
+for name in forbidden:
+    assert name not in names, name
+PY
+    clover_usage_status=0
+    clover_usage_err=$(php scripts/ci/filter-domain-coverage-clover.php --domain-path=app/Domains/People 2>&1 >/dev/null) || clover_usage_status=$?
+    if [[ "$clover_usage_status" -ne 2 ]]; then
+        echo "filter-domain-coverage-clover.php missing --coverage exited $clover_usage_status, expected 2" >&2
+        exit 1
+    fi
+    if ! grep -qF 'usage: filter-domain-coverage-clover.php --domain-path=<path> --coverage=<clover.xml>' <<< "$clover_usage_err"; then
+        echo "filter-domain-coverage-clover.php did not print its usage line: $clover_usage_err" >&2
+        exit 1
+    fi
+    clover_missing="$clover_fixture/missing.xml"
+    clover_missing_status=0
+    clover_missing_err=$(
+        php scripts/ci/filter-domain-coverage-clover.php \
+            --domain-path=app/Domains/People \
+            --coverage="$clover_missing" 2>&1 >/dev/null
+    ) || clover_missing_status=$?
+    if [[ "$clover_missing_status" -ne 1 ]]; then
+        echo "filter-domain-coverage-clover.php unreadable path exited $clover_missing_status, expected 1" >&2
+        exit 1
+    fi
+    if ! grep -qF "coverage file not readable: $clover_missing" <<< "$clover_missing_err"; then
+        echo "filter-domain-coverage-clover.php did not name the unreadable path: $clover_missing_err" >&2
+        exit 1
+    fi
+    printf 'not xml\n' > "$clover_fixture/invalid.xml"
+    clover_invalid_status=0
+    clover_invalid_err=$(
+        php scripts/ci/filter-domain-coverage-clover.php \
+            --domain-path=app/Domains/People \
+            --coverage="$clover_fixture/invalid.xml" 2>&1 >/dev/null
+    ) || clover_invalid_status=$?
+    if [[ "$clover_invalid_status" -ne 1 ]]; then
+        echo "filter-domain-coverage-clover.php invalid XML exited $clover_invalid_status, expected 1" >&2
+        exit 1
+    fi
+    if ! grep -qF 'invalid clover XML' <<< "$clover_invalid_err"; then
+        echo "filter-domain-coverage-clover.php did not report invalid clover XML: $clover_invalid_err" >&2
+        exit 1
+    fi
+    rm -rf "$clover_fixture"
+    trap - EXIT
 else
     echo 'SKIP: PHP checks (php is unavailable)' >&2
 fi
@@ -824,6 +1149,99 @@ with tempfile.TemporaryDirectory() as tmp:
 PY
 
 
+# refresh-livewire-action-baselines.py (#775): never raise a committed count.
+python3 - <<'PY'
+from pathlib import Path
+import importlib.util
+import json
+import subprocess
+import tempfile
+
+root = Path('.').resolve()
+script = root / 'scripts/ci/refresh-livewire-action-baselines.py'
+workflow = (root / '.github/workflows/refresh-livewire-action-baselines.yml').read_text(
+    encoding='utf-8'
+)
+assert script.is_file(), 'missing refresh-livewire-action-baselines.py'
+assert 'refresh-livewire-action-baselines.py' in workflow
+assert 'gh pr create' in workflow
+assert '--label bot-maintenance' in workflow
+assert 'Protect Main refuses direct pushes' in workflow
+assert 'HEAD:main' not in workflow.replace('HEAD:refs/heads/$branch', '')
+
+spec = importlib.util.spec_from_file_location('refresh_livewire', script)
+mod = importlib.util.module_from_spec(spec)
+assert spec.loader is not None
+spec.loader.exec_module(mod)
+source = script.read_text(encoding='utf-8')
+assert 'never-raise guard' in source
+
+with tempfile.TemporaryDirectory() as tmp:
+    fixture = Path(tmp)
+    baseline = fixture / 'baseline.json'
+    measured = fixture / 'measured.json'
+    baseline.write_text(
+        json.dumps({'domain': None, 'module_owned_unreferenced': 10, 'actions': ['A::a']})
+        + '\n',
+        encoding='utf-8',
+    )
+
+    # Lower count rewrites the baseline.
+    measured.write_text(
+        json.dumps({'domain': None, 'module_owned_unreferenced': 7, 'actions': ['A::a']})
+        + '\n',
+        encoding='utf-8',
+    )
+    lower = subprocess.run(
+        ['python3', str(script), '--baseline', str(baseline), '--measured', str(measured)],
+        capture_output=True,
+        text=True,
+    )
+    assert lower.returncode == 0, lower.stdout + lower.stderr
+    assert json.loads(baseline.read_text(encoding='utf-8'))['module_owned_unreferenced'] == 7
+
+    # Higher count leaves the file untouched and exits 0 with a message.
+    before = baseline.read_text(encoding='utf-8')
+    measured.write_text(
+        json.dumps({'domain': None, 'module_owned_unreferenced': 99, 'actions': ['Z::z']})
+        + '\n',
+        encoding='utf-8',
+    )
+    higher = subprocess.run(
+        ['python3', str(script), '--baseline', str(baseline), '--measured', str(measured)],
+        capture_output=True,
+        text=True,
+    )
+    assert higher.returncode == 0, higher.stdout + higher.stderr
+    assert 'refusing to raise' in higher.stdout
+    assert baseline.read_text(encoding='utf-8') == before
+    assert json.loads(baseline.read_text(encoding='utf-8'))['module_owned_unreferenced'] == 7
+
+    # Delete the never-raise guard and the higher count is written (check goes red).
+    patched = source.replace(
+        '        # never-raise guard: a higher measured count must not rewrite the file.\n'
+        '        if measured_count > old:\n'
+        '            print(\n'
+        '                f"refusing to raise Livewire action-debt baseline {baseline}: "\n'
+        '                f"{old} -> {measured_count}; leaving file untouched"\n'
+        '            )\n'
+        '            return "unchanged-raise"\n',
+        '',
+        1,
+    )
+    assert patched != source, 'never-raise guard block missing for red check'
+    patched_path = fixture / 'patched.py'
+    patched_path.write_text(patched, encoding='utf-8')
+    raised = subprocess.run(
+        ['python3', str(patched_path), '--baseline', str(baseline), '--measured', str(measured)],
+        capture_output=True,
+        text=True,
+    )
+    assert raised.returncode == 0, raised.stdout + raised.stderr
+    assert json.loads(baseline.read_text(encoding='utf-8'))['module_owned_unreferenced'] == 99
+PY
+
+
 # bot-pr-policy.sh (#728): hermetic profile check + workflow contracts.
 python3 - <<'PY'
 from pathlib import Path
@@ -837,16 +1255,22 @@ assert policy.stat().st_mode & 0o111, 'bot-pr-policy.sh must be executable'
 
 tests_yml = (root / '.github/workflows/tests.yml').read_text(encoding='utf-8')
 timings_yml = (root / '.github/workflows/refresh-feature-shard-timings.yml').read_text(encoding='utf-8')
+livewire_yml = (root / '.github/workflows/refresh-livewire-action-baselines.yml').read_text(
+    encoding='utf-8'
+)
 review_yml = (root / '.github/workflows/ai-team-independent-review.yml').read_text(encoding='utf-8')
 assert '--label bot-maintenance' in tests_yml, 'coverage raise must apply bot-maintenance'
 assert '--add-label bot-maintenance' in tests_yml
 assert '--label bot-maintenance' in timings_yml, 'timings refresh must apply bot-maintenance'
 assert 'AI-Team-Lane-Issue: none' in timings_yml
+assert '--label bot-maintenance' in livewire_yml, 'livewire refresh must apply bot-maintenance'
+assert 'AI-Team-Lane-Issue: none' in livewire_yml
 assert 'Recognize a bot-maintenance PR' in review_yml
 assert 'Materialize bot-maintenance policy' in review_yml
 assert 'scripts/ci/bot-pr-policy.sh' in review_yml
 assert "steps.bot_policy.outputs.accepted != 'true'" in review_yml
 assert "contains(github.event.pull_request.labels.*.name, 'bot-maintenance')" in review_yml
+assert 'livewire_actions_profile' in policy.read_text(encoding='utf-8')
 
 with tempfile.TemporaryDirectory() as tmp:
     repo = Path(tmp)
@@ -854,10 +1278,12 @@ with tempfile.TemporaryDirectory() as tmp:
     subprocess.check_call(['git', 'config', 'user.name', 'test'], cwd=repo)
     subprocess.check_call(['git', 'config', 'user.email', 'test@example.invalid'], cwd=repo)
     (repo / 'tests/ci').mkdir(parents=True)
+    (repo / 'tests/ci/livewire-actions-baselines').mkdir(parents=True)
     (repo / 'scripts/ci').mkdir(parents=True)
     (repo / 'tests/ci/platform-coverage-baseline.json').write_text('{}\n', encoding='utf-8')
     (repo / 'scripts/ci/platform-feature-shard-timings.json').write_text('{}\n', encoding='utf-8')
     (repo / 'scripts/ci/platform-feature-shards.json').write_text('{}\n', encoding='utf-8')
+    (repo / 'tests/ci/livewire-actions-baselines/platform.json').write_text('{}\n', encoding='utf-8')
     (repo / 'README.md').write_text('other\n', encoding='utf-8')
     subprocess.check_call(['git', 'add', '-A'], cwd=repo)
     subprocess.check_call(['git', 'commit', '-qm', 'base'], cwd=repo)
@@ -916,6 +1342,18 @@ with tempfile.TemporaryDirectory() as tmp:
     passed = run_policy(head)
     assert passed.returncode == 0, passed.stdout + passed.stderr
 
+    def livewire_ok():
+        (repo / 'tests/ci/livewire-actions-baselines/platform.json').write_text(
+            '{"module_owned_unreferenced":1}\n', encoding='utf-8'
+        )
+        (repo / 'tests/ci/livewire-actions-baselines/people.json').write_text(
+            '{"module_owned_unreferenced":2}\n', encoding='utf-8'
+        )
+
+    head = commit_on('livewire-ok', livewire_ok)
+    passed = run_policy(head)
+    assert passed.returncode == 0, passed.stdout + passed.stderr
+
     def mixed():
         (repo / 'tests/ci/platform-coverage-baseline.json').write_text(
             '{"line_rate":1}\n', encoding='utf-8'
@@ -928,5 +1366,416 @@ with tempfile.TemporaryDirectory() as tmp:
     failed = run_policy(head)
     assert failed.returncode == 1, failed.stdout + failed.stderr
 PY
+
+# changed-authorable-php.sh (#823): the subset rule that decides what Pint sees
+# in lint.yml. An existing migration is hash-immutable, so re-linting it can
+# only ever fail CI for a file nobody may edit; a NEWLY added migration is
+# still authorable and must be linted. Both halves lived only in the script.
+# Hermetic: a throwaway repository with two commits, so nothing here reads the
+# platform checkout's own history or working tree.
+authorable_fixture=$(mktemp -d)
+trap 'rm -rf "$authorable_fixture"' EXIT
+authorable_script="$root/scripts/ci/changed-authorable-php.sh"
+(
+    cd "$authorable_fixture"
+    git init -q
+    git config user.name test
+    git config user.email test@example.invalid
+
+    mkdir -p app/Base/X/Database/Migrations database/migrations \
+        app/Base/X/Services app/Base/X/Livewire
+    printf '<?php // a\n' > app/Base/X/Database/Migrations/2026_01_01_000000_a.php
+    printf '<?php // b\n' > database/migrations/2026_01_01_000000_b.php
+    printf '<?php // s\n' > app/Base/X/Services/S.php
+    printf '<?php // old\n' > app/Base/X/Old.php
+    git add -A
+    git commit -qm base
+    authorable_base=$(git rev-parse HEAD)
+
+    # Touch both existing migrations, add one, add an ordinary class, delete a
+    # class, and add a non-PHP file. Each is a different arm of the rule.
+    #
+    # Deletion exclusion is two guards: --diff-filter=ACMR (pinned by the
+    # head-tree case below — ACMRD alone stays green because -f still drops
+    # Old.php) and [[ -f "$path" ]] (pinned by the base-tree case that follows —
+    # deleting -f alone turns that case red while the head-tree case stays
+    # green). Do not drop either on the strength of one green run.
+    printf '<?php // a changed\n' > app/Base/X/Database/Migrations/2026_01_01_000000_a.php
+    printf '<?php // b changed\n' > database/migrations/2026_01_01_000000_b.php
+    printf '<?php // s changed\n' > app/Base/X/Services/S.php
+    printf '<?php // c\n' > app/Base/X/Database/Migrations/2026_02_01_000000_c.php
+    printf '<?php // l\n' > app/Base/X/Livewire/L.php
+    printf 'notes\n' > notes.txt
+    rm app/Base/X/Old.php
+    git add -A
+    git commit -qm head
+    authorable_head=$(git rev-parse HEAD)
+
+    # Head-tree case: working tree matches head (lint.yml checkout). git orders
+    # paths lexically, so the expected sequence is fixed. Compared whole rather
+    # than grepped: a missing line and an extra line are both failures.
+    authorable_expected=$(printf '%s\n' \
+        'app/Base/X/Database/Migrations/2026_02_01_000000_c.php' \
+        'app/Base/X/Livewire/L.php' \
+        'app/Base/X/Services/S.php')
+    authorable_actual=$(bash "$authorable_script" "$authorable_base" "$authorable_head" | tr '\0' '\n')
+
+    if [[ "$authorable_actual" != "$authorable_expected" ]]; then
+        echo 'changed-authorable-php.sh printed the wrong set of files' >&2
+        echo "expected:" >&2
+        printf '%s\n' "$authorable_expected" >&2
+        echo "actual:" >&2
+        printf '%s\n' "$authorable_actual" >&2
+        exit 1
+    fi
+
+    # The output is NUL-separated, which is what lint.yml feeds to xargs -0:
+    # three records means three trailing NULs and no newline of its own.
+    authorable_nuls=$(bash "$authorable_script" "$authorable_base" "$authorable_head" | tr -dc '\0' | wc -c)
+    if [[ "$authorable_nuls" -ne 3 ]]; then
+        echo "changed-authorable-php.sh emitted $authorable_nuls NUL separators, expected 3" >&2
+        exit 1
+    fi
+
+    # Base-tree case (#857): checkout at base so paths the diff lists but the
+    # tree lacks (the added migration and Livewire class) are absent on disk.
+    # [[ -f "$path" ]] must drop them; without it the script prints the full
+    # head set against a base tree and Pint would lint ghosts. lint.yml relies
+    # on checkout-at-head; this pins the -f guard alone.
+    git checkout -q "$authorable_base"
+    authorable_base_expected=$(printf '%s\n' 'app/Base/X/Services/S.php')
+    authorable_base_actual=$(bash "$authorable_script" "$authorable_base" "$authorable_head" 2>"$authorable_fixture/base.err" | tr '\0' '\n')
+    if [[ -s "$authorable_fixture/base.err" ]]; then
+        echo 'changed-authorable-php.sh wrote stderr on a base-tree checkout' >&2
+        cat "$authorable_fixture/base.err" >&2
+        exit 1
+    fi
+    if [[ "$authorable_base_actual" != "$authorable_base_expected" ]]; then
+        echo 'changed-authorable-php.sh did not drop missing paths on a base-tree checkout' >&2
+        echo "expected:" >&2
+        printf '%s\n' "$authorable_base_expected" >&2
+        echo "actual:" >&2
+        printf '%s\n' "$authorable_base_actual" >&2
+        exit 1
+    fi
+    git checkout -q "$authorable_head"
+
+    # No base ref: the ${1:?} guard refuses rather than diffing against nothing.
+    if bash "$authorable_script" >/dev/null 2>"$authorable_fixture/usage.txt"; then
+        echo 'changed-authorable-php.sh accepted a missing base ref' >&2
+        exit 1
+    fi
+    if ! grep -qF 'usage: changed-authorable-php.sh <base> [head]' "$authorable_fixture/usage.txt"; then
+        echo 'changed-authorable-php.sh did not print its usage line' >&2
+        cat "$authorable_fixture/usage.txt" >&2
+        exit 1
+    fi
+
+    # An unresolvable base ref must fail, not silently lint nothing: an empty
+    # file list is exactly what a green "Pint on changed files" step looks like.
+    if bash "$authorable_script" nosuchref >/dev/null 2>&1; then
+        echo 'changed-authorable-php.sh accepted an unknown base ref' >&2
+        exit 1
+    fi
+)
+rm -rf "$authorable_fixture"
+trap - EXIT
+
+# token-audit.sh (#780 / #825): every statically resolvable secrets.* reference
+# must be allowlisted in docs/ci/secrets.json; stale rotation warns; malformed
+# entries fail; computed keys and secrets: inherit warn (or --strict refuse).
+python3 - <<'PY'
+from pathlib import Path
+import json
+import subprocess
+import tempfile
+
+root = Path('.').resolve()
+audit = root / 'scripts/ci/token-audit.sh'
+assert audit.is_file(), 'missing scripts/ci/token-audit.sh'
+assert audit.stat().st_mode & 0o111, 'token-audit.sh must be executable'
+lint_yml = (root / '.github/workflows/lint.yml').read_text(encoding='utf-8')
+assert 'run: scripts/ci/token-audit.sh' in lint_yml, 'quality job must run token-audit.sh'
+
+live = subprocess.run(['bash', str(audit)], cwd=root, capture_output=True, text=True)
+assert live.returncode == 0, live.stdout + live.stderr
+assert 'every referenced secret is allowlisted' in live.stdout, live.stdout
+assert 'not statically verifiable' not in live.stdout, live.stdout
+assert '::warning file=' not in live.stdout, live.stdout
+assert '::warning::' not in live.stdout, live.stdout
+
+
+def run_audit(tmp, workflow, allowlist, today='2026-09-07', strict=False):
+    (tmp / 'wf').mkdir(exist_ok=True)
+    (tmp / 'wf/ci.yml').write_text(workflow, encoding='utf-8')
+    (tmp / 'secrets.json').write_text(json.dumps(allowlist), encoding='utf-8')
+    cmd = ['bash', str(audit), '--workflows', str(tmp / 'wf'),
+           '--allowlist', str(tmp / 'secrets.json'), '--today', today]
+    if strict:
+        cmd.append('--strict')
+    return subprocess.run(cmd, capture_output=True, text=True)
+
+
+def entry(name, **overrides):
+    payload = {'name': name, 'purpose': 'fixture', 'owner': 'kiatng', 'rotated': '2026-09-01'}
+    payload.update(overrides)
+    return payload
+
+
+workflow = (
+    'jobs:\n  a:\n    steps:\n      - env:\n'
+    '          A: ${{ secrets.LISTED_TOKEN }}\n'
+    '          B: ${{ secrets.GITHUB_TOKEN }}\n'
+    '          C: ${{ steps.x.outputs.token || secrets.FIXTURE_UNLISTED_TOKEN }}\n'
+)
+with tempfile.TemporaryDirectory() as tmpdir:
+    tmp = Path(tmpdir)
+    unlisted = run_audit(tmp, workflow, {'secrets': [entry('LISTED_TOKEN')]})
+    assert unlisted.returncode == 1, unlisted.stdout + unlisted.stderr
+    assert 'FIXTURE_UNLISTED_TOKEN' in unlisted.stderr, unlisted.stderr
+    assert 'secret LISTED_TOKEN is referenced' not in unlisted.stderr, unlisted.stderr
+    assert 'GITHUB_TOKEN' not in unlisted.stderr, unlisted.stderr
+
+    listed = run_audit(tmp, workflow, {'secrets': [entry('LISTED_TOKEN'), entry('FIXTURE_UNLISTED_TOKEN')]})
+    assert listed.returncode == 0, listed.stdout + listed.stderr
+    assert '::warning::' not in listed.stdout, listed.stdout
+
+    # A bracketed reference is the same reference: GitHub accepts
+    # ${{ secrets['NAME'] }} exactly as it accepts ${{ secrets.NAME }}.
+    bracketed = run_audit(tmp, (
+        'jobs:\n  a:\n    steps:\n      - env:\n'
+        "          A: ${{ secrets['FIXTURE_UNLISTED_TOKEN'] }}\n"
+    ), {'secrets': [entry('LISTED_TOKEN')]})
+    assert bracketed.returncode == 1, bracketed.stdout + bracketed.stderr
+    assert 'FIXTURE_UNLISTED_TOKEN' in bracketed.stderr, bracketed.stderr
+
+    stale = run_audit(tmp, workflow, {'secrets': [
+        entry('LISTED_TOKEN', rotated='2026-06-01'), entry('FIXTURE_UNLISTED_TOKEN')]})
+    assert stale.returncode == 0, stale.stdout + stale.stderr
+    assert '::warning::secret LISTED_TOKEN was last rotated 2026-06-01 (98 days ago' in stale.stdout, stale.stdout
+
+    fresh = run_audit(tmp, workflow, {'secrets': [
+        entry('LISTED_TOKEN', rotated='2026-06-09'), entry('FIXTURE_UNLISTED_TOKEN')]})
+    assert fresh.returncode == 0 and '::warning::' not in fresh.stdout, fresh.stdout
+
+    no_owner = run_audit(tmp, workflow, {'secrets': [
+        entry('LISTED_TOKEN', owner=''), entry('FIXTURE_UNLISTED_TOKEN')]})
+    assert no_owner.returncode == 1, no_owner.stdout + no_owner.stderr
+    assert 'entry LISTED_TOKEN: missing owner' in no_owner.stderr, no_owner.stderr
+
+    no_date = run_audit(tmp, workflow, {'secrets': [
+        entry('LISTED_TOKEN'), {'name': 'FIXTURE_UNLISTED_TOKEN', 'purpose': 'p', 'owner': 'kiatng'}]})
+    assert no_date.returncode == 1, no_date.stdout + no_date.stderr
+    assert 'entry FIXTURE_UNLISTED_TOKEN: missing rotated' in no_date.stderr, no_date.stderr
+
+    bad_date = run_audit(tmp, workflow, {'secrets': [
+        entry('LISTED_TOKEN', rotated='soon'), entry('FIXTURE_UNLISTED_TOKEN')]})
+    assert bad_date.returncode == 1 and 'not an ISO date' in bad_date.stderr, bad_date.stderr
+
+    (tmp / 'secrets.json').unlink()
+    missing = subprocess.run(
+        ['bash', str(audit), '--workflows', str(tmp / 'wf'), '--allowlist', str(tmp / 'secrets.json')],
+        capture_output=True, text=True)
+    assert missing.returncode == 1 and 'is missing' in missing.stderr, missing.stderr
+
+    # #825: computed keys and secrets: inherit are warned, not silently green.
+    computed_wf = (
+        'jobs:\n  a:\n    steps:\n      - env:\n'
+        "          A: ${{ secrets[format('TOKEN_{0}', github.ref_name)] }}\n"
+        '          B: ${{ secrets.LISTED_TOKEN }}\n'
+    )
+    computed = run_audit(tmp, computed_wf, {'secrets': [entry('LISTED_TOKEN')]})
+    assert computed.returncode == 0, computed.stdout + computed.stderr
+    assert '::warning file=' in computed.stdout and 'computed-key' in computed.stdout, computed.stdout
+    assert '1 reference(s) not statically verifiable' in computed.stdout, computed.stdout
+    assert 'every statically resolvable referenced secret is allowlisted' in computed.stdout, computed.stdout
+    assert 'every referenced secret is allowlisted\n' not in computed.stdout + '\n', computed.stdout
+    computed_strict = run_audit(tmp, computed_wf, {'secrets': [entry('LISTED_TOKEN')]}, strict=True)
+    assert computed_strict.returncode == 1, computed_strict.stdout + computed_strict.stderr
+    assert '--strict refuses' in computed_strict.stderr, computed_strict.stderr
+
+    inherit_wf = (
+        'jobs:\n  a:\n    secrets: inherit\n'
+        '    uses: ./.github/workflows/extension-conformance.yml\n'
+        '  b:\n    steps:\n      - env:\n'
+        '          A: ${{ secrets.LISTED_TOKEN }}\n'
+    )
+    inherit = run_audit(tmp, inherit_wf, {'secrets': [entry('LISTED_TOKEN')]})
+    assert inherit.returncode == 0, inherit.stdout + inherit.stderr
+    assert 'secrets: inherit' in inherit.stdout, inherit.stdout
+    assert '1 reference(s) not statically verifiable' in inherit.stdout, inherit.stdout
+    assert 'every statically resolvable referenced secret is allowlisted' in inherit.stdout, inherit.stdout
+    inherit_strict = run_audit(tmp, inherit_wf, {'secrets': [entry('LISTED_TOKEN')]}, strict=True)
+    assert inherit_strict.returncode == 1, inherit_strict.stdout + inherit_strict.stderr
+
+    plain = run_audit(tmp, (
+        'jobs:\n  a:\n    steps:\n      - env:\n'
+        '          A: ${{ secrets.SONAR_TOKEN }}\n'
+    ), {'secrets': [entry('SONAR_TOKEN')]})
+    assert plain.returncode == 0, plain.stdout + plain.stderr
+    assert '::warning file=' not in plain.stdout, plain.stdout
+    assert 'not statically verifiable' not in plain.stdout, plain.stdout
+    assert 'every referenced secret is allowlisted' in plain.stdout, plain.stdout
+PY
+
+
+# compose-domain.php (#843): cross-domain clone TSV, registry refusals, unknown args.
+compose_fixture=$(mktemp -d)
+trap 'rm -rf "$compose_fixture"' EXIT
+compose_src="$root/tests/ci/fixtures/compose-domain"
+cp -a "$compose_src/registry-root/." "$compose_fixture/tree/"
+mkdir -p "$compose_fixture/present/app/Domains"
+# Pre-existing beta mount so the already-present path is omitted from stdout.
+cp -a "$compose_fixture/tree/app/Domains/Beta" "$compose_fixture/present/app/Domains/Beta"
+python3 - "$compose_fixture" <<'COMPOSE_REG'
+import json, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+tree = root / "tree"
+absent_beta = root / "absent" / "app" / "Domains" / "Beta"
+reg = {
+    "domains": {
+        "solo": {"repo": "Example/solo", "path": str(tree / "app/Domains/Solo")},
+        "needs-beta": {"repo": "Example/needs-beta", "path": str(tree / "app/Domains/NeedsBeta")},
+        "needs-gamma": {"repo": "Example/needs-gamma", "path": str(tree / "app/Domains/NeedsGamma")},
+        # Absent on disk so NeedsBeta must emit a clone line.
+        "beta": {"repo": "Example/beta", "path": str(absent_beta)},
+    }
+}
+(root / "registry.json").write_text(json.dumps(reg))
+# Registry whose beta path already exists on disk (present mount).
+reg_present = dict(reg)
+reg_present["domains"] = dict(reg["domains"])
+reg_present["domains"]["beta"] = {
+    "repo": "Example/beta",
+    "path": str(root / "present/app/Domains/Beta"),
+}
+(root / "registry-present.json").write_text(json.dumps(reg_present))
+COMPOSE_REG
+
+compose_run() {
+    local domain="$1" registry="$2"
+    shift 2 || true
+    php "$root/scripts/ci/compose-domain.php" \
+        --domain-path="$compose_fixture/tree/app/Domains/$domain" \
+        --registry="$registry" \
+        "$@"
+}
+
+# Sibling + core only: nothing to clone.
+set +e
+solo_out=$(compose_run Solo "$compose_fixture/registry.json" 2>"$compose_fixture/solo.err")
+solo_ec=$?
+set -e
+if [[ "$solo_ec" -ne 0 || -n "$solo_out" ]]; then
+    echo "compose-domain Solo expected empty stdout exit 0, got ec=$solo_ec out=$(printf %q "$solo_out")" >&2
+    exit 1
+fi
+if ! grep -qF 'no cross-domain dependencies to clone' "$compose_fixture/solo.err"; then
+    echo 'compose-domain Solo missing no-cross-domain stderr' >&2
+    cat "$compose_fixture/solo.err" >&2
+    exit 1
+fi
+
+# Cross-domain requirement prints one TSV line when the registry path is absent.
+set +e
+need_out=$(compose_run NeedsBeta "$compose_fixture/registry.json" 2>"$compose_fixture/need.err")
+need_ec=$?
+set -e
+if [[ "$need_ec" -ne 0 ]]; then
+    echo "compose-domain NeedsBeta expected exit 0, got $need_ec" >&2
+    cat "$compose_fixture/need.err" >&2
+    exit 1
+fi
+expected_tsv=$'Example/beta\t'"$compose_fixture/absent/app/Domains/Beta"
+if [[ "$need_out" != "$expected_tsv" ]]; then
+    echo "compose-domain NeedsBeta TSV mismatch: $(printf %q "$need_out") expected $(printf %q "$expected_tsv")" >&2
+    exit 1
+fi
+
+# Already-present registry path is omitted.
+set +e
+present_out=$(compose_run NeedsBeta "$compose_fixture/registry-present.json" 2>"$compose_fixture/present.err")
+present_ec=$?
+set -e
+if [[ "$present_ec" -ne 0 || -n "$present_out" ]]; then
+    echo "compose-domain present beta expected empty stdout exit 0, got ec=$present_ec out=$(printf %q "$present_out")" >&2
+    exit 1
+fi
+
+# Required module with no registry entry exits 1 naming it.
+set +e
+miss_out=$(compose_run NeedsGamma "$compose_fixture/registry.json" 2>"$compose_fixture/miss.err")
+miss_ec=$?
+set -e
+if [[ "$miss_ec" -ne 1 ]]; then
+    echo "compose-domain NeedsGamma expected exit 1, got $miss_ec" >&2
+    exit 1
+fi
+if ! grep -qF 'gamma/missing' "$compose_fixture/miss.err"; then
+    echo 'compose-domain NeedsGamma stderr did not name gamma/missing' >&2
+    cat "$compose_fixture/miss.err" >&2
+    exit 1
+fi
+
+# Unreadable registry exits 2.
+set +e
+php "$root/scripts/ci/compose-domain.php" \
+    --domain-path="$compose_fixture/tree/app/Domains/Solo" \
+    --registry="$compose_fixture/no-such-registry.json" \
+    >/dev/null 2>"$compose_fixture/noread.err"
+noread_ec=$?
+set -e
+if [[ "$noread_ec" -ne 2 ]] || ! grep -qF 'cannot read registry' "$compose_fixture/noread.err"; then
+    echo 'compose-domain unreadable registry refusal failed' >&2
+    cat "$compose_fixture/noread.err" >&2
+    exit 1
+fi
+
+# Non-JSON registry exits 2.
+printf 'not-json\n' > "$compose_fixture/bad.json"
+set +e
+php "$root/scripts/ci/compose-domain.php" \
+    --domain-path="$compose_fixture/tree/app/Domains/Solo" \
+    --registry="$compose_fixture/bad.json" \
+    >/dev/null 2>"$compose_fixture/bad.err"
+bad_ec=$?
+set -e
+if [[ "$bad_ec" -ne 2 ]] || ! grep -qF 'not valid JSON' "$compose_fixture/bad.err"; then
+    echo 'compose-domain invalid JSON refusal failed' >&2
+    cat "$compose_fixture/bad.err" >&2
+    exit 1
+fi
+
+# Unknown argument exits 2 naming it.
+set +e
+php "$root/scripts/ci/compose-domain.php" \
+    --domain-path="$compose_fixture/tree/app/Domains/Solo" \
+    --registry="$compose_fixture/registry.json" \
+    --bogus \
+    >/dev/null 2>"$compose_fixture/bogus.err"
+bogus_ec=$?
+set -e
+if [[ "$bogus_ec" -ne 2 ]] || ! grep -qF 'unknown argument --bogus' "$compose_fixture/bogus.err"; then
+    echo 'compose-domain unknown argument refusal failed' >&2
+    cat "$compose_fixture/bogus.err" >&2
+    exit 1
+fi
+
+# Workflow argument list (domain-path only) exits 0 against the fixture.
+set +e
+php "$root/scripts/ci/compose-domain.php" \
+    --domain-path="$compose_fixture/tree/app/Domains/Solo" \
+    --registry="$compose_fixture/registry.json" \
+    >/dev/null 2>"$compose_fixture/wf.err"
+wf_ec=$?
+set -e
+if [[ "$wf_ec" -ne 0 ]]; then
+    echo 'compose-domain workflow args failed against Solo fixture' >&2
+    cat "$compose_fixture/wf.err" >&2
+    exit 1
+fi
+
+rm -rf "$compose_fixture"
+trap - EXIT
 
 echo 'CI script checks passed'

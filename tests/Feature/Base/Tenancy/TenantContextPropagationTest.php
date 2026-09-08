@@ -8,6 +8,7 @@ use App\Base\Tenancy\Services\TenantStoragePath;
 use Illuminate\Contracts\Queue\Job;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Queue\Events\JobExceptionOccurred;
+use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
@@ -69,6 +70,47 @@ it('clears the tenant when a job throws but still has attempts left', function (
     expect($context->currentTenantId())->toBe(11);
 
     event(new JobExceptionOccurred('database', $job, new RuntimeException('transient')));
+
+    expect($context->currentTenantId())->toBeNull();
+});
+
+it('clears the tenant when a job fails permanently', function (): void {
+    // JobFailed alone (no preceding JobExceptionOccurred) must clear: this is
+    // the listener at Tenancy ServiceProvider for permanent failure, not the
+    // attempts-left path covered above. Audit's JobListener also hears
+    // JobFailed, so the mock must answer resolveName/getQueue/getConnectionName.
+    $context = app(TenantContext::class);
+    $context->set(11);
+
+    $job = Mockery::mock(Job::class);
+    $job->allows('payload')->andReturns(['tenantId' => 11]);
+    $job->allows('resolveName')->andReturns(TenantContextProbeJob::class);
+    $job->allows('getName')->andReturns(TenantContextProbeJob::class);
+    $job->allows('getQueue')->andReturns('default');
+    $job->allows('getConnectionName')->andReturns('database');
+
+    event(new JobProcessing('database', $job));
+    expect($context->currentTenantId())->toBe(11);
+
+    event(new JobFailed('database', $job, new RuntimeException('permanent')));
+
+    expect($context->currentTenantId())->toBeNull();
+});
+
+it('does not clear on JobFailed for a tenant a sibling worker set', function (): void {
+    // Clear means clear: a JobFailed stamped for tenant A must not restore a
+    // sibling worker's tenant B that was set without JobProcessing.
+    $context = app(TenantContext::class);
+    $context->set(22);
+
+    $job = Mockery::mock(Job::class);
+    $job->allows('payload')->andReturns(['tenantId' => 11]);
+    $job->allows('resolveName')->andReturns(TenantContextProbeJob::class);
+    $job->allows('getName')->andReturns(TenantContextProbeJob::class);
+    $job->allows('getQueue')->andReturns('default');
+    $job->allows('getConnectionName')->andReturns('database');
+
+    event(new JobFailed('database', $job, new RuntimeException('permanent')));
 
     expect($context->currentTenantId())->toBeNull();
 });

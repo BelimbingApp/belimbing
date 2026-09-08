@@ -25,25 +25,53 @@ class FilesystemSkillPackLoader
     private const SKILLS_PATH = '/.agents/skills';
 
     /**
+     * Duplicate ids dropped by the most recent {@see load()} call.
+     *
+     * @var list<array{id: string, kept: string, dropped: string}>
+     */
+    private array $shadowed = [];
+
+    /**
      * @return list<SkillPackManifest>
      */
     public function load(): array
     {
         $manifests = [];
-        $seenIds = [];
+        $keptPaths = [];
+        $this->shadowed = [];
 
         foreach ($this->skillRoots() as $root) {
             foreach ($this->loadFromRoot($root['path'], $root['owner'], $root['id_prefix']) as $manifest) {
-                if (isset($seenIds[$manifest->id])) {
+                if (isset($keptPaths[$manifest->id])) {
+                    // First root wins. Record the loser so an operator can see
+                    // which tree is being ignored instead of guessing why an
+                    // edit had no effect.
+                    $this->shadowed[] = [
+                        'id' => $manifest->id,
+                        'kept' => $keptPaths[$manifest->id],
+                        'dropped' => $manifest->primaryReferencePath(),
+                    ];
+
                     continue;
                 }
 
-                $seenIds[$manifest->id] = true;
+                $keptPaths[$manifest->id] = $manifest->primaryReferencePath();
                 $manifests[] = $manifest;
             }
         }
 
         return $manifests;
+    }
+
+    /**
+     * Duplicate pack ids the most recent {@see load()} dropped, in discovery
+     * order. Empty until `load()` has run.
+     *
+     * @return list<array{id: string, kept: string, dropped: string}>
+     */
+    public function shadowed(): array
+    {
+        return $this->shadowed;
     }
 
     /**
@@ -225,22 +253,20 @@ class FilesystemSkillPackLoader
 
     private function nameFromContent(string $content): ?string
     {
-        $frontmatter = $this->frontmatter($content);
-        $name = $frontmatter['name'] ?? null;
+        $name = SkillPackFrontmatter::fields($content)['name'] ?? null;
 
         return is_string($name) && trim($name) !== '' ? trim($name) : null;
     }
 
     private function descriptionFromContent(string $content): string
     {
-        $frontmatter = $this->frontmatter($content);
-        $description = $frontmatter['description'] ?? null;
+        $description = SkillPackFrontmatter::fields($content)['description'] ?? null;
 
         if (is_string($description) && trim($description) !== '') {
             return mb_substr(trim($description), 0, 200);
         }
 
-        $body = $this->bodyWithoutFrontmatter($content);
+        $body = SkillPackFrontmatter::body($content);
 
         foreach (explode("\n", $body) as $line) {
             $line = trim($line, " \t#");
@@ -250,44 +276,6 @@ class FilesystemSkillPackLoader
         }
 
         return 'Filesystem skill';
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    private function frontmatter(string $content): array
-    {
-        if (! str_starts_with(ltrim($content), '---')) {
-            return [];
-        }
-
-        if (! preg_match('/^---\s*\n(.*?)\n---\s*(?:\n|$)/s', ltrim($content), $matches)) {
-            return [];
-        }
-
-        $fields = [];
-
-        foreach (explode("\n", $matches[1]) as $line) {
-            if (! str_contains($line, ':')) {
-                continue;
-            }
-
-            [$key, $value] = explode(':', $line, 2);
-            $fields[trim($key)] = trim(trim($value), '"\'');
-        }
-
-        return $fields;
-    }
-
-    private function bodyWithoutFrontmatter(string $content): string
-    {
-        $trimmed = ltrim($content);
-
-        if (! preg_match('/^---\s*\n.*?\n---\s*(?:\n(.*))?$/s', $trimmed, $matches)) {
-            return $content;
-        }
-
-        return $matches[1] ?? '';
     }
 
     private function relativePath(string $path): string

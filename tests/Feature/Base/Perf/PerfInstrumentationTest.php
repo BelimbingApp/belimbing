@@ -78,6 +78,15 @@ it('records the tenant resolver in the request performance log', function (): vo
     expect(latestPerfEntry($this->perfDir)['tenant_resolver'])->toBe('session');
 });
 
+it('records the resolved tenant id in the request performance log', function (): void {
+    $admin = createAdminUser();
+    $this->actingAs($admin)->get(route('dashboard'))->assertOk();
+
+    // The tenant-audit resolution mix (#781) scopes by this; without it a
+    // resolver count could only ever be installation-wide.
+    expect(latestPerfEntry($this->perfDir)['tenant_id'])->toBe((int) $admin->tenant_id);
+});
+
 it('counts queries, cache traffic, and subprocesses while a request window is active', function (): void {
     Process::fake();
 
@@ -260,5 +269,10 @@ it('keeps shared-chrome page renders within the query budget', function (): void
 
     // Definition-backed settings preload sparse overrides once per active
     // scope so shared chrome does not pay one query per declared parameter.
-    expect($queries)->toBeLessThanOrEqual(95);
+    //
+    // 96, not 95: ResolveTenantContext reads the resolved tenant's row once
+    // per authenticated request so a suspended tenant is refused on the web
+    // as well as at the console (#812). One row, once — a second read of the
+    // tenant on this path would be the regression this budget is for.
+    expect($queries)->toBeLessThanOrEqual(96);
 });

@@ -26,6 +26,23 @@ class DataShareOfferFetcher
 
     public function fetch(DataShareTransferOfferBundle $offer): DataShareReceipt
     {
+        try {
+            return $this->fetchOffer($offer);
+        } catch (Throwable $e) {
+            $this->events->recordFailure('fetch_failed', [
+                'offer_id' => $offer->offerId,
+                'package_id' => $offer->packageId,
+                'bytes' => $offer->bytes,
+                'endpoint_host' => parse_url($offer->endpoint, PHP_URL_HOST),
+                'scope_name' => $offer->scope,
+            ], $e);
+
+            throw $e;
+        }
+    }
+
+    private function fetchOffer(DataShareTransferOfferBundle $offer): DataShareReceipt
+    {
         $this->assertLocalPolicy($offer);
         $temporary = tempnam(sys_get_temp_dir(), 'blb-data-share-fetch-');
 
