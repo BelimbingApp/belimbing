@@ -13,7 +13,9 @@ return [
         //
         // People (#833 / blb-people#347) no longer needs entries — every
         // Domain command extends TenantScopedCommand. Connector entries stay
-        // until blb-people-connector#249 / #275 lands.
+        // as dated rollout exemptions until they expire; the composed-smoke
+        // audit (#912) is not proof that this allowlist is correct — see
+        // DomainCommandTenantAudit::isAllowlisted().
         'allowlist' => [
             'connector:capability:verify' => ['reason' => 'Rollout exemption: migrated onto TenantScopedCommand in blb-people-connector#249.', 'expires' => '2026-10-07'],
             'connector:doctor' => ['reason' => 'Rollout exemption: migrated onto TenantScopedCommand in blb-people-connector#249.', 'expires' => '2026-10-07'],
