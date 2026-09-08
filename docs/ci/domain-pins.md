@@ -61,6 +61,42 @@ prints a warning without failing. The count is the comparison's commits unique
 to main, not a count inferred from local history. The validator never advances
 pins. Follow the reviewed pin-update flow above to address a warning.
 
+## Check a lane against the pin before ready
+
+`domain-ci` composes each sibling Domain at the immutable SHA in
+`scripts/ci/domain-repos.json`, while a local mount is that Domain's clone at
+`main`. The pin therefore trails `main` for as long as it takes to advance it,
+and a lane that calls a sibling API added in that window is green locally and
+red on every composed job — a failure that looks like the author's bug and only
+appears after `ready.sh` ([#927](https://github.com/BelimbingApp/belimbing/issues/927)).
+
+Run this from the platform checkout before handing off:
+
+```bash
+php scripts/ci/pinned-mount-check.php --base=origin/main
+```
+
+It reads the changed PHP files, finds the sibling Domain classes they name, and
+refuses the lane when a method those files call exists on that class at your
+mounted revision but not at the pinned one — naming the class, the method, the
+pin and the revision your mount is on, so the next step is a decision rather
+than a bisect. A class the pin does not have at all is refused the same way.
+Pass explicit paths instead of `--base` to check a subset. Exit 1 is a finding,
+exit 2 is a usage error, and a mount that is not a git checkout is skipped with
+a note rather than silently passing.
+
+The fix is either to advance the pin through the reviewed flow above, or to keep
+the lane on API the pin already has. Advancing the pin is the honest option when
+the sibling API is the point of the change.
+
+Two limits worth knowing, because the check does not pretend to cover them:
+
+- **Runtime shape is invisible to it.** A test asserting an absolute count of a
+  sibling's tables (33 at the pin, 40 on `main`) drifts without naming any
+  method. Compose the pin and run the suite for that class of difference.
+- **It compares names, not signatures.** A method that kept its name and changed
+  its parameters passes this check and still fails in CI.
+
 ## Composition failures and the missing-check exception
 
 [PR #570](https://github.com/BelimbingApp/belimbing/pull/570) refuses duplicate

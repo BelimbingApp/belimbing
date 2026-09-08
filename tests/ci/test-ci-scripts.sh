@@ -534,7 +534,7 @@ if command -v php >/dev/null; then
         echo 'domain-ci accepted an invalid repository slug' >&2
         exit 1
     fi
-    php scripts/ci/validate-php-syntax.php scripts/ci/domain-ci.php scripts/ci/compose-domain.php scripts/ci/filter-domain-coverage-clover.php scripts/ci/validate-extension-manifest.php scripts/ci/composed-smoke.php
+    php scripts/ci/validate-php-syntax.php scripts/ci/domain-ci.php scripts/ci/compose-domain.php scripts/ci/filter-domain-coverage-clover.php scripts/ci/validate-extension-manifest.php scripts/ci/composed-smoke.php scripts/ci/pinned-mount-check.php
 
     # validate-php-syntax.php (#856): the Extension syntax gate
     # (extension-conformance.sh) fails an Extension whose PHP does not parse.
@@ -1827,6 +1827,181 @@ if [[ "$wf_ec" -ne 0 ]]; then
 fi
 
 rm -rf "$compose_fixture"
+trap - EXIT
+
+# pinned-mount-check.php (#927): a lane that calls sibling Domain API absent at
+# the pinned revision must be refused locally, naming both revisions. The proof
+# is the same case run against two pins — red at the old one, green at the new
+# one — not an assertion that the script exists.
+pin_fixture=$(mktemp -d)
+trap 'rm -rf "$pin_fixture"' EXIT
+mkdir -p "$pin_fixture/app/Domains/People/Training/Services" \
+    "$pin_fixture/app/Domains/PeopleConnector/Connector"
+
+pin_store() {
+    cat > "$pin_fixture/app/Domains/People/Training/Services/TrainingParticipationStore.php"
+}
+pin_git() { git -C "$pin_fixture/app/Domains/People" "$@"; }
+
+pin_git init -q .
+pin_git config user.email ci@example.com
+pin_git config user.name ci
+pin_store <<'STORE'
+<?php
+namespace App\Domains\People\Training\Services;
+final class TrainingParticipationStore
+{
+    public function enrol(int $id): void {}
+}
+STORE
+pin_git add -A
+pin_git commit -qm 'pinned revision'
+pinned_sha=$(pin_git rev-parse HEAD)
+pin_store <<'STORE'
+<?php
+namespace App\Domains\People\Training\Services;
+final class TrainingParticipationStore
+{
+    public function enrol(int $id): void {}
+
+    public function enrolFromRequest(int $id): void {}
+}
+STORE
+pin_git add -A
+pin_git commit -qm 'method added after the pin'
+mounted_sha=$(pin_git rev-parse HEAD)
+
+# The connector lane that #927 describes: green locally, red on all three jobs.
+cat > "$pin_fixture/app/Domains/PeopleConnector/Connector/EnrolmentTest.php" <<'LANE'
+<?php
+use App\Domains\People\Training\Services\TrainingParticipationStore;
+
+it('enrols through the People API', function (): void {
+    app(TrainingParticipationStore::class)->enrolFromRequest(1);
+});
+LANE
+
+# A second lane file that calls only what the pin already has, plus an unrelated
+# method name: neither may fire, or the check is noise an author learns to skip.
+cat > "$pin_fixture/app/Domains/PeopleConnector/Connector/SettledTest.php" <<'LANE'
+<?php
+use App\Domains\People\Training\Services\TrainingParticipationStore;
+
+it('enrols through API the pin already has', function (): void {
+    app(TrainingParticipationStore::class)->enrol(1);
+    $unrelated->enrolFromRequestSomewhereElse(2);
+});
+LANE
+
+pin_registry() {
+    python3 - "$pin_fixture/registry.json" "$1" <<'PIN_REG'
+import json, sys
+json.dump({
+    "schema_version": 1,
+    "domains": {
+        "people": {
+            "repo": "BelimbingApp/blb-people",
+            "path": "app/Domains/People",
+            "sonar_project_key": "BelimbingApp_blb-people",
+            "ref": sys.argv[2],
+        },
+        "people-connector": {
+            "repo": "BelimbingApp/blb-people-connector",
+            "path": "app/Domains/PeopleConnector",
+            "sonar_project_key": "BelimbingApp_blb-people-connector",
+            "ref": "d91e2ccbcc0e40dcbb750c28aeebbe9c05729a33",
+        },
+    },
+}, open(sys.argv[1], "w"))
+PIN_REG
+}
+
+pin_check() {
+    php "$root/scripts/ci/pinned-mount-check.php" \
+        --root="$pin_fixture" --registry="$pin_fixture/registry.json" "$@"
+}
+
+pin_registry "$pinned_sha"
+set +e
+pin_err=$(pin_check app/Domains/PeopleConnector/Connector/EnrolmentTest.php 2>&1)
+pin_ec=$?
+set -e
+if [[ "$pin_ec" -ne 1 ]]; then
+    echo "pinned-mount-check accepted a lane calling People API absent at the pin (exit $pin_ec)" >&2
+    echo "$pin_err" >&2
+    exit 1
+fi
+grep -q 'enrolFromRequest() does not exist' <<< "$pin_err"
+# The message has to name both revisions or the author cannot act on it.
+grep -q "${pinned_sha:0:12}" <<< "$pin_err"
+grep -q "${mounted_sha:0:12}" <<< "$pin_err"
+
+# Same file, pin advanced to the mounted revision: the refusal must lift.
+pin_registry "$mounted_sha"
+if ! pin_check app/Domains/PeopleConnector/Connector/EnrolmentTest.php >/dev/null 2>&1; then
+    echo 'pinned-mount-check refused a lane whose pin matches the mount' >&2
+    pin_check app/Domains/PeopleConnector/Connector/EnrolmentTest.php || true
+    exit 1
+fi
+
+# Back to the old pin: a lane using only pinned API stays green, so the check
+# refuses drift rather than every lane that names a sibling class.
+pin_registry "$pinned_sha"
+if ! pin_check app/Domains/PeopleConnector/Connector/SettledTest.php >/dev/null 2>&1; then
+    echo 'pinned-mount-check refused a lane that only uses API the pin has' >&2
+    pin_check app/Domains/PeopleConnector/Connector/SettledTest.php || true
+    exit 1
+fi
+
+# A sibling class that does not exist at the pin at all is the same hazard.
+mkdir -p "$pin_fixture/app/Domains/PeopleConnector/Connector"
+cat > "$pin_fixture/app/Domains/PeopleConnector/Connector/NewClassTest.php" <<'LANE'
+<?php
+use App\Domains\People\Training\Services\TrainingLedger;
+
+it('reads a class the pin never had', function (): void {
+    app(TrainingLedger::class)->read(1);
+});
+LANE
+set +e
+pin_new_err=$(pin_check app/Domains/PeopleConnector/Connector/NewClassTest.php 2>&1)
+pin_new_ec=$?
+set -e
+if [[ "$pin_new_ec" -ne 1 ]]; then
+    echo 'pinned-mount-check accepted a lane naming a class absent at the pin' >&2
+    echo "$pin_new_err" >&2
+    exit 1
+fi
+grep -q 'TrainingLedger does not exist' <<< "$pin_new_err"
+
+# The domain under review is composed at its PR head, not at its pin, so a
+# lane's references to its OWN classes are not drift. Without this the real
+# connector tree reports every class it added since its own pin.
+cat > "$pin_fixture/app/Domains/People/Training/OwnClassTest.php" <<'LANE'
+<?php
+use App\Domains\People\Training\Services\TrainingParticipationStore;
+
+it('calls its own new API', function (): void {
+    app(TrainingParticipationStore::class)->enrolFromRequest(1);
+});
+LANE
+if ! pin_check app/Domains/People/Training/OwnClassTest.php >/dev/null 2>&1; then
+    echo 'pinned-mount-check refused a People lane for using People API added since the People pin' >&2
+    pin_check app/Domains/People/Training/OwnClassTest.php || true
+    exit 1
+fi
+
+# Missing arguments are a usage error (exit 2), distinct from a finding (exit 1).
+set +e
+pin_check >/dev/null 2>&1
+pin_usage_ec=$?
+set -e
+if [[ "$pin_usage_ec" -ne 2 ]]; then
+    echo "pinned-mount-check did not report a usage error for missing arguments (exit $pin_usage_ec)" >&2
+    exit 1
+fi
+
+rm -rf "$pin_fixture"
 trap - EXIT
 
 echo 'CI script checks passed'
