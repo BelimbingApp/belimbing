@@ -45,7 +45,7 @@ class AuditSemanticActionRecorder implements SemanticActionRecorder
             'url' => $this->context->url,
             'user_agent' => $this->context->userAgent,
             'event' => $event,
-            'payload' => json_encode([
+            'payload' => json_encode(array_filter([
                 'semantic' => true,
                 'source' => $source,
                 'summary' => $summary,
@@ -54,7 +54,8 @@ class AuditSemanticActionRecorder implements SemanticActionRecorder
                 'subject' => $normalizedSubject,
                 'context' => $context,
                 'result' => $result,
-            ], JSON_UNESCAPED_SLASHES),
+                'impersonator_id' => $actor['impersonator_id'] ?? null,
+            ], static fn (mixed $value): bool => $value !== null), JSON_UNESCAPED_SLASHES),
             'trace_id' => $this->context->traceId,
             'is_retained' => $retain,
             'occurred_at' => now(),
