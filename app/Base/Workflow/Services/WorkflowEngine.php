@@ -243,8 +243,7 @@ class WorkflowEngine
                 && isset($subject['name'], $subject['id'])
                 && is_string($subject['name'])
                 && $subject['name'] !== ''
-                && $subject['id'] !== null
-                && $subject['id'] !== '') {
+                && (is_int($subject['id']) || (is_string($subject['id']) && $subject['id'] !== ''))) {
                 $payload = [
                     'name' => $subject['name'],
                     'id' => is_int($subject['id']) ? $subject['id'] : (string) $subject['id'],

@@ -10,20 +10,26 @@ final readonly class ProcessDefinition
     private array $stepsByKey;
 
     /**
-     * @param  non-empty-list<ProcessStep>  $steps
+     * @var non-empty-list<ProcessStep>
+     */
+    public array $steps;
+
+    /**
+     * @param  list<mixed>  $steps
      */
     public function __construct(
         public string $key,
         public int $version,
-        public array $steps,
+        array $steps,
     ) {
-        if (! preg_match('/^[a-z0-9][a-z0-9._-]*$/', $this->key) || $this->version < 1 || $this->steps === []) {
+        if (! preg_match('/^[a-z0-9][a-z0-9._-]*$/', $this->key) || $this->version < 1 || $steps === []) {
             throw new InvalidArgumentException('A process definition needs a stable lowercase key, positive version, and at least one step.');
         }
 
         $byKey = [];
+        $validated = [];
 
-        foreach ($this->steps as $step) {
+        foreach ($steps as $step) {
             if (! $step instanceof ProcessStep) {
                 throw new InvalidArgumentException('Process definitions may contain only ProcessStep values.');
             }
@@ -33,6 +39,7 @@ final readonly class ProcessDefinition
             }
 
             $byKey[$step->key] = $step;
+            $validated[] = $step;
         }
 
         foreach ($byKey as $step) {
@@ -45,6 +52,8 @@ final readonly class ProcessDefinition
 
         $this->assertAcyclic($byKey);
         $this->stepsByKey = $byKey;
+        /** @var non-empty-list<ProcessStep> $validated */
+        $this->steps = $validated;
     }
 
     public function step(string $key): ProcessStep

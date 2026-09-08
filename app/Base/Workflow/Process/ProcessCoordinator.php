@@ -224,8 +224,8 @@ class ProcessCoordinator
      * Claim one due unit of work. The returned lease token is required for all
      * worker-owned mutations, so a late worker cannot overwrite a reassignment.
      *
-     * @param  list<string>|null  $executorKeys
-     * @param  list<int>|null  $processRunIds
+     * @param  list<mixed>|null  $executorKeys
+     * @param  list<mixed>|null  $processRunIds
      */
     public function claim(
         string $worker,
@@ -418,7 +418,6 @@ class ProcessCoordinator
         return (int) $workItem->process_run_id === (int) $run->getKey()
             && $run->status === ProcessRunStatus::RUNNING
             && $run->last_error === null
-            && $run->available_at !== null
             && $run->available_at->lte($now)
             && $workItem->status === ProcessWorkStatus::AVAILABLE
             && $workItem->available_at !== null

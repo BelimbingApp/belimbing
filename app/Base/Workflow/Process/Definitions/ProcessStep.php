@@ -8,14 +8,19 @@ use InvalidArgumentException;
 final readonly class ProcessStep
 {
     /**
-     * @param  list<ProcessDependency>  $dependencies
+     * @var list<ProcessDependency>
+     */
+    public array $dependencies;
+
+    /**
+     * @param  list<mixed>  $dependencies
      * @param  array<string, mixed>  $input
      * @param  array<string, mixed>  $metadata
      */
     public function __construct(
         public string $key,
         public string $label,
-        public array $dependencies = [],
+        array $dependencies = [],
         public DependencyMode $dependencyMode = DependencyMode::ALL,
         public ?string $requiredSignal = null,
         public int $delaySeconds = 0,
@@ -35,11 +40,17 @@ final readonly class ProcessStep
             throw new InvalidArgumentException('Process step delay must be non-negative and max attempts must be positive.');
         }
 
-        foreach ($this->dependencies as $dependency) {
+        $validated = [];
+
+        foreach ($dependencies as $dependency) {
             if (! $dependency instanceof ProcessDependency) {
                 throw new InvalidArgumentException('Process step dependencies must be ProcessDependency values.');
             }
+
+            $validated[] = $dependency;
         }
+
+        $this->dependencies = $validated;
 
         if ($this->executorKey !== null && trim($this->executorKey) === '') {
             throw new InvalidArgumentException('A process step executor key cannot be empty.');

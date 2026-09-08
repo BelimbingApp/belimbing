@@ -167,7 +167,7 @@ class SendTransitionNotification
     {
         $user = User::query()->find($actorId);
 
-        if ($user !== null && method_exists($user, 'notify')) {
+        if ($user !== null) {
             $recipients->push($user);
         }
     }

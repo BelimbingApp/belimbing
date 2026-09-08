@@ -36,7 +36,7 @@ class StatusTransition extends Model
     protected $table = 'base_workflow_status_transitions';
 
     /**
-     * @var array<int, string>
+     * @var list<string>
      */
     protected $fillable = [
         'flow',
@@ -78,7 +78,11 @@ class StatusTransition extends Model
             ->where('code', $this->to_code)
             ->first();
 
-        return $targetStatus?->label ?? $this->to_code;
+        if ($targetStatus === null) {
+            return $this->to_code;
+        }
+
+        return $targetStatus->label;
     }
 
     /**
