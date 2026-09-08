@@ -75,6 +75,59 @@ it('denies with DENIED_POLICY_ENGINE_ERROR and logs when a policy throws', funct
         ->and($decision->appliedPolicies)->toBe(['throwing_stub']);
 });
 
+it('names the policy that threw, not the first one consulted', function (): void {
+    $abstaining = new class implements AuthorizationPolicy
+    {
+        public function key(): string
+        {
+            return 'abstaining_stub';
+        }
+
+        public function evaluate(
+            Actor $actor,
+            string $capability,
+            ?ResourceContext $resource = null,
+            array $context = []
+        ): ?AuthorizationDecision {
+            return null;
+        }
+    };
+
+    $throwing = new class implements AuthorizationPolicy
+    {
+        public function key(): string
+        {
+            return 'throwing_stub';
+        }
+
+        public function evaluate(
+            Actor $actor,
+            string $capability,
+            ?ResourceContext $resource = null,
+            array $context = []
+        ): ?AuthorizationDecision {
+            throw new RuntimeException('policy boom');
+        }
+    };
+
+    Log::shouldReceive('error')
+        ->once()
+        ->withArgs(function (string $message, array $context): bool {
+            return $message === 'Authorization policy evaluation failed.'
+                && ($context['policy'] ?? null) === 'throwing_stub'
+                && ($context['capability'] ?? null) === 'admin.user.view';
+        });
+
+    $decision = (new AuthorizationEngine([$abstaining, $throwing]))->can(
+        new Actor(PrincipalType::USER, 1, 10),
+        'admin.user.view',
+    );
+
+    expect($decision->allowed)->toBeFalse()
+        ->and($decision->reasonCode)->toBe(AuthorizationReasonCode::DENIED_POLICY_ENGINE_ERROR)
+        ->and($decision->appliedPolicies)->toBe(['abstaining_stub', 'throwing_stub']);
+});
+
 it('keeps the authorization decision when decision-log flush persistence fails', function (): void {
     $role = Role::query()->where('code', 'core_admin')->whereNull('company_id')->firstOrFail();
 
