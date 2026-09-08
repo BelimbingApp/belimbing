@@ -534,7 +534,7 @@ if command -v php >/dev/null; then
         echo 'domain-ci accepted an invalid repository slug' >&2
         exit 1
     fi
-    php scripts/ci/validate-php-syntax.php scripts/ci/domain-ci.php scripts/ci/compose-domain.php scripts/ci/filter-domain-coverage-clover.php scripts/ci/validate-extension-manifest.php scripts/ci/composed-smoke.php
+    php scripts/ci/validate-php-syntax.php scripts/ci/domain-ci.php scripts/ci/compose-domain.php scripts/ci/filter-domain-coverage-clover.php scripts/ci/validate-extension-manifest.php scripts/ci/composed-smoke.php scripts/ci/pinned-mount-check.php
 
     # validate-php-syntax.php (#856): the Extension syntax gate
     # (extension-conformance.sh) fails an Extension whose PHP does not parse.
