@@ -3,6 +3,7 @@
 namespace App\Base\Integration\Services;
 
 use App\Base\Integration\Models\OutboundExchange;
+use App\Base\Tenancy\Contracts\TenantContext;
 use Composer\CaBundle\CaBundle;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
@@ -166,6 +167,7 @@ class IntegrationGateway
         $exchangeMetadata = $this->exchangeMetadata($metadata);
 
         return OutboundExchange::query()->create([
+            'tenant_id' => app(TenantContext::class)->currentTenantId(),
             'system' => $request->system,
             'provider' => $request->provider,
             'operation' => $request->operation,

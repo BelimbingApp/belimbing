@@ -47,15 +47,18 @@ declare(strict_types=1);
  * Production runs never pass it.
  */
 /**
- * Route names the pinned Domains own; everything else is platform surface.
+ * Naming prefixes that mark a live route as Domain surface (#870, #916).
  *
- * `people-connector.` covers the signed webhook and any other non-admin
- * connector routes (#870). `admin.people-connector.` remains for the operator
- * UI. A Domain Routes file that declares a name matching none of these is
- * refused by {@see unmatchedDeclaredDomainRouteNames()} so a new prefix is a
- * loud failure instead of a silent surface miss.
+ * Domain surface membership is the live route table filtered by this prefix
+ * list — not a text scan of `->name()` literals. Assembled names from
+ * `Route::name()->group` / `Route::resource` never appear as one literal in
+ * Routes files; counting only literals silently under-counts and lets new
+ * Domain routes ride in without a surface bump (#920). Base Integration uses
+ * `admin.integration.*` and must never appear here (#916).
+ * {@see declaredDomainRouteNames()} still refuses Domain Routes declarations
+ * outside this list so an unconventional prefix fails loudly (#870).
  */
-const DOMAIN_ROUTE_NAME = '/^(people\.|people-connector\.|admin\.people-connector\.|admin\.integration\.|commerce\.|it\.|quality\.)/';
+const DOMAIN_ROUTE_NAME = '/^(people\.|people-connector\.|admin\.people-connector\.|commerce\.|it\.|quality\.)/';
 
 function fail(string $message): never
 {
@@ -293,11 +296,20 @@ if ($options['routes'] !== null) {
 }
 $names = array_values(array_filter(array_map(fn (array $route): ?string => $route['name'] ?? null, $routes)));
 sort($names);
-$domainNames = array_values(array_filter($names, fn (string $name): bool => preg_match(DOMAIN_ROUTE_NAME, $name) === 1));
+$declared = declaredDomainRouteNames($root);
+// Domain surface = live names matching DOMAIN_ROUTE_NAME (#916, #920).
+// Do not intersect with literal ->name() declarations: Route::name()->group and
+// Route::resource assemble names the text scan never sees, and under-counting
+// lets Domain routes land without failing the pin. Excluding admin.integration
+// from DOMAIN_ROUTE_NAME is what keeps Base Integration off this count (#916).
+$domainNames = array_values(array_filter(
+    $names,
+    static fn (string $name): bool => preg_match(DOMAIN_ROUTE_NAME, $name) === 1,
+));
 
 // A Domain Routes declaration outside DOMAIN_ROUTE_NAME is invisible to the
 // surface count: refuse it here so a new prefix is a decision, not silence (#870).
-$unmatchedDeclared = unmatchedDeclaredDomainRouteNames(declaredDomainRouteNames($root));
+$unmatchedDeclared = unmatchedDeclaredDomainRouteNames($declared);
 if ($unmatchedDeclared !== []) {
     $failures[] = 'Domain Routes declare names outside DOMAIN_ROUTE_NAME (add a prefix or rename): '.implode(', ', $unmatchedDeclared);
 }

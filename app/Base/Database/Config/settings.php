@@ -95,6 +95,7 @@ return [
             'label' => 'Identity',
             'capability' => 'admin.system.data-share-settings.manage',
             'description' => 'How this Belimbing instance identifies itself in transfer offers, packages, policy checks, and the audit ledger.',
+            'view' => 'livewire.admin.system.data-share.partials.identity-settings',
             'fields' => [
                 [
                     'key' => 'data_share.instance.id',

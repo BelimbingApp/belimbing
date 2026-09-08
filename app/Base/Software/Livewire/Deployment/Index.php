@@ -4,6 +4,7 @@ namespace App\Base\Software\Livewire\Deployment;
 
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
+use App\Base\Foundation\Contracts\SemanticActionRecorder;
 use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Software\Livewire\Deployment\Concerns\FormatsDeploymentRunOutput;
 use App\Base\Software\Services\DeploymentRunHistory;
@@ -129,13 +130,24 @@ class Index extends Component
                 $deployment->rebuildPhp(),
                 $runtimeReloader,
             ),
-            $runtimeReloader,
+            event: 'software.rebuild.php',
+            summary: (string) __('Rebuilt PHP dependencies'),
+            uiElement: (string) __('Rebuild PHP'),
+            subject: ['name' => 'software_rebuild', 'id' => 'php', 'identifier' => 'php'],
+            runtimeReloader: $runtimeReloader,
         );
     }
 
     public function rebuildAssets(DeploymentService $deployment, DeploymentRunHistory $history): void
     {
-        $this->runAction($history, fn (): array => $deployment->rebuildAssets());
+        $this->runAction(
+            $history,
+            fn (): array => $deployment->rebuildAssets(),
+            event: 'software.rebuild.assets',
+            summary: (string) __('Rebuilt frontend assets'),
+            uiElement: (string) __('Rebuild assets'),
+            subject: ['name' => 'software_rebuild', 'id' => 'assets', 'identifier' => 'assets'],
+        );
     }
 
     /**
@@ -147,11 +159,20 @@ class Index extends Component
      * record so the detached process can close it with the real outcome; without it
      * the box would sit on "in progress" even after the workers came back.
      *
+     * Audit arguments are required: every maintenance action that goes through
+     * here must leave an Operator Activity row (#918). Optional-with-a-guard would
+     * silently drop the trail when a future caller forgets one.
+     *
      * @param  callable(): list<string>  $work
+     * @param  array{name?: string, id?: int|string, identifier?: string|null}  $subject
      */
     private function runAction(
         DeploymentRunHistory $history,
         callable $work,
+        string $event,
+        string $summary,
+        string $uiElement,
+        array $subject,
         ?FrankenPhpDomainRuntimeReloader $runtimeReloader = null,
     ): void {
         $this->authorizeManage();
@@ -176,6 +197,21 @@ class Index extends Component
                 $this->log,
                 $outcome,
                 $runId,
+            );
+
+            $this->recordSemanticAction(
+                event: $event,
+                summary: $summary,
+                uiElement: $uiElement,
+                subject: [
+                    'name' => (string) ($subject['name'] ?? 'software'),
+                    'id' => $subject['id'] ?? 'unknown',
+                    'identifier' => $subject['identifier'] ?? null,
+                ],
+                context: array_filter([
+                    'run_id' => $runId,
+                    'outcome' => $outcome,
+                ], fn (mixed $value): bool => $value !== null),
             );
 
             if ($outcome !== 'pending') {
@@ -218,6 +254,28 @@ class Index extends Component
             $history->rememberDeploymentRun($lines, $outcome);
         }
 
+        // Detached updates finish elsewhere; Operator Activity records the launch
+        // (with the reserved run_id) rather than a terminal outcome (#918).
+        if (is_string($runId) && $runId !== '') {
+            $sourceKey = $keys === [] ? 'all' : implode(',', $keys);
+            $this->recordSemanticAction(
+                event: 'software.update.launched',
+                summary: $keys === []
+                    ? (string) __('Launched software update for all sources')
+                    : (string) __('Launched software update for :source', ['source' => $sourceKey]),
+                uiElement: $keys === [] ? (string) __('Update all') : (string) __('Update source'),
+                subject: [
+                    'name' => 'software_source',
+                    'id' => $sourceKey,
+                    'identifier' => $sourceKey,
+                ],
+                context: [
+                    'run_id' => $runId,
+                    'source_keys' => $keys,
+                ],
+            );
+        }
+
         $this->log = [];
         $this->dispatch('run-finished', status: $outcome, refresh: false, runId: $runId);
 
@@ -228,6 +286,28 @@ class Index extends Component
         if ($outcome === 'pending') {
             $this->dispatch('follow-update-progress', runId: $runId);
         }
+    }
+
+    /**
+     * @param  array{name: string, id: string|int, identifier: string|null}  $subject
+     * @param  array<string, mixed>  $context
+     */
+    private function recordSemanticAction(
+        string $event,
+        string $summary,
+        string $uiElement,
+        array $subject,
+        array $context = [],
+    ): void {
+        app(SemanticActionRecorder::class)->record(
+            event: $event,
+            summary: $summary,
+            source: (string) __('Updates'),
+            subject: $subject,
+            surface: 'admin.system.software.updates',
+            uiElement: $uiElement,
+            context: $context,
+        );
     }
 
     /**
