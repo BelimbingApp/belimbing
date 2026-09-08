@@ -55,7 +55,7 @@ it('fails closed without an ambient tenant', function (): void {
 });
 
 it('allows platform operators to inspect legacy rows', function (): void {
-    createAdminUser();
+    app(TenantContext::class)->set((int) platformOperatorTenant()->id);
     $legacy = outboundTenantExchange(null);
     expect(OutboundExchange::visibleToCurrentTenant()->find($legacy->id)?->id)->toBe($legacy->id);
 });
