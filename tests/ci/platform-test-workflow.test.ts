@@ -156,6 +156,20 @@ test("all shard reports feed one Sonar scan and downstream dispatch still requir
     expect(workflow.jobs["postgres-mirror"].steps.some((entry: any) => entry.name === "Run native and portable mirror integration tests")).toBeTrue();
 });
 
+test("SonarCloud Scan skips only for dependabot[bot] and announces the skip", () => {
+    const scan = step(gateSteps(), "SonarCloud Scan");
+    expect(scan.if).toBe("github.actor != 'dependabot[bot]'");
+    expect(scan.if).not.toContain("||");
+    expect(scan.if).not.toContain("&&");
+    const announce = step(gateSteps(), "Skip SonarCloud for Dependabot (missing Dependabot SONAR_TOKEN)");
+    expect(announce.if).toBe("github.actor == 'dependabot[bot]'");
+    expect(announce.if).not.toContain("||");
+    expect(announce.if).not.toContain("&&");
+    expect(announce.run).toContain("Skipping SonarCloud Scan");
+    expect(announce.run).toContain("dependabot[bot]");
+    expect(gateSteps().indexOf(announce)).toBe(gateSteps().indexOf(scan) - 1);
+});
+
 test("committed Feature shards are disjoint and cover every Feature test file exactly once", () => {
     const validation = spawnSync("python3", ["scripts/ci/platform-feature-shards.py", "--validate-only"], {
         cwd: root,
