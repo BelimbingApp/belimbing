@@ -19,7 +19,13 @@ class Index extends Component
             return;
         }
 
-        Cache::flush();
+        // FileStore::flush() returns false when the cache directory cannot be cleared;
+        // never audit a success the store refused (#898).
+        if (! Cache::flush()) {
+            $this->notifyError(__('Application cache could not be flushed.'));
+
+            return;
+        }
 
         app(SemanticActionRecorder::class)->record(
             event: 'system.cache.flushed',

@@ -108,7 +108,11 @@ it('retries only actionable failed jobs from retry all', function (): void {
     Artisan::shouldReceive('call')
         ->once()
         ->with('queue:retry', ['id' => [$queuedUuid]])
-        ->andReturn(0);
+        ->andReturnUsing(function () use ($queuedUuid): int {
+            DB::table('failed_jobs')->where('uuid', $queuedUuid)->delete();
+
+            return 0;
+        });
 
     Livewire::actingAs($user)
         ->test(FailedJobsIndex::class)
@@ -128,7 +132,11 @@ it('records queue.failed_job.retried for each retried uuid from retryAll and non
     Artisan::shouldReceive('call')
         ->once()
         ->with('queue:retry', ['id' => [$queuedUuid]])
-        ->andReturn(0);
+        ->andReturnUsing(function () use ($queuedUuid): int {
+            DB::table('failed_jobs')->where('uuid', $queuedUuid)->delete();
+
+            return 0;
+        });
 
     Livewire::actingAs($user)
         ->test(FailedJobsIndex::class)
@@ -142,4 +150,32 @@ it('records queue.failed_job.retried for each retried uuid from retryAll and non
     $payload = json_decode((string) $rows[0]->payload, true);
     expect($payload['subject']['identifier'] ?? null)->toBe($queuedUuid)
         ->and($payload['context']['uuid'] ?? null)->toBe($queuedUuid);
+});
+
+it('records no queue.failed_job.retried when queue:retry exits non-zero', function (): void {
+    $user = createAdminUser();
+    $uuid = (string) Str::uuid();
+    DB::table('failed_jobs')->insert([
+        'uuid' => $uuid,
+        'connection' => 'database',
+        'queue' => 'default',
+        'payload' => json_encode(['displayName' => 'RetryFailJob']),
+        'exception' => 'retry will fail',
+        'failed_at' => now(),
+    ]);
+
+    Artisan::shouldReceive('call')
+        ->once()
+        ->with('queue:retry', ['id' => [$uuid]])
+        ->andReturn(1);
+
+    Livewire::actingAs($user)
+        ->test(FailedJobsIndex::class)
+        ->call('retryJob', $uuid);
+
+    $buffer = app(AuditBuffer::class);
+    (new ReflectionClass($buffer))->getMethod('flush')->invoke($buffer);
+
+    expect(DB::table('base_audit_actions')->where('event', 'queue.failed_job.retried')->count())->toBe(0);
+    expect(DB::table('failed_jobs')->where('uuid', $uuid)->exists())->toBeTrue();
 });

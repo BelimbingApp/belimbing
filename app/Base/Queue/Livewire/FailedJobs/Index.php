@@ -60,7 +60,13 @@ class Index extends TableSearchablePaginatedList
             return;
         }
 
-        Artisan::call('queue:retry', ['id' => [$uuid]]);
+        $exitCode = Artisan::call('queue:retry', ['id' => [$uuid]]);
+        if ($exitCode !== 0 || ! $this->retryRemovedFailedJob($uuid)) {
+            // queue:retry can exit non-zero, or leave the row when the id is missing (#898).
+            $this->notifyError(__('Failed job could not be retried.'));
+
+            return;
+        }
 
         $this->recordRetried($uuid);
     }
@@ -77,12 +83,24 @@ class Index extends TableSearchablePaginatedList
             return;
         }
 
-        Artisan::call('queue:retry', ['id' => $uuids]);
+        $exitCode = Artisan::call('queue:retry', ['id' => $uuids]);
+        if ($exitCode !== 0) {
+            $this->notifyError(__('Failed jobs could not be retried.'));
 
-        // One audit row per retried uuid so Operator Activity can name each job;
-        // retryAll does not collapse into a count-only row (#898).
+            return;
+        }
+
+        // One audit row per uuid that actually left failed_jobs; skip partial misses (#898).
+        $retried = 0;
         foreach ($uuids as $uuid) {
-            $this->recordRetried($uuid);
+            if ($this->retryRemovedFailedJob($uuid)) {
+                $this->recordRetried($uuid);
+                $retried++;
+            }
+        }
+
+        if ($retried === 0) {
+            $this->notifyError(__('Failed jobs could not be retried.'));
         }
     }
 
@@ -124,6 +142,15 @@ class Index extends TableSearchablePaginatedList
             uiElement: __('Retry'),
             context: ['uuid' => $uuid],
         );
+    }
+
+    /**
+     * queue:retry removes a row from failed_jobs only when that id was retried.
+     * Exit code 0 alone is not enough: missing ids are reported while the command continues.
+     */
+    private function retryRemovedFailedJob(string $uuid): bool
+    {
+        return ! DB::table('failed_jobs')->where('uuid', $uuid)->exists();
     }
 
     private function failedJobs(): ActionableFailedJobRepository

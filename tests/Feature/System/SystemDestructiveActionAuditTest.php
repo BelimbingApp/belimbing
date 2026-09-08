@@ -8,6 +8,7 @@ use App\Base\Queue\Livewire\FailedJobs\Index as FailedJobsIndex;
 use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\User\Models\User;
 use Illuminate\Filesystem\Filesystem;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
@@ -40,6 +41,17 @@ it('records system.cache.flushed when flushAll runs with the manage capability',
         ->and($payload['result'] ?? null)->toBe('succeeded');
 });
 
+it('records nothing when Cache::flush returns false', function (): void {
+    $user = createAdminUser();
+    Cache::partialMock()->shouldReceive('flush')->once()->andReturn(false);
+
+    Livewire::actingAs($user)
+        ->test(CacheManagementIndex::class)
+        ->call('flushAll');
+
+    expect(systemAuditEvents('system.cache.flushed'))->toBe([]);
+});
+
 it('records nothing when flushAll is refused for lack of capability', function (): void {
     setupAuthzRoles();
     $user = User::factory()->create();
@@ -49,6 +61,19 @@ it('records nothing when flushAll is refused for lack of capability', function (
         ->call('flushAll');
 
     expect(systemAuditEvents('system.cache.flushed'))->toBe([]);
+});
+
+it('records system.menu_cache.cleared when clearMenuCache runs with the manage capability', function (): void {
+    Livewire::actingAs(createAdminUser())
+        ->test(CacheManagementIndex::class)
+        ->call('clearMenuCache');
+
+    $rows = systemAuditEvents('system.menu_cache.cleared');
+    expect($rows)->toHaveCount(1);
+    $payload = json_decode((string) $rows[0]->payload, true);
+    expect($payload['surface'] ?? null)->toBe('admin.system.cache')
+        ->and($payload['subject']['name'] ?? null)->toBe('menu_cache')
+        ->and($payload['result'] ?? null)->toBe('succeeded');
 });
 
 it('records queue.failed_job.deleted with the job uuid when deleteJob runs', function (): void {
