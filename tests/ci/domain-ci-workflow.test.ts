@@ -95,6 +95,26 @@ test("domain CI scans composed Domains Livewire for raw subject-id request reads
     expect(pgNames).not.toContain("Scan Domain Livewire for raw subject-id request reads");
 });
 
+test("domain CI scans composed Domain trees for duplicate Pest helpers", () => {
+    const scan = step("Scan composed Domain trees for duplicate Pest helpers");
+    expect(scan.run).toContain("./vendor/bin/pest");
+    expect(scan.run).toContain(
+        "finds no duplicate Domain Pest helpers on the composed checkout",
+    );
+    const names = sqliteSteps().map((entry: any) => entry.name);
+    expect(names.indexOf("Run Pint")).toBeLessThan(
+        names.indexOf("Scan composed Domain trees for duplicate Pest helpers"),
+    );
+    expect(names.indexOf("Scan Domain Livewire for raw subject-id request reads")).toBeLessThan(
+        names.indexOf("Scan composed Domain trees for duplicate Pest helpers"),
+    );
+    expect(names.indexOf("Scan composed Domain trees for duplicate Pest helpers")).toBeLessThan(
+        names.indexOf("Run Tests"),
+    );
+    const pgNames = (workflow.jobs["postgres-mirror"].steps as any[]).map((entry: any) => entry.name);
+    expect(pgNames).not.toContain("Scan composed Domain trees for duplicate Pest helpers");
+});
+
 test("module smoke checks every pinned Domain after its suite", () => {
     const smoke = step("Module smoke composition");
 
