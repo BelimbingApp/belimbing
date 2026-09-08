@@ -160,7 +160,7 @@ class Index extends Component
      * the box would sit on "in progress" even after the workers came back.
      *
      * @param  callable(): list<string>  $work
-     * @param  array{name: string, id: string|int, identifier: string|null}  $subject
+     * @param  array{name?: string, id?: int|string, identifier?: string|null}  $subject
      */
     private function runAction(
         DeploymentRunHistory $history,
@@ -195,12 +195,16 @@ class Index extends Component
                 $runId,
             );
 
-            if ($event !== null && $summary !== null && $uiElement !== null) {
+            if ($event !== null && $summary !== null && $uiElement !== null && $subject !== []) {
                 $this->recordSemanticAction(
                     event: $event,
                     summary: $summary,
                     uiElement: $uiElement,
-                    subject: $subject,
+                    subject: [
+                        'name' => (string) ($subject['name'] ?? 'software'),
+                        'id' => $subject['id'] ?? 'unknown',
+                        'identifier' => $subject['identifier'] ?? null,
+                    ],
                     context: array_filter([
                         'run_id' => $runId,
                         'outcome' => $outcome,
