@@ -119,6 +119,66 @@ use App\Base\FeatureFlags\Livewire\Index;
         </x-ui.card>
 
         <x-ui.card>
+            <h3 class="mb-1 text-sm font-medium text-ink">{{ __('Orphaned overrides') }}</h3>
+            <p class="mb-4 text-sm text-muted">
+                {{ __('Override rows for tenant :tenant that no enabled module currently declares. Purge removes the stale row; declared flags still clear through Use default.', ['tenant' => $tenantId]) }}
+            </p>
+
+            <x-ui.table
+                container="flush"
+                :caption="__('Orphaned feature-flag overrides for tenant :tenant — not declared by any enabled module', ['tenant' => $tenantId])"
+            >
+                <x-slot name="head">
+                    <tr>
+                        <th scope="col" class="px-table-cell-x py-table-cell-y text-left text-xs font-medium text-muted uppercase tracking-wider">{{ __('Flag') }}</th>
+                        <th scope="col" class="px-table-cell-x py-table-cell-y text-left text-xs font-medium text-muted uppercase tracking-wider">{{ __('Stored') }}</th>
+                        <th scope="col" class="px-table-cell-x py-table-cell-y text-left text-xs font-medium text-muted uppercase tracking-wider">{{ __('Updated') }}</th>
+                        <th scope="col" class="px-table-cell-x py-table-cell-y text-right text-xs font-medium text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
+                    </tr>
+                </x-slot>
+
+                @forelse ($orphanedRows as $orphan)
+                    <tr wire:key="feature-flag-orphan-{{ $orphan['flag'] }}">
+                        <td class="px-table-cell-x py-table-cell-y text-sm font-medium text-ink">{{ $orphan['flag'] }}</td>
+                        <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
+                            @if ($orphan['enabled'])
+                                <x-ui.badge variant="success">{{ __('On') }}</x-ui.badge>
+                            @else
+                                <x-ui.badge>{{ __('Off') }}</x-ui.badge>
+                            @endif
+                        </td>
+                        <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">
+                            @if ($orphan['updated_at'])
+                                <x-ui.datetime :value="$orphan['updated_at']" />
+                            @else
+                                —
+                            @endif
+                        </td>
+                        <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right">
+                            @if ($canManage)
+                                <x-ui.button
+                                    variant="secondary"
+                                    size="sm"
+                                    wire:click="purge({{ Js::from($orphan['flag']) }})"
+                                >
+                                    {{ __('Purge') }}
+                                </x-ui.button>
+                            @else
+                                <span class="text-xs text-muted">{{ __('View only') }}</span>
+                            @endif
+                        </td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="4" class="px-table-cell-x py-8 text-center text-sm text-muted">
+                            {{ __('No orphaned overrides for this tenant.') }}
+                        </td>
+                    </tr>
+                @endforelse
+            </x-ui.table>
+        </x-ui.card>
+
+        <x-ui.card>
             <h3 class="mb-1 text-sm font-medium text-ink">{{ __('Overrides history') }}</h3>
             <p class="mb-4 text-sm text-muted">{{ __('Recent override mutations for this tenant only. Viewers can read the trail; only managers can change flags.') }}</p>
 

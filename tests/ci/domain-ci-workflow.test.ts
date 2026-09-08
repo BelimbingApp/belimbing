@@ -32,7 +32,10 @@ test("composed route middleware audit gates SQLite before Domain Pest", () => {
 test("composed command tenant-scope audit gates SQLite after the route audit and before Domain Pest", () => {
     const name = "Audit composed Domain command tenant scope";
     const audit = step(name);
-    expect(audit.run).toBe("php artisan blb:domain-commands --audit");
+    expect(audit.run).toContain("php artisan blb:domain-commands --audit --json");
+    expect(audit.run).toContain(".expiring[]");
+    expect(audit.run).toContain("::warning title=Tenant-scope exemption lapses::");
+    expect(audit.run).toContain("exit \"$audit_status\"");
     expect(audit.if).toBeUndefined();
     expect(audit["continue-on-error"]).toBeUndefined();
     const names = sqliteSteps().map((entry: any) => entry.name);
@@ -132,5 +135,17 @@ test("both Domain test lanes raise the coverage memory limit before Pest runs", 
         const run = workflow.jobs[job].steps[raise].run as string;
         expect(run).toContain('value="2G"');
         expect(run).toContain("phpunit.xml");
+    }
+});
+
+test("both jobs compose cross-domain dependencies without unknown flags", () => {
+    const name = "Compose exact cross-domain dependencies";
+    for (const jobName of ["sqlite", "postgres-mirror"] as const) {
+        const steps = workflow.jobs[jobName].steps as any[];
+        const found = steps.find((entry: any) => entry.name === name);
+        expect(found).toBeDefined();
+        expect(found.run).toContain('php scripts/ci/compose-domain.php --domain-path="$DOMAIN_PATH"');
+        expect(found.run).not.toContain("--exact");
+        expect(found.run).toContain("> extra-repos.tsv");
     }
 });

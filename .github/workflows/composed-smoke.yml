@@ -6,12 +6,14 @@ name: composed-smoke
 # dependencies, so nothing else proves that the pins in
 # scripts/ci/domain-repos.json compose into one application: no route
 # collision (#570), no duplicate migration name (#117), the expected route
-# table. A pin advance that breaks composition fails here, on the PR that
-# advances it (#627). Do not add pull_request paths: filters: a required check
-# that only runs on descriptor edits leaves every other PR missing that status.
-# The nightly schedule (#663) re-runs the same assertion against the pins on
-# main and opens or updates one "Composed boot failed" issue on refusal so
-# drift between pin advances is visible without waiting for a PR.
+# table, and Domain commands extend TenantScopedCommand (#912). A pin
+# advance that breaks composition or pulls an unconverted Domain command
+# fails here, on the PR that advances it (#627 / #912). Do not add
+# pull_request paths: filters: a required check that only runs on descriptor
+# edits leaves every other PR missing that status. The nightly schedule
+# (#663) re-runs the same assertion against the pins on main and opens or
+# updates one "Composed boot failed" issue on refusal so drift between pin
+# advances is visible without waiting for a PR.
 
 on:
   push:
@@ -175,3 +177,16 @@ jobs:
         run: |
           echo "composed-smoke refused (exit ${{ steps.boot.outputs.exit_code }})"
           exit 1
+
+      # Platform-owned TenantScopedCommand rule over the Domains we ship
+      # (#912). Domain CI still runs the same audit against one Domain plus
+      # its exact dependencies; this step answers what that cannot: do the
+      # pins in domain-repos.json, composed together, satisfy the rule?
+      # A pin advance that introduces an unconverted command fails here on
+      # the advancing PR — that is intentional, not a flake. DomainCommand
+      # TenantAudit::isAllowlisted() short-circuits before the tenant_scoped
+      # check, so an allowlisted command passes regardless; this step is not
+      # proof that the allowlisted set is correct or empty.
+      - name: Audit composed Domain command tenant scope
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) && steps.boot.outcome == 'success' && steps.boot.outputs.exit_code == '0' }}
+        run: php artisan blb:domain-commands --audit

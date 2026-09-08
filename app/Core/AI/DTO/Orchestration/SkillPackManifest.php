@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Core\AI\DTO\Orchestration;
 
 use App\Core\AI\Enums\SkillPackStatus;
@@ -55,6 +56,17 @@ final readonly class SkillPackManifest
         }
 
         return in_array((string) $employeeId, $this->applicableAgentIds, true);
+    }
+
+    /**
+     * Path of the first bundled reference, or '' when the pack bundles none.
+     *
+     * For filesystem packs this is the `SKILL.md` the manifest was built from,
+     * which is the only handle an operator has on where the pack came from.
+     */
+    public function primaryReferencePath(): string
+    {
+        return $this->references[0]->path ?? '';
     }
 
     /**

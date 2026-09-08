@@ -24,6 +24,7 @@ class DataSharePackageExporter
         private readonly DataSharePrivateStorage $storage,
         private readonly DataShareSettings $settings,
         private readonly DataShareRedactionAdvisor $redactions,
+        private readonly DataShareEventRecorder $events,
     ) {}
 
     /** @param list<string> $tables */
@@ -81,6 +82,30 @@ class DataSharePackageExporter
         string $expectedPreviewHash,
         array $redactions = [],
     ): DataShareExportResult {
+        try {
+            return $this->exportPackage($scopeName, $tables, $offerId, $expiresAt, $expectedPreviewHash, $redactions);
+        } catch (Throwable $e) {
+            $this->events->recordFailure('export_failed', [
+                'offer_id' => $offerId,
+                'scope_name' => $scopeName,
+            ], $e);
+
+            throw $e;
+        }
+    }
+
+    /**
+     * @param  list<string>  $tables
+     * @param  array<string, list<string>>  $redactions
+     */
+    private function exportPackage(
+        string $scopeName,
+        array $tables,
+        string $offerId,
+        string $expiresAt,
+        string $expectedPreviewHash,
+        array $redactions = [],
+    ): DataShareExportResult {
         [$scope, $serialized, $redactions] = $this->serializeScope($scopeName, $tables, $redactions);
         $temporaryPackage = null;
 
@@ -130,7 +155,14 @@ class DataSharePackageExporter
                 throw DataSharePackageException::storeFailed($path);
             }
 
-            return new DataShareExportResult($packageId, $path, $sha256, $bytes, $manifest);
+            $result = new DataShareExportResult($packageId, $path, $sha256, $bytes, $manifest);
+            $this->events->recordPackage('exported', $packageId, $scopeName, [
+                'offer_id' => $offerId,
+                'bytes' => $bytes,
+                'package_sha256' => $sha256,
+            ]);
+
+            return $result;
         } finally {
             $serialized->cleanup();
 

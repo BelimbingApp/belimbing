@@ -5,6 +5,7 @@ use App\Base\Foundation\Services\DomainState;
 use App\Base\Foundation\Services\ModuleCheck;
 use App\Base\Support\AppPath;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Symfony\Component\Process\Process;
 
@@ -193,6 +194,55 @@ test('an unknown module id is refused', function (): void {
 
     expect($report['ok'])->toBeFalse()
         ->and($report['refusals'])->toBe(['unknown module: check/does-not-exist']);
+});
+
+/** @param list<string> $capabilities */
+function moduleCheckCapabilities(string $group, string $module, string $id, array $capabilities): void
+{
+    moduleCheckFixture($group, $module, $id);
+    $directory = ApplicationTopology::domainPath($group).'/'.$module.'/Config';
+    File::ensureDirectoryExists($directory);
+    file_put_contents($directory.'/authz.php', '<?php return '.var_export(['capabilities' => $capabilities], true).';');
+    config([
+        'authz.domains.fixture' => [],
+        'authz.capabilities' => [...config('authz.capabilities', []), ...$capabilities],
+    ]);
+}
+
+test('module smoke refuses its rejected capabilities without listing accepted keys', function (): void {
+    moduleCheckCapabilities($this->moduleCheckGroup, 'Probe', 'check/probe', ['fixture.thing.view', 'fixture.thing.hod']);
+
+    $exit = Artisan::call('blb:module-check', ['module' => 'check/probe']);
+
+    expect($exit)->toBe(1)
+        ->and(Artisan::output())->toContain('Capabilities:', 'accepted: 1', 'rejected: 1', 'fixture.thing.hod', 'unknown verb [hod]')
+        ->not->toContain('fixture.thing.view');
+});
+
+test('module capability JSON accepts grammatical declarations and excludes other modules without reading tenant data', function (): void {
+    moduleCheckCapabilities($this->moduleCheckGroup, 'Probe', 'check/probe', ['fixture.thing.view']);
+    moduleCheckCapabilities($this->moduleCheckGroup, 'Other', 'check/other', ['fixture.other.hod']);
+    DB::enableQueryLog();
+    DB::flushQueryLog();
+
+    $exit = Artisan::call('blb:module-check', ['module' => 'check/probe', '--json' => true]);
+    $payload = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
+    $queries = DB::getQueryLog();
+    DB::disableQueryLog();
+
+    expect($exit)->toBe(0)
+        ->and($payload['capabilities'])->toBe(['accepted' => ['fixture.thing.view'], 'rejected' => []])
+        ->and($queries)->toBe([]);
+});
+
+test('module capability JSON carries the catalog rejection reason', function (): void {
+    moduleCheckCapabilities($this->moduleCheckGroup, 'Probe', 'check/probe', ['fixture.thing.hod']);
+
+    $exit = Artisan::call('blb:module-check', ['module' => 'check/probe', '--json' => true]);
+    $payload = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
+
+    expect($exit)->toBe(1)
+        ->and($payload['capabilities'])->toBe(['accepted' => [], 'rejected' => ['fixture.thing.hod' => 'unknown verb [hod]']]);
 });
 
 test('a declared binding whose provider is not registered is reported as missing', function (): void {
