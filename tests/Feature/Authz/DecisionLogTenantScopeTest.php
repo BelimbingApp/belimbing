@@ -84,6 +84,25 @@ it('stamps the ambient tenant on every buffered decision log row', function (): 
     expect($row->tenant_id)->toBe((int) $tenant->id);
 });
 
+it('prefers the ambient tenant over the actor company tenant when they differ', function (): void {
+    [$tenantA, $companyA] = createTenantWithCompany(['name' => 'Decision Log Actor Tenant A']);
+    [$tenantB] = createTenantWithCompany(['name' => 'Decision Log Ambient Tenant B']);
+    app(TenantContext::class)->set((int) $tenantB->id);
+
+    app(DecisionLogger::class)->log(
+        new Actor(PrincipalType::USER, 71, (int) $companyA->id),
+        'admin.authz.decision-log.stamp-ambient-first',
+        null,
+        AuthorizationDecision::allow(['stamp_ambient_first']),
+    );
+    decisionLogFlushLogger();
+
+    $row = DecisionLog::query()->where('capability', 'admin.authz.decision-log.stamp-ambient-first')->firstOrFail();
+
+    expect($row->tenant_id)->toBe((int) $tenantB->id)
+        ->and($row->tenant_id)->not->toBe((int) $tenantA->id);
+});
+
 it('falls back to the actor company tenant when no ambient tenant is set', function (): void {
     [$tenant, $company] = createTenantWithCompany(['name' => 'Decision Log Fallback Tenant']);
     app(TenantContext::class)->clear();
@@ -177,8 +196,10 @@ it('lets the platform operator tenant view all tenants only with the toggle', fu
 it('scopes the last-prune retention card to the ambient tenant', function (): void {
     [$viewer, $tenantAId] = decisionLogTenantForeignFixture();
 
-    $foreignAt = now()->subDay()->seconds(0);
-    $homeAt = now()->subHour()->seconds(0);
+    // Foreign must be newer than home: orderByDesc without the scope would
+    // otherwise still pick the home row and leave this test green (#894).
+    $homeAt = now()->subDay()->seconds(0);
+    $foreignAt = now()->subHour()->seconds(0);
 
     DB::table('base_audit_actions')->insert([
         [
@@ -217,6 +238,47 @@ it('scopes the last-prune retention card to the ambient tenant', function (): vo
         ->test(Index::class)
         ->assertSee($homeAt->format('Y-m-d H:i'))
         ->assertDontSee($foreignAt->format('Y-m-d H:i'));
+});
+
+it('hides a null-tenant decision log from a tenant admin and shows it only with all-tenants', function (): void {
+    // Runtime nulls remain possible when resolveTenantId has neither ambient nor
+    // company fallback. Historical pre-migration rows are backfilled to the
+    // licensee tenant; leftover nulls stay invisible under exact tenant scope.
+    [$viewer] = decisionLogTenantForeignFixture();
+
+    decisionLogTenantInsert([
+        'tenant_id' => null,
+        'capability' => 'null.tenant.decision.capability',
+        'trace_id' => 'NULLTENANTDEC1',
+    ]);
+    decisionLogTenantInsert([
+        'tenant_id' => (int) $viewer->tenant_id,
+        'actor_id' => $viewer->id,
+        'capability' => 'home.tenant.with.null.sibling',
+        'trace_id' => 'HOMENULLSIBLNG',
+    ]);
+
+    Livewire::actingAs($viewer)
+        ->test(Index::class)
+        ->assertSee('home.tenant.with.null.sibling')
+        ->assertDontSee('null.tenant.decision.capability');
+
+    $company = provisionPlatformOperatorCompany();
+    $operator = User::factory()->create(['company_id' => $company->id, 'name' => 'Null Tenant Decision Viewer']);
+    $role = Role::query()->where('code', 'core_admin')->whereNull('company_id')->firstOrFail();
+    PrincipalRole::query()->create([
+        'company_id' => $company->id,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => $operator->id,
+        'role_id' => $role->id,
+    ]);
+    app(TenantContext::class)->set((int) $company->tenant_id);
+
+    Livewire::actingAs($operator)
+        ->test(Index::class)
+        ->assertDontSee('null.tenant.decision.capability')
+        ->set('allTenants', true)
+        ->assertSee('null.tenant.decision.capability');
 });
 it('denies the page without admin.authz.decision-log.list', function (): void {
     [$tenant, $company] = createTenantWithCompany(['name' => 'Decision Log Deny Tenant']);

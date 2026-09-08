@@ -98,6 +98,14 @@ class DatabaseDecisionLogger implements DecisionLogger
         }
     }
 
+    /**
+     * Ambient tenant first, then the actor's company tenant.
+     *
+     * Returns null only when neither is available. Historical rows written
+     * before tenant_id existed were backfilled to the licensee tenant in
+     * migration 0100_01_11_000006; leftover nulls (this path) stay invisible
+     * to ordinary tenant admins under AuditTenantScope's exact match.
+     */
     private function resolveTenantId(Actor $actor): ?int
     {
         return $this->tenants->currentTenantId()
