@@ -165,8 +165,8 @@ class Settings extends SettingsForm
         $toId = trim((string) ($this->values[$idKey] ?? ''));
         $toRole = trim((string) ($this->values[$roleKey] ?? ''));
 
-        $idChanged = $toId !== '' && $toId !== $fromId;
-        $roleChanged = $toRole !== '' && $toRole !== $fromRole;
+        $idChanged = $toId !== $fromId;
+        $roleChanged = $toRole !== $fromRole;
 
         if (! $idChanged && ! $roleChanged) {
             return null;
@@ -197,7 +197,7 @@ class Settings extends SettingsForm
 
         if (($offers > 0 || $unapplied > 0) && ! $this->confirmIdentityChange) {
             $message = $this->outstandingIdentityMessage($offers, $unapplied);
-            $this->notify($message, 'danger');
+            $this->notifyError($message);
 
             throw ValidationException::withMessages([
                 'confirmIdentityChange' => $message,

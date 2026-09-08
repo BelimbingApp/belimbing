@@ -95,7 +95,23 @@ it('refuses an instance id change while an available offer exists', function ():
         ->set('values.'.SettingsFieldValue::formKey('data_share.instance.id'), 'renamed-instance')
         ->call('save')
         ->assertHasErrors(['confirmIdentityChange'])
-        ->assertSee('1 offer');
+        ->assertSee('1 offer')
+        ->assertDispatched('notify', variant: 'error');
+
+    expect(app(SettingsService::class)->get('data_share.instance.id'))->toBe('identity-source-dev')
+        ->and(DataShareEvent::query()->where('action', 'identity_changed')->exists())->toBeFalse();
+});
+
+it('refuses clearing the instance id while an available offer exists', function (): void {
+    $admin = dataShareIdentityAdmin();
+    insertOutstandingOffer();
+
+    Livewire::actingAs($admin)
+        ->test(DataShareSettings::class)
+        ->set('values.'.SettingsFieldValue::formKey('data_share.instance.id'), '')
+        ->call('save')
+        ->assertHasErrors(['confirmIdentityChange'])
+        ->assertDispatched('notify', variant: 'error');
 
     expect(app(SettingsService::class)->get('data_share.instance.id'))->toBe('identity-source-dev')
         ->and(DataShareEvent::query()->where('action', 'identity_changed')->exists())->toBeFalse();
