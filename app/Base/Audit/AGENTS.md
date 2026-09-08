@@ -143,6 +143,12 @@ not import Audit Livewire classes, query Audit tables, or build Audit search
 URLs. `SourceHistory` and `AuditSourceHistory` own authorization, bounded
 lookup, search/sort/load-more behavior, trace links, and full-history URLs.
 
+Default authorization still requires both `admin.audit.log.list` and the page's
+source capability. Pages that serve ordinary record maintainers (for example
+People Training) may pass `:require-audit-list-capability="false"` so the source
+capability alone opens local History. That path never offers the full Audit Log
+URL and never opens trace timelines — those remain auditor-only.
+
 Bounded configuration pages follow the same bridge contract. Settings-backed
 pages derive exact `setting` handles through `App\Base\Settings\Support\SettingSubject`;
 global IDs are `<key>` and scoped IDs are `<key>@<scope>:<scope-id>`. A page may

@@ -7,19 +7,31 @@
     'buttonLabel' => null,
     'iconOnly' => false,
     'subjectLabel' => null,
+    // When false, the source page capability alone authorizes local History.
+    // Full Audit Log navigation and trace timelines stay off — those still need
+    // admin.audit.log.list so ordinary maintainers never inherit the admin log.
+    'requireAuditListCapability' => true,
 ])
 
 @php
     $authUser = auth()->user();
     $resolvedSourceCapability = (string) $sourceCapability;
+    // Fail closed: unrecognized values keep the admin.audit.log.list gate.
+    // FILTER_VALIDATE_BOOLEAN without FILTER_NULL_ON_FAILURE treats typos as false
+    // (the permissive side) and would silently widen History to page capability alone.
+    $requiresAuditList = filter_var(
+        $requireAuditListCapability,
+        FILTER_VALIDATE_BOOLEAN,
+        FILTER_NULL_ON_FAILURE
+    ) !== false;
     $canRenderRecordHistory = false;
 
     if ($authUser !== null && $resolvedSourceCapability !== '') {
         $authorization = app(\App\Base\Authz\Contracts\AuthorizationService::class);
         $actor = \App\Base\Authz\DTO\Actor::forUser($authUser);
 
-        $canRenderRecordHistory = $authorization->can($actor, 'admin.audit.log.list')->allowed
-            && $authorization->can($actor, $resolvedSourceCapability)->allowed;
+        $canRenderRecordHistory = $authorization->can($actor, $resolvedSourceCapability)->allowed
+            && (! $requiresAuditList || $authorization->can($actor, 'admin.audit.log.list')->allowed);
     }
 
     $subjectHandles = collect($subjects)
@@ -36,7 +48,11 @@
     $fullHistorySearch = $primarySubject !== null
         ? $primarySubject['name'].'#'.$primarySubject['id']
         : null;
-    $fullHistoryUrl = $fullHistorySearch !== null && \Illuminate\Support\Facades\Route::has('admin.audit.mutations')
+    // Local-only History never offers the admin mutations page: that URL is the
+    // broad audit surface the source-capability-only path must not inherit.
+    $fullHistoryUrl = $requiresAuditList
+        && $fullHistorySearch !== null
+        && \Illuminate\Support\Facades\Route::has('admin.audit.mutations')
         ? route('admin.audit.mutations', ['search' => $fullHistorySearch])
         : '';
     $componentKey = 'record-history-'.md5(json_encode([
@@ -45,6 +61,7 @@
         'auditable_id' => $auditableId,
         'source_capability' => $resolvedSourceCapability,
         'subject_label' => $subjectLabel,
+        'require_audit_list' => $requiresAuditList,
     ], JSON_THROW_ON_ERROR));
 @endphp
 
@@ -59,5 +76,6 @@
         'iconOnly' => $iconOnly,
         'subjectLabel' => $subjectLabel,
         'sourceCapability' => $resolvedSourceCapability,
+        'requireAuditListCapability' => $requiresAuditList,
     ], key($componentKey))
 @endif

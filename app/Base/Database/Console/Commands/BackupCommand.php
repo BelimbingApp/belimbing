@@ -65,6 +65,8 @@ final class BackupCommand extends Command
                 diskName: $diskName,
                 trigger: $this->resolveTrigger(),
                 dryRun: $dryRun,
+                surface: BackupService::SURFACE_CONSOLE,
+                uiElement: $dryRun ? '--dry-run' : 'backup',
             );
         } catch (BackupException $e) {
             $this->components->error($e->getMessage());
@@ -127,7 +129,13 @@ final class BackupCommand extends Command
             return;
         }
 
-        $removed = $service->deleteEntries($diskName, $expired);
+        $removed = $service->deleteEntries(
+            diskName: $diskName,
+            entries: $expired,
+            surface: BackupService::SURFACE_CONSOLE,
+            uiElement: '--prune',
+            keepDays: $policy->keepDays,
+        );
         $this->components->info('Pruned '.count($expired).' backup(s); '.count($removed).' object(s) removed.');
     }
 

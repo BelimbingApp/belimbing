@@ -9,12 +9,23 @@ const gate = resolve(root, "scripts/ci/phpstan-baseline-gate.sh");
 const workflow = Bun.YAML.parse(readFileSync(join(root, ".github/workflows/lint.yml"), "utf8")) as any;
 
 test("quality job runs Larastan then the baseline-count gate", () => {
-    const steps = workflow.jobs.quality.steps as Array<{ name?: string; run?: string }>;
+    const steps = workflow.jobs.quality.steps as Array<{ name?: string; run?: string; "continue-on-error"?: boolean }>;
     const analyse = steps.find((s) => s.name === "Run Larastan on app/Base");
     const countGate = steps.find((s) => s.name === "Refuse PHPStan baseline growth");
+    const unmatched = steps.find((s) => s.name === "Report unmatched PHPStan baseline ignores");
     expect(analyse?.run).toContain("vendor/bin/phpstan analyse");
     expect(countGate?.run).toContain("phpstan-baseline-gate.sh");
     expect(steps.indexOf(analyse!)).toBeLessThan(steps.indexOf(countGate!));
+    expect(unmatched).toBeDefined();
+    expect(unmatched!["continue-on-error"]).toBe(true);
+    expect(unmatched!.run).toContain("reportUnmatchedIgnoredErrors: true");
+    expect(unmatched!.run).toContain("vendor/bin/phpstan analyse");
+    expect(unmatched!.run).toContain("::notice::PHPStan unmatched baseline ignores");
+    // Relative includes from /tmp resolve under /tmp; the override must pin the
+    // project config with an absolute path or the step never analyses anything.
+    expect(unmatched!.run).toContain("${PWD}/phpstan.neon");
+    expect(unmatched!.run).not.toMatch(/includes:\s*\n\s*-\s+phpstan\.neon\s*\n/);
+    expect(steps.indexOf(countGate!)).toBeLessThan(steps.indexOf(unmatched!));
 });
 
 test("baseline gate accepts the committed count and refuses growth", () => {

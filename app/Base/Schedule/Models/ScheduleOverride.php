@@ -2,6 +2,7 @@
 
 namespace App\Base\Schedule\Models;
 
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -11,6 +12,14 @@ use Illuminate\Database\Eloquent\Model;
  * so the board's "Effective" column and the schedule the runtime honors are
  * the same fact (#398). Deleting the row is the reset: the task immediately
  * re-adopts its code-declared default.
+ *
+ * @property int|null $id
+ * @property string|null $source
+ * @property string|null $key
+ * @property string|null $name
+ * @property string|null $expression
+ * @property CarbonInterface|null $created_at
+ * @property CarbonInterface|null $updated_at
  */
 class ScheduleOverride extends Model
 {

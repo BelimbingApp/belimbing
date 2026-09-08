@@ -224,7 +224,15 @@ jobs:
         run: php artisan blb:domain-routes --audit
 
       - name: Audit composed Domain command tenant scope
-        run: php artisan blb:domain-commands --audit
+        run: |
+          audit_status=0
+          audit=$(php artisan blb:domain-commands --audit --json) || audit_status=$?
+          printf '%s\n' "$audit"
+          jq -r '.expiring[]
+            | "\(.name) exempt until \(.expires) (\(.days_left) days)"
+            | gsub("%"; "%25") | gsub("\r"; "%0D") | gsub("\n"; "%0A")
+            | "::warning title=Tenant-scope exemption lapses::" + .' <<< "$audit"
+          exit "$audit_status"
 
       # Platform tests.yml only sees an empty Domains tree; the real hit surface
       # is composed here. Fixture cases stay in SubjectIdRequestScanTest.

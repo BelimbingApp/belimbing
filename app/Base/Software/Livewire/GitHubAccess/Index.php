@@ -4,6 +4,7 @@ namespace App\Base\Software\Livewire\GitHubAccess;
 
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
+use App\Base\Foundation\Contracts\SemanticActionRecorder;
 use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Software\Services\DeploymentService;
 use Illuminate\Contracts\View\View;
@@ -61,6 +62,15 @@ class Index extends Component
 
         $deployment->saveToken($owner, $value);
         unset($this->tokens[$owner], $this->testResults[$owner]);
+
+        // Never put token material in the audit row — subject is the owner only (#918).
+        $this->recordTokenAction(
+            event: 'software.github_token.stored',
+            summary: (string) __('Stored GitHub token for :owner', ['owner' => $owner]),
+            owner: $owner,
+            uiElement: (string) __('Save token'),
+        );
+
         $this->notify(__('Token saved for :owner.', ['owner' => $owner]));
     }
 
@@ -81,7 +91,35 @@ class Index extends Component
 
         $deployment->saveToken($owner, '');
         unset($this->tokens[$owner], $this->testResults[$owner]);
+
+        // Never put token material in the audit row — subject is the owner only (#918).
+        $this->recordTokenAction(
+            event: 'software.github_token.cleared',
+            summary: (string) __('Cleared GitHub token for :owner', ['owner' => $owner]),
+            owner: $owner,
+            uiElement: (string) __('Clear token'),
+        );
+
         $this->notify(__('Token cleared for :owner.', ['owner' => $owner]));
+    }
+
+    private function recordTokenAction(string $event, string $summary, string $owner, string $uiElement): void
+    {
+        app(SemanticActionRecorder::class)->record(
+            event: $event,
+            summary: $summary,
+            source: (string) __('GitHub Access'),
+            subject: [
+                'name' => 'github_owner',
+                'id' => $owner,
+                'identifier' => $owner,
+            ],
+            surface: 'admin.system.software.github-access',
+            uiElement: $uiElement,
+            context: [
+                'owner' => $owner,
+            ],
+        );
     }
 
     public function render(DeploymentService $deployment): View
