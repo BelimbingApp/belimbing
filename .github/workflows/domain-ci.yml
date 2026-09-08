@@ -241,6 +241,12 @@ jobs:
       - name: Scan Domain Livewire for raw subject-id request reads
         run: ./vendor/bin/pest --filter='keeps the production Domain Livewire tree free of unallowlisted subject-id request reads'
 
+      # Same empty-Domains blind spot as the Livewire scan: DomainPestHelperCollisionTest
+      # lives under tests/Unit and only sees a real tree here. One Domain per lane, so
+      # this catches intra-Domain helper collisions; cross-Domain belongs on composed-smoke.
+      - name: Scan composed Domain trees for duplicate Pest helpers
+        run: ./vendor/bin/pest --filter='finds no duplicate Domain Pest helpers on the composed checkout'
+
       # phpunit.xml pins memory_limit at 512M and PHPUnit applies its <ini>
       # after php.ini and -d, so only editing the file raises it. The platform
       # workflow does the same (#537); People's coverage run outgrew 512M (#784).
