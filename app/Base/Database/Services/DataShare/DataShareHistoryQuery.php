@@ -41,6 +41,9 @@ class DataShareHistoryQuery
             'exported',
             'export_failed',
         ],
+        'identity' => [
+            'identity_changed',
+        ],
         'failures' => [
             'fetch_failed',
             'plan_failed',
