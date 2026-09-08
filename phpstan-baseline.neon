@@ -175,6 +175,12 @@ parameters:
 			path: app/Base/Audit/DTO/RequestContext.php
 
 		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditAction\:\:\$is_retained\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Audit/Livewire/AuditLog/Actions.php
+
+		-
 			message: '#^Offset ''id'' on array\{name\: string, id\: int\|string, identifier\?\: string\|null\} in isset\(\) always exists and is not nullable\.$#'
 			identifier: isset.offset
 			count: 1
@@ -187,10 +193,154 @@ parameters:
 			path: app/Base/Audit/Livewire/AuditLog/Concerns/InteractsWithSourceHistory.php
 
 		-
+			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Audit\\Models\\AuditAction\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
+			identifier: property.phpDocType
+			count: 1
+			path: app/Base/Audit/Models/AuditAction.php
+
+		-
 			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Audit\\Models\\AuditMutation\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
 			identifier: property.phpDocType
 			count: 1
 			path: app/Base/Audit/Models/AuditMutation.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditAction\:\:\$actor_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditDomainLifecycleLedger.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditAction\:\:\$actor_type\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditDomainLifecycleLedger.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditAction\:\:\$occurred_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditDomainLifecycleLedger.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditAction\:\:\$payload\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditDomainLifecycleLedger.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditAction\:\:\$event\.$#'
+			identifier: property.notFound
+			count: 6
+			path: app/Base/Audit/Services/AuditLogPresenter.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditAction\:\:\$payload\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditLogPresenter.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditAction\:\:\$url\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditLogPresenter.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$auditable_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditLogPresenter.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$auditable_type\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditLogPresenter.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$new_values\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditLogPresenter.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$old_values\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditLogPresenter.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$subject_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditLogPresenter.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$subject_identifier\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditLogPresenter.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$subject_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditLogPresenter.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$actor_role\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditSourceHistory.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$auditable_id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Audit/Services/AuditSourceHistory.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$auditable_type\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Audit/Services/AuditSourceHistory.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$event\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Base/Audit/Services/AuditSourceHistory.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$occurred_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditSourceHistory.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$source\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditSourceHistory.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$subject_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditSourceHistory.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$subject_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditSourceHistory.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$trace_id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Audit/Services/AuditSourceHistory.php
 
 		-
 			message: '#^Call to an undefined method App\\Base\\Audit\\Services\\AuditSourceHistory\:\:lowerCoalescedExpression\(\)\.$#'
@@ -211,10 +361,82 @@ parameters:
 			path: app/Base/Audit/Services/AuditSourceHistory.php
 
 		-
-			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$company_id\.$#'
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditAction\:\:\$actor_role\.$#'
 			identifier: property.notFound
 			count: 1
-			path: app/Base/Authz/Database/Seeders/Dev/DevAuthzCompanyAssignmentSeeder.php
+			path: app/Base/Audit/Services/AuditTraceTimeline.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditAction\:\:\$event\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditTraceTimeline.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditAction\:\:\$ip_address\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditTraceTimeline.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditAction\:\:\$occurred_at\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Audit/Services/AuditTraceTimeline.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditAction\:\:\$url\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditTraceTimeline.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditAction\:\:\$user_agent\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditTraceTimeline.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$actor_role\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditTraceTimeline.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$auditable_type\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditTraceTimeline.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$event\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Base/Audit/Services/AuditTraceTimeline.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$occurred_at\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Audit/Services/AuditTraceTimeline.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Audit\\Models\\AuditMutation\:\:\$source\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Audit/Services/AuditTraceTimeline.php
+
+		-
+			message: '#^Parameter \#1 \$array of function usort contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 1
+			path: app/Base/Audit/Services/AuditTraceTimeline.php
+
+		-
+			message: '#^Parameter \#2 \$callback of function usort contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 1
+			path: app/Base/Audit/Services/AuditTraceTimeline.php
 
 		-
 			message: '#^Match arm comparison between ''module'' and ''module'' is always true\.$#'
@@ -229,46 +451,10 @@ parameters:
 			path: app/Base/Authz/Livewire/Capabilities/Index.php
 
 		-
-			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$company_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Livewire/Roles/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$email\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Authz/Livewire/Roles/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 4
-			path: app/Base/Authz/Livewire/Roles/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$pivot_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Livewire/Roles/Show.php
-
-		-
 			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Authz\\Models\\DecisionLog\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
 			identifier: property.phpDocType
 			count: 1
 			path: app/Base/Authz/Models/DecisionLog.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\PrincipalCapability\:\:\$principal_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Models/PrincipalCapability.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\PrincipalCapability\:\:\$principal_type\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Models/PrincipalCapability.php
 
 		-
 			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Authz\\Models\\PrincipalCapability\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
@@ -277,46 +463,10 @@ parameters:
 			path: app/Base/Authz/Models/PrincipalCapability.php
 
 		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\PrincipalRole\:\:\$principal_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Models/PrincipalRole.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\PrincipalRole\:\:\$principal_type\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Models/PrincipalRole.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\PrincipalRole\:\:\$role_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Models/PrincipalRole.php
-
-		-
 			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Authz\\Models\\PrincipalRole\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
 			identifier: property.phpDocType
 			count: 1
 			path: app/Base/Authz/Models/PrincipalRole.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\PrincipalCapability\:\:\$capability_key\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Base/Authz/Services/EffectivePermissions.php
-
-		-
-			message: '#^Access to an undefined property App\\Base\\Authz\\Models\\PrincipalCapability\:\:\$is_allowed\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Services/EffectivePermissions.php
-
-		-
-			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Authz/Services/ImpersonationManager.php
 
 		-
 			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
@@ -551,18 +701,6 @@ parameters:
 			identifier: class.notFound
 			count: 1
 			path: app/Base/Database/Livewire/DatabaseTables/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$email\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Database/Livewire/Queries/Show.php
-
-		-
-			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Base/Database/Livewire/Queries/Show.php
 
 		-
 			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Core\\User\\Models\\User\>\:\:map\(\) contains unresolvable type\.$#'
@@ -1189,10 +1327,10 @@ parameters:
 			path: app/Base/Database/Services/TableInspector.php
 
 		-
-			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$company_id\.$#'
+			message: '#^Access to an undefined property App\\Base\\FeatureFlags\\Models\\FeatureFlagOverride\:\:\$enabled\.$#'
 			identifier: property.notFound
-			count: 2
-			path: app/Base/DateTime/Services/DateTimeDisplayService.php
+			count: 1
+			path: app/Base/FeatureFlags/Services/FeatureFlags.php
 
 		-
 			message: '#^Argument of an invalid type stdClass supplied for foreach, only iterables are supported\.$#'
@@ -1429,6 +1567,12 @@ parameters:
 			path: app/Base/Routing/RouteDiscoveryService.php
 
 		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleOverride\:\:\$expression\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Schedule/Livewire/Index.php
+
+		-
 			message: '#^Anonymous function never returns null so it can be removed from the return type\.$#'
 			identifier: return.unusedType
 			count: 1
@@ -1439,6 +1583,84 @@ parameters:
 			identifier: method.notFound
 			count: 1
 			path: app/Base/Schedule/Livewire/Index.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleOverride\:\:\$key\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Schedule/Models/ScheduleOverride.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleOverride\:\:\$source\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Schedule/Models/ScheduleOverride.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleSuppression\:\:\$key\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Schedule/Models/ScheduleSuppression.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleSuppression\:\:\$source\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Schedule/Models/ScheduleSuppression.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleOverride\:\:\$expression\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Schedule/Services/ScheduleBoard.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$exit_code\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Schedule/Services/ScheduleBoard.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$finished_at\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Schedule/Services/ScheduleBoard.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Schedule/Services/ScheduleBoard.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$output_excerpt\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Schedule/Services/ScheduleBoard.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$source\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Schedule/Services/ScheduleBoard.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$started_at\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Schedule/Services/ScheduleBoard.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Base/Schedule/Services/ScheduleBoard.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$triggered_by_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Schedule/Services/ScheduleBoard.php
 
 		-
 			message: '#^Left side of \|\| is always false\.$#'
@@ -1471,6 +1693,18 @@ parameters:
 			path: app/Base/Schedule/Services/ScheduleBoard.php
 
 		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$started_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Schedule/Services/ScheduleHealthService.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Schedule/Services/ScheduleHealthService.php
+
+		-
 			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
 			identifier: function.alreadyNarrowedType
 			count: 2
@@ -1481,6 +1715,48 @@ parameters:
 			identifier: nullCoalesce.property
 			count: 2
 			path: app/Base/Schedule/Services/ScheduleRunOutput.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$finished_at\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Base/Schedule/Services/ScheduleRunRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$output_excerpt\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Schedule/Services/ScheduleRunRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$started_at\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Base/Schedule/Services/ScheduleRunRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Base/Schedule/Services/ScheduleRunRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$trigger\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Schedule/Services/ScheduleRunRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$triggered_by_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Schedule/Services/ScheduleRunRecorder.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Schedule\\Models\\ScheduleRun\:\:\$triggered_by_user_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Schedule/Services/ScheduleRunRecorder.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Console\\Scheduling\\Event\:\:\$blbScheduleRunId\.$#'
@@ -1511,12 +1787,6 @@ parameters:
 			identifier: match.unhandled
 			count: 1
 			path: app/Base/Settings/DTO/SettingDefinition.php
-
-		-
-			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$company_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Base/Settings/Livewire/SettingsForm.php
 
 		-
 			message: '#^PHPDoc type array\<string\> of property App\\Base\\Settings\\Models\\Setting\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
@@ -1651,12 +1921,6 @@ parameters:
 			path: app/Base/System/Console/Commands/TestCommand.php
 
 		-
-			message: '#^Access to an undefined property App\\Core\\User\\Models\\User\:\:\$company_id\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Base/System/Livewire/Localization/Index.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>value" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
@@ -1673,6 +1937,12 @@ parameters:
 			identifier: function.alreadyNarrowedType
 			count: 1
 			path: app/Base/Tenancy/Middleware/ResolveTenantContext.php
+
+		-
+			message: '#^Access to an undefined property App\\Base\\Tenancy\\Models\\Tenant\:\:\$is_platform_operator\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Base/Tenancy/Models/Tenant.php
 
 		-
 			message: '#^PHPDoc type array\<int, string\> of property App\\Base\\Tenancy\\Models\\Tenant\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
