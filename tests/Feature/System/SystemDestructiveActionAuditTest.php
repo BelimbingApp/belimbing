@@ -7,6 +7,7 @@ use App\Base\Log\Livewire\Logs\Show as LogsShow;
 use App\Base\Queue\Livewire\FailedJobs\Index as FailedJobsIndex;
 use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\User\Models\User;
+use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
@@ -123,6 +124,33 @@ it('records system.log.deleted with the filename and byte count before redirecti
             ->and($payload['context']['bytes'] ?? null)->toBe($bytes)
             ->and($payload['context']['filename'] ?? null)->toBe($filename);
     } finally {
+        @unlink($path);
+    }
+});
+
+it('leaves the file and writes no system.log.deleted row when File::delete returns false', function (): void {
+    $user = createAdminUser();
+    $filename = 'system-audit-delete-fail-'.bin2hex(random_bytes(4)).'.log';
+    $path = storage_path('logs/'.$filename);
+    File::put($path, "still-here\n");
+
+    try {
+        File::partialMock()
+            ->shouldReceive('delete')
+            ->once()
+            ->with($path)
+            ->andReturn(false);
+
+        Livewire::actingAs($user)
+            ->test(LogsShow::class, ['filename' => $filename])
+            ->call('deleteFile')
+            ->assertRedirect(route('admin.system.logs.index'))
+            ->assertSessionHas('error');
+
+        expect(File::exists($path))->toBeTrue();
+        expect(systemAuditEvents('system.log.deleted'))->toBe([]);
+    } finally {
+        File::swap(new Filesystem);
         @unlink($path);
     }
 });

@@ -154,9 +154,15 @@ class Show extends Component
         $path = $this->resolvedPath();
         if ($path !== null) {
             $bytes = File::size($path);
-            File::delete($path);
+            if (! File::delete($path)) {
+                // Do not record a successful deletion when the filesystem refused (#898).
+                session()->flash('error', __('Log file could not be deleted.'));
+                $this->redirect(route('admin.system.logs.index'), navigate: true);
 
-            // Record before redirect so Operator Activity sees the deletion (#898).
+                return;
+            }
+
+            // Record only after a confirmed delete so Operator Activity stays truthful (#898).
             app(SemanticActionRecorder::class)->record(
                 event: 'system.log.deleted',
                 summary: __('Deleted log file :file', ['file' => $this->filename]),
