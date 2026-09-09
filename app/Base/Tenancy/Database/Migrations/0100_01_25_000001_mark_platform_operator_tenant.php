@@ -5,6 +5,10 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
+if (! class_exists(PlatformOperatorTenantMigrationException::class, false)) {
+    final class PlatformOperatorTenantMigrationException extends RuntimeException {}
+}
+
 return new class extends Migration
 {
     private const string OPERATOR_INDEX = 'tenants_one_platform_operator';
@@ -34,13 +38,13 @@ return new class extends Migration
         $legacyOperator = DB::table('tenants')->where('id', 1)->first();
 
         if ($legacyOperator === null && DB::table('tenants')->exists()) {
-            throw new RuntimeException(
+            throw new PlatformOperatorTenantMigrationException(
                 'Cannot identify the platform-operator tenant: legacy tenant id 1 does not exist. Restore it or designate the operator before retrying the migration.'
             );
         }
 
         if ($legacyOperator?->deleted_at !== null) {
-            throw new RuntimeException(
+            throw new PlatformOperatorTenantMigrationException(
                 'Cannot designate legacy tenant id 1 as the platform operator because it is soft-deleted. Restore the tenant before retrying the migration.'
             );
         }
@@ -68,7 +72,7 @@ return new class extends Migration
             ->get(['id', 'deleted_at']);
 
         if ($operators->count() > 1) {
-            throw new RuntimeException(
+            throw new PlatformOperatorTenantMigrationException(
                 'Cannot roll back explicit platform-operator identity while multiple tenants are marked as the operator.'
             );
         }
@@ -76,13 +80,13 @@ return new class extends Migration
         $operator = $operators->first();
 
         if ($operator?->deleted_at !== null) {
-            throw new RuntimeException(
+            throw new PlatformOperatorTenantMigrationException(
                 'Cannot roll back explicit platform-operator identity while the marked operator tenant is soft-deleted.'
             );
         }
 
         if ($operator !== null && (int) $operator->id !== 1) {
-            throw new RuntimeException(
+            throw new PlatformOperatorTenantMigrationException(
                 'Cannot roll back explicit platform-operator identity after a non-legacy operator tenant has been used.'
             );
         }

@@ -13,7 +13,9 @@
         $isTopLevelContainer = $item->isContainer() && $item->parent === null;
         // Debug-only tooltip: source attribution helps identify whether an item
         // came from BLB core or an extension when something looks wrong.
-        $tooltip = __($item->label);
+        $translatedLabel = __($item->label);
+        $label = is_string($translatedLabel) ? $translatedLabel : $item->label;
+        $tooltip = $label;
         if (config('app.debug') && $item->sourceFile) {
             $tooltip .= "\n[".$item->id.($item->sourceModule ? ' · '.$item->sourceModule : '').']'
                 ."\n".$item->sourceFile;
@@ -31,7 +33,7 @@
                 href="{{ $href }}"
                 @if($item->route) wire:navigate @endif
                 class="flex items-center justify-center w-full h-8 rounded-none transition text-link hover:bg-surface-subtle data-[current]:bg-surface-card data-[current]:text-ink"
-                aria-label="{{ __($item->label) }}"
+                aria-label="{{ $label }}"
                 title="{{ $tooltip }}"
             >
                 <x-icon :name="$iconName" class="w-[1.125rem] h-[1.125rem]" />
@@ -67,7 +69,7 @@
                 @if($item->route) wire:navigate @endif
                 class="truncate flex-1 font-normal text-link data-[current]:text-accent"
                 title="{{ $tooltip }}"
-            >{{ __($item->label) }}</a>
+            >{{ $label }}</a>
 
             {{-- Pin/unpin toggle (visible on hover) --}}
             <button
@@ -76,7 +78,7 @@
                 class="shrink-0 w-4 h-4 transition-opacity"
                 :class="isPinnedByUrl('{{ $href }}') ? 'text-accent opacity-100' : 'text-muted hover:text-ink opacity-0 group-hover:opacity-100'"
                 :title="isPinnedByUrl('{{ $href }}') ? '{{ __('Unpin') }}' : '{{ __('Pin to top') }}'"
-                :aria-label="isPinnedByUrl('{{ $href }}') ? '{{ __('Unpin :item', ['item' => $item->label]) }}' : '{{ __('Pin :item to top', ['item' => $item->label]) }}'"
+                :aria-label="isPinnedByUrl('{{ $href }}') ? '{{ __('Unpin :item', ['item' => $label]) }}' : '{{ __('Pin :item to top', ['item' => $label]) }}'"
             >
                 <x-icon name="heroicon-o-pin" class="w-3.5 h-3.5" />
             </button>
@@ -90,7 +92,7 @@
                 type="button"
                 @click="expanded = !expanded"
                 class="flex items-center justify-center w-full h-8 rounded-none transition {{ $isTopLevelContainer ? 'text-accent' : 'text-link hover:bg-surface-subtle group-has-[[data-current]]/menuitem:text-ink' }}"
-                aria-label="{{ __($item->label) }}"
+                aria-label="{{ $label }}"
                 title="{{ $tooltip }}"
             >
                 <x-icon :name="$iconName" class="w-[1.125rem] h-[1.125rem]" />
@@ -110,7 +112,7 @@
                 <span x-show="expanded">&#x2BC6;</span>
             </span>
 
-            <span class="truncate">{{ __($item->label) }}</span>
+            <span class="truncate">{{ $label }}</span>
         </div>
     @endif
 

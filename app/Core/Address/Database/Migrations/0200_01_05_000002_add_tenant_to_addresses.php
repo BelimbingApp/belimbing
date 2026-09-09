@@ -9,6 +9,10 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
+if (! class_exists(AddressTenantBackfillMigrationException::class, false)) {
+    final class AddressTenantBackfillMigrationException extends RuntimeException {}
+}
+
 return new class extends Migration
 {
     public function up(): void
@@ -90,7 +94,7 @@ return new class extends Migration
         }
 
         if ($ambiguous !== []) {
-            throw new RuntimeException(
+            throw new AddressTenantBackfillMigrationException(
                 'Cannot backfill address tenancy: '.implode('; ', $ambiguous)
                 .'. Assign each address to exactly one tenant-owned company or employee before retrying.'
             );
@@ -104,7 +108,7 @@ return new class extends Migration
             ->all();
 
         if ($missingTenantIds !== []) {
-            throw new RuntimeException(
+            throw new AddressTenantBackfillMigrationException(
                 'Cannot backfill address tenancy because linked records reference missing tenant IDs ['
                 .implode(', ', $missingTenantIds).']. Repair those tenant assignments before retrying.'
             );
@@ -131,7 +135,7 @@ return new class extends Migration
             $tenantId = match ($addressableType) {
                 Company::class => $this->companyTenantId((int) $link->addressable_id),
                 Employee::class => $this->employeeTenantId((int) $link->addressable_id),
-                default => throw new RuntimeException(
+                default => throw new AddressTenantBackfillMigrationException(
                     'Cannot backfill address '.$addressId.' because addressable type '
                     .$link->addressable_type.' has no tenant ownership mapping.'
                 ),

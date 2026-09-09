@@ -22,6 +22,8 @@ use Illuminate\Contracts\Foundation\Application;
  */
 final class ModuleCheck
 {
+    private const EMPTY_REPORT_LINE = '  (none)';
+
     public function __construct(
         private readonly Application $app,
         private readonly ModuleTableOwnershipScanner $tableOwnership,
@@ -165,7 +167,7 @@ final class ModuleCheck
         ];
 
         if ($report['composition'] === []) {
-            $lines[] = '  (none)';
+            $lines[] = self::EMPTY_REPORT_LINE;
         } else {
             foreach ($report['composition'] as $id) {
                 $lines[] = '  - '.$id;
@@ -174,7 +176,7 @@ final class ModuleCheck
 
         $lines[] = 'refusals:';
         if ($report['refusals'] === []) {
-            $lines[] = '  (none)';
+            $lines[] = self::EMPTY_REPORT_LINE;
         } else {
             foreach ($report['refusals'] as $refusal) {
                 $lines[] = '  - '.$refusal;
@@ -183,7 +185,7 @@ final class ModuleCheck
 
         $lines[] = 'routes:';
         if ($report['routes'] === []) {
-            $lines[] = '  (none)';
+            $lines[] = self::EMPTY_REPORT_LINE;
         } else {
             foreach ($report['routes'] as $route) {
                 $lines[] = '  - '.$route;
@@ -192,7 +194,7 @@ final class ModuleCheck
 
         $lines[] = 'tables:';
         if ($report['tables'] === []) {
-            $lines[] = '  (none)';
+            $lines[] = self::EMPTY_REPORT_LINE;
         } else {
             foreach ($report['tables'] as $table) {
                 $lines[] = '  - '.$table;
@@ -201,7 +203,7 @@ final class ModuleCheck
 
         $lines[] = 'bindings:';
         if ($report['bindings'] === []) {
-            $lines[] = '  (none)';
+            $lines[] = self::EMPTY_REPORT_LINE;
         } else {
             foreach ($report['bindings'] as $binding) {
                 $lines[] = '  - '.$binding['abstract'].' ['.($binding['resolved'] ? 'resolved' : 'missing').']';
@@ -232,7 +234,7 @@ final class ModuleCheck
         $lines = ['domain modules:'];
 
         if ($report['modules'] === []) {
-            $lines[] = '  (none)';
+            $lines[] = self::EMPTY_REPORT_LINE;
         } else {
             foreach ($report['modules'] as $module) {
                 $lines[] = '  - '.$module;
@@ -241,7 +243,7 @@ final class ModuleCheck
 
         $lines[] = 'refusals:';
         if ($report['refusals'] === []) {
-            $lines[] = '  (none)';
+            $lines[] = self::EMPTY_REPORT_LINE;
         } else {
             foreach ($report['refusals'] as $refusal) {
                 $lines[] = '  - '.$refusal;

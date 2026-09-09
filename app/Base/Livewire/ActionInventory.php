@@ -14,6 +14,8 @@ use Symfony\Component\Finder\Finder;
 
 final class ActionInventory
 {
+    private const ALL_COMPONENTS_LABEL = 'all components';
+
     public function __construct(private ComponentDiscoveryService $discovery) {}
 
     /**
@@ -150,10 +152,10 @@ final class ActionInventory
                 'baseline' => $limit,
                 'new_actions' => $newActions,
                 'message' => $strictNames && $namesChanged
-                    ? 'Livewire action names changed for '.($domain ?? 'all components').'; review the snapshot and update it with --write-baseline.'
+                    ? 'Livewire action names changed for '.($domain ?? self::ALL_COMPONENTS_LABEL).'; review the snapshot and update it with --write-baseline.'
                     : sprintf(
                         'Livewire action debt rose for %s: %d module-owned unreferenced actions (baseline %d). Cover new actions or raise only with justification.',
-                        $domain ?? 'all components',
+                        $domain ?? self::ALL_COMPONENTS_LABEL,
                         $current,
                         $limit,
                     ),
@@ -166,7 +168,7 @@ final class ActionInventory
             'baseline' => $limit,
             'message' => sprintf(
                 'Livewire action debt for %s is %d (baseline %d).%s',
-                $domain ?? 'all components',
+                $domain ?? self::ALL_COMPONENTS_LABEL,
                 $current,
                 $limit,
                 $current < $limit
@@ -213,9 +215,9 @@ final class ActionInventory
 
         $references = [];
         foreach ((new Finder)->files()->name('*.php')->followLinks()->in($directories)->sortByName() as $file) {
-            preg_match_all('/\b[A-Za-z_][A-Za-z0-9_]*\b/', $file->getContents(), $tokens);
+            preg_match_all('/\b[A-Za-z_]\w*\b/', $file->getContents(), $tokens);
             foreach (array_intersect_key(array_fill_keys($tokens[0], true), $methods) as $method => $_) {
-                $references[$method][] = str_replace(base_path().'/', '', $file->getPathname());
+                $references[$method][] = $this->relativeTestPath($file->getPathname());
             }
         }
 
@@ -225,5 +227,13 @@ final class ActionInventory
         }
 
         return $references;
+    }
+
+    private function relativeTestPath(string $path): string
+    {
+        $path = str_replace('\\', '/', $path);
+        $basePath = rtrim(str_replace('\\', '/', base_path()), '/').'/';
+
+        return str_starts_with($path, $basePath) ? substr($path, strlen($basePath)) : $path;
     }
 }

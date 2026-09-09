@@ -36,12 +36,12 @@ final readonly class GuardMutationSuggester
     private function referencedProductionFiles(string $testContents): array
     {
         preg_match_all(
-            '/^\s*use\s+(App\\\\[A-Za-z_][A-Za-z0-9_\\\\]*)(?:\s+as\s+[A-Za-z_][A-Za-z0-9_]*)?\s*;/m',
+            '/^\s*use\s+(App\\\\[A-Za-z_][\w\\\\]*)(?:\s+as\s+[A-Za-z_]\w*)?\s*;/m',
             $testContents,
             $imports,
         );
         preg_match_all(
-            '/(?<![A-Za-z0-9_\\\\])(App\\\\(?:[A-Za-z_][A-Za-z0-9_]*\\\\)*[A-Za-z_][A-Za-z0-9_]*)/',
+            '/(?<![\w\\\\])(App\\\\(?:[A-Za-z_]\w*\\\\)*[A-Za-z_]\w*)/',
             $testContents,
             $qualifiedNames,
         );
@@ -53,7 +53,7 @@ final readonly class GuardMutationSuggester
             $real = realpath($candidate);
 
             if ($real !== false && is_file($real)) {
-                $files[] = $real;
+                $files[] = str_replace('\\', '/', $real);
             }
         }
 
@@ -71,7 +71,7 @@ final readonly class GuardMutationSuggester
         foreach ($lines as $index => $line) {
             $directGuard = preg_match('/\babort_unless\s*\(/', $line) === 1
                 || preg_match('/\bthrow\s+new\b/', $line) === 1
-                || preg_match('/->where\s*\(\s*([\'\"])(?:[A-Za-z0-9_]+\.)?(?:tenant_id|company_id)\1/', $line) === 1;
+                || preg_match('/->where\s*\(\s*([\'\"])(?:\w+\.)?(?:tenant_id|company_id)\1/', $line) === 1;
             $conditionalExit = preg_match('/\bif\s*\(.*\)\s*\{?\s*(?:return|throw)\b/', $line) === 1
                 || ($this->isReturnLine($line) && $this->previousLineOpensIf($lines, $index));
 
@@ -109,16 +109,17 @@ final readonly class GuardMutationSuggester
 
     private function resolveFile(string $path, string $kind): string
     {
-        $candidate = str_starts_with($path, DIRECTORY_SEPARATOR)
+        $candidate = $this->isAbsolutePath($path)
             ? $path
-            : $this->root().'/'.ltrim($path, '/');
+            : $this->root().'/'.ltrim(str_replace('\\', '/', $path), '/');
         $real = realpath($candidate);
+        $normalized = $real === false ? false : str_replace('\\', '/', $real);
 
-        if ($real === false || ! is_file($real) || ! str_starts_with($real, $this->root().'/')) {
+        if ($normalized === false || ! is_file($normalized) || ! str_starts_with($normalized, $this->root().'/')) {
             throw new GuardMutationException(ucfirst($kind)." file [{$path}] does not exist inside the application root.");
         }
 
-        return $real;
+        return $normalized;
     }
 
     private function read(string $path): string
@@ -133,6 +134,8 @@ final readonly class GuardMutationSuggester
 
     private function displayPath(string $path): string
     {
+        $path = str_replace('\\', '/', $path);
+
         return ltrim(substr($path, strlen($this->root())), '/');
     }
 
@@ -144,6 +147,11 @@ final readonly class GuardMutationSuggester
             throw new GuardMutationException('Application root does not exist.');
         }
 
-        return rtrim($root, '/');
+        return rtrim(str_replace('\\', '/', $root), '/');
+    }
+
+    private function isAbsolutePath(string $path): bool
+    {
+        return preg_match('/^(?:[A-Za-z]:[\/\\\\]|[\/\\\\])/', $path) === 1;
     }
 }

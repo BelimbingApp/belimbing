@@ -141,7 +141,7 @@ final class DomainTableBoundaryRule implements Rule
     {
         $tables = [];
         foreach ($statements as $statement) {
-            if (preg_match_all('/\b(?:from|join)\s+[`"]?([a-zA-Z_][a-zA-Z0-9_]*)[`"]?/i', $statement, $matches)) {
+            if (preg_match_all('/\b(?:from|join)\s+[`"]?([a-z_]\w*)[`"]?/i', $statement, $matches)) {
                 $tables = [...$tables, ...$matches[1]];
             }
         }
