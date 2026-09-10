@@ -53,7 +53,7 @@ final readonly class GuardMutationSuggester
             $real = realpath($candidate);
 
             if ($real !== false && is_file($real)) {
-                $files[] = str_replace('\\', '/', $real);
+                $files[] = $this->normalizePath($real);
             }
         }
 
@@ -113,7 +113,7 @@ final readonly class GuardMutationSuggester
             ? $path
             : $this->root().'/'.ltrim(str_replace('\\', '/', $path), '/');
         $real = realpath($candidate);
-        $normalized = $real === false ? false : str_replace('\\', '/', $real);
+        $normalized = $real === false ? false : $this->normalizePath($real);
 
         if ($normalized === false || ! is_file($normalized) || ! str_starts_with($normalized, $this->root().'/')) {
             throw new GuardMutationException(ucfirst($kind)." file [{$path}] does not exist inside the application root.");
@@ -134,7 +134,7 @@ final readonly class GuardMutationSuggester
 
     private function displayPath(string $path): string
     {
-        $path = str_replace('\\', '/', $path);
+        $path = $this->normalizePath($path);
 
         return ltrim(substr($path, strlen($this->root())), '/');
     }
@@ -147,11 +147,16 @@ final readonly class GuardMutationSuggester
             throw new GuardMutationException('Application root does not exist.');
         }
 
-        return rtrim(str_replace('\\', '/', $root), '/');
+        return rtrim($this->normalizePath($root), '/');
     }
 
     private function isAbsolutePath(string $path): bool
     {
         return preg_match('/^(?:[A-Za-z]:[\/\\\\]|[\/\\\\])/', $path) === 1;
+    }
+
+    private function normalizePath(string $path): string
+    {
+        return str_replace('\\', '/', $path);
     }
 }
