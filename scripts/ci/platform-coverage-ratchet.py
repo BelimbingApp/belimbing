@@ -3,8 +3,8 @@
 
 Combines PHPUnit/Pest Clover reports by source file and statement line identity.
 A statement is covered if any shard executed it. PR checks fail when the line rate falls
-more than ``tolerance_pp`` percentage points below the baseline. On main, the
-baseline is raised (never lowered) when the measured rate is higher.
+more than ``tolerance_pp`` percentage points below the baseline. The explicit update command raises (never lowers) the
+baseline for deliberate inclusion in a coverage-improving PR.
 """
 
 from __future__ import annotations
