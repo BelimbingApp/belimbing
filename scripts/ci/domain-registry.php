@@ -54,10 +54,15 @@ function registryFail(string $message): never
 }
 
 /**
- * The GitHub owner of a remote URL, in either SSH or HTTPS spelling, including
- * the token-bearing HTTPS form actions/checkout writes. Null when the URL is
- * not a recognisable GitHub remote, so a non-GitHub remote is skipped rather
- * than guessed at.
+ * The GitHub.com owner of a remote URL, in either SSH or HTTPS spelling,
+ * including the token-bearing HTTPS form actions/checkout writes.
+ *
+ * The host must be github.com exactly. A near-miss like github.internal.example
+ * is a different service: taking its path segment as an owner and then cloning
+ * `https://github.com/<owner>/…` would fetch an unrelated public repository and
+ * compose it as though the checkout had vouched for it (#944 review). An
+ * enterprise or self-hosted remote is skipped, never translated; set
+ * BLB_DOMAIN_OWNERS to say who owns the Domains in that case.
  */
 function remoteOwner(string $url): ?string
 {
@@ -65,14 +70,22 @@ function remoteOwner(string $url): ?string
     if ($url === '') {
         return null;
     }
-    if (preg_match('#^[^@]+@[^:]+:([^/]+)/#', $url, $ssh) === 1) {
-        return $ssh[1];
+    if (preg_match('#^[^@/]+@([^:/]+):([^/]+)/#', $url, $ssh) === 1) {
+        return isGitHubHost($ssh[1]) ? $ssh[2] : null;
     }
-    if (preg_match('#^[a-z+]+://(?:[^@/]+@)?[^/]+/([^/]+)/#', $url.'/', $https) === 1) {
-        return $https[1];
+    if (preg_match('#^[a-z+]+://(?:[^@/]+@)?([^/]+)/([^/]+)/#', $url.'/', $https) === 1) {
+        return isGitHubHost($https[1]) ? $https[2] : null;
     }
 
     return null;
+}
+
+/** github.com itself, with an optional port, and nothing that merely resembles it. */
+function isGitHubHost(string $host): bool
+{
+    $host = strtolower((string) preg_replace('/:\d+$/', '', $host));
+
+    return $host === 'github.com' || $host === 'www.github.com';
 }
 
 /**
