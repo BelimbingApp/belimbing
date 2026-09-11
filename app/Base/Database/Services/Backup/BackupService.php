@@ -214,12 +214,13 @@ final class BackupService
 
         $actualHash = $this->hashRemoteArtifact($disk, $artifactPath);
         $ok = $actualHash === $expectedHash && $expectedHash !== '';
+        $backupLabel = $backupId !== '' ? $backupId : $manifestPath;
 
         $this->record(
             event: $ok ? self::EVENT_VERIFIED : self::EVENT_VERIFY_FAILED,
             summary: $ok
-                ? __('Verified database backup :id', ['id' => $backupId !== '' ? $backupId : $manifestPath])
-                : __('Verify failed for database backup :id', ['id' => $backupId !== '' ? $backupId : $manifestPath]),
+                ? __('Verified database backup :id', ['id' => $backupLabel])
+                : __('Verify failed for database backup :id', ['id' => $backupLabel]),
             manifestPath: $manifestPath,
             sha256: $expectedHash,
             surface: $surface,

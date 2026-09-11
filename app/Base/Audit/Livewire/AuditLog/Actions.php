@@ -47,6 +47,14 @@ class Actions extends Component
 
     private const SQL_LIKE_PLACEHOLDER = ' like ?';
 
+    private const RESET_PAGE_PROPERTIES = [
+        'filterActorType',
+        'filterEventFamily',
+        'filterResult',
+        'filterDiagnostics',
+        'allTenants',
+    ];
+
     private const SORTABLE = [
         'occurred_at' => 'base_audit_actions.occurred_at',
         'event' => 'base_audit_actions.event',
@@ -67,29 +75,11 @@ class Actions extends Component
         );
     }
 
-    public function updatedFilterActorType(): void
+    public function updated(string $name): void
     {
-        $this->resetPage();
-    }
-
-    public function updatedFilterEventFamily(): void
-    {
-        $this->resetPage();
-    }
-
-    public function updatedFilterResult(): void
-    {
-        $this->resetPage();
-    }
-
-    public function updatedFilterDiagnostics(): void
-    {
-        $this->resetPage();
-    }
-
-    public function updatedAllTenants(): void
-    {
-        $this->resetPage();
+        if (in_array($name, self::RESET_PAGE_PROPERTIES, true)) {
+            $this->resetPage();
+        }
     }
 
     public function toggleRetain(int $id): void

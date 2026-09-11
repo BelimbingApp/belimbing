@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\Foundation\ApplicationTopology;
 use App\Base\Foundation\Contracts\DomainRuntimeReloader;
 use App\Base\Foundation\Livewire\Domains;
 use App\Base\Foundation\Services\DomainState;
@@ -221,7 +222,7 @@ it('installs an available domain and redirects back', function (): void {
         ->call('install', DOMAINS_DOMAIN)
         ->assertRedirect(route('admin.system.software.domains.index'));
 
-    Process::assertRan(fn ($process): bool => gitCommandWithoutConfig($process->command) === ['git', 'clone', DOMAINS_REPO, app_path(DOMAINS_PATH)]);
+    Process::assertRan(fn ($process): bool => gitCommandWithoutConfig($process->command) === ['git', 'clone', DOMAINS_REPO, ApplicationTopology::domainPath(DOMAINS_DOMAIN)]);
 });
 
 it('disables and re-enables an installed domain', function (): void {
@@ -282,5 +283,5 @@ it('blocks lifecycle actions for users without the manage capability', function 
     Livewire::test(Domains::class)->call('disable', DOMAINS_DOMAIN)->assertForbidden();
     Livewire::test(Domains::class)->call('openUninstall', DOMAINS_DOMAIN)->assertForbidden();
 
-    Process::assertDidntRun(fn ($process): bool => gitCommandWithoutConfig($process->command) === ['git', 'clone', DOMAINS_REPO, app_path(DOMAINS_PATH)]);
+    Process::assertDidntRun(fn ($process): bool => gitCommandWithoutConfig($process->command) === ['git', 'clone', DOMAINS_REPO, ApplicationTopology::domainPath(DOMAINS_DOMAIN)]);
 });

@@ -3,6 +3,10 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 
+if (! class_exists(PrimaryCompanyBackfillMigrationException::class, false)) {
+    final class PrimaryCompanyBackfillMigrationException extends RuntimeException {}
+}
+
 return new class extends Migration
 {
     public function up(): void
@@ -30,7 +34,7 @@ return new class extends Migration
                     ->exists();
 
                 if (! $designatedCompanyIsLive) {
-                    throw new RuntimeException(
+                    throw new PrimaryCompanyBackfillMigrationException(
                         'Cannot preserve the designated primary company '.$existingAssignment->company_id
                         .' for tenant '.$tenant->id.' because it is missing, soft-deleted, or belongs to another tenant.'
                     );
@@ -57,14 +61,14 @@ return new class extends Migration
                 ]);
 
                 if ($legacyOperatorCompany !== null && (int) $legacyOperatorCompany->tenant_id !== (int) $tenant->id) {
-                    throw new RuntimeException(
+                    throw new PrimaryCompanyBackfillMigrationException(
                         'Cannot backfill the platform-operator primary company because legacy company id 1 belongs to tenant '
                         .$legacyOperatorCompany->tenant_id.' instead of operator tenant '.$tenant->id.'. Repair the tenant assignment before retrying.'
                     );
                 }
 
                 if ($legacyOperatorCompany?->deleted_at !== null) {
-                    throw new RuntimeException(
+                    throw new PrimaryCompanyBackfillMigrationException(
                         'Cannot backfill the platform-operator primary company because legacy company id 1 is soft-deleted. Restore it before retrying.'
                     );
                 }
@@ -89,7 +93,7 @@ return new class extends Migration
                     .$tenantId.' has candidates ['.implode(', ', $companyIds).']')
                 ->implode('; ');
 
-            throw new RuntimeException(
+            throw new PrimaryCompanyBackfillMigrationException(
                 'Cannot backfill primary companies because the selection is ambiguous: '
                 .$details.'. Insert an explicit same-tenant relationship into tenant_primary_companies, or repair the candidate data, then retry.'
             );

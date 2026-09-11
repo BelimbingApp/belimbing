@@ -143,7 +143,7 @@ printf '{"directories":{"Alpha":{"wall_seconds":10},"Beta":{"wall_seconds":6},"G
 printf '{"shards":{"a":["Alpha","Beta"],"b":["Gamma"]}}' > "$shard_file"
 python3 scripts/ci/platform-feature-shards.py --root "$shard_root" --shards-file "$shard_file" --timings-file "$shard_root/timings.json" --write-balanced >/dev/null
 balanced=$(python3 -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1]))["shards"], sort_keys=True))' "$shard_file")
-if [ "$balanced" != '{"a": ["Alpha"], "b": ["Beta", "Gamma"]}' ]; then
+if [[ "$balanced" != '{"a": ["Alpha"], "b": ["Beta", "Gamma"]}' ]]; then
     echo "Feature shard balancer did not apply longest-processing-time: $balanced" >&2; exit 1
 fi
 rm -rf "$shard_root"
@@ -170,7 +170,7 @@ python3 scripts/ci/platform-feature-shard-timings.py \
     --root "$timings_refresh_root" \
     --write >/dev/null
 refreshed=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1]))["directories"]; print(d["Alpha"]["wall_seconds"], d["Beta"]["wall_seconds"])' "$timings_refresh_root/summary.json")
-if [ "$refreshed" != "30.0 20.0" ]; then
+if [[ "$refreshed" != "30.0 20.0" ]]; then
     echo "Feature shard timing refresh did not rewrite directory walls: $refreshed" >&2
     exit 1
 fi
@@ -212,7 +212,7 @@ python3 scripts/ci/platform-feature-shard-timings.py --suite=Unit \
     --root "$timings_refresh_root" \
     --write >/dev/null
 refreshed=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1]))["directories"]; print(d["Alpha"]["wall_seconds"], d["Beta"]["wall_seconds"])' "$timings_refresh_root/summary.json")
-if [ "$refreshed" != "30.0 20.0" ]; then
+if [[ "$refreshed" != "30.0 20.0" ]]; then
     echo "Unit shard timing refresh did not rewrite directory walls: $refreshed" >&2
     exit 1
 fi
@@ -475,7 +475,7 @@ trap 'rm -rf "$mount_guard_fixture"' EXIT
         cd "$shallow_clone"
         guard_status=0
         bash "$root/scripts/ci/mount-guard.sh" "$base" "$refreshed_head" >/dev/null 2>&1 || guard_status=$?
-        if [ "$guard_status" -le 1 ]; then
+        if [[ "$guard_status" -le 1 ]]; then
             echo "mount-guard.sh judged a range with missing objects (exit $guard_status); it must fail closed" >&2
             exit 1
         fi
@@ -667,7 +667,8 @@ PY
         smoke_sha[$mount]=$(git -C "$smoke_root/app/Domains/$mount" rev-parse HEAD)
     done
     smoke_descriptor() {
-        python3 - "$smoke_root/scripts/ci/domain-repos.json" "$1" "$2" <<'PY'
+        local people_sha="$1" connector_sha="$2"
+        python3 - "$smoke_root/scripts/ci/domain-repos.json" "$people_sha" "$connector_sha" <<'PY'
 import json, sys
 json.dump({"domains": {
     "people": {"repo": "BelimbingApp/blb-people", "path": "app/Domains/People", "ref": sys.argv[2]},
@@ -676,7 +677,8 @@ json.dump({"domains": {
 PY
     }
     smoke_surface() {
-        python3 - "$smoke_root/scripts/ci/composed-surface.json" "$1" "$2" "$3" "$4" <<'PY'
+        local people_sha="$1" connector_sha="$2" route_count="$3" route_names="$4"
+        python3 - "$smoke_root/scripts/ci/composed-surface.json" "$people_sha" "$connector_sha" "$route_count" "$route_names" <<'PY'
 import json, sys
 json.dump({"pins": {"people": sys.argv[2], "people-connector": sys.argv[3]}, "domain_route_count": int(sys.argv[4]), "route_names": sys.argv[5].split(",")}, open(sys.argv[1], "w"))
 PY
@@ -1894,7 +1896,8 @@ it('enrols through API the pin already has', function (): void {
 LANE
 
 pin_registry() {
-    python3 - "$pin_fixture/registry.json" "$1" <<'PIN_REG'
+    local people_sha="$1"
+    python3 - "$pin_fixture/registry.json" "$people_sha" <<'PIN_REG'
 import json, sys
 json.dump({
     "schema_version": 1,

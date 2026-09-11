@@ -5,6 +5,10 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
+if (! class_exists(CustomAuthorizationRoleScopingMigrationException::class, false)) {
+    final class CustomAuthorizationRoleScopingMigrationException extends RuntimeException {}
+}
+
 return new class extends Migration
 {
     private const string CHECK_CONSTRAINT = 'base_authz_roles_custom_company_check';
@@ -50,7 +54,7 @@ return new class extends Migration
                     ->first(['companies.id']);
 
             if ($operator === null || $primaryCompany === null) {
-                throw new RuntimeException(
+                throw new CustomAuthorizationRoleScopingMigrationException(
                     'Cannot scope legacy custom global roles because the platform-operator tenant has no valid primary company. Provision or repair that relationship before retrying.'
                 );
             }
@@ -91,7 +95,7 @@ return new class extends Migration
             ->all();
 
         if ($invalidAssignments !== []) {
-            throw new RuntimeException(
+            throw new CustomAuthorizationRoleScopingMigrationException(
                 'Cannot scope custom roles because these assignments have no company or cross a tenant boundary: '
                 .implode('; ', $invalidAssignments)
                 .'. Assign each role only within its owning tenant before retrying.'
@@ -197,7 +201,7 @@ return new class extends Migration
             ->all();
 
         if ($invalidSystemRoleIds !== [] || $missingCompanyRoleIds !== []) {
-            throw new RuntimeException(
+            throw new CustomAuthorizationRoleScopingMigrationException(
                 'Cannot enforce role ownership integrity. System roles with a company: '
                 .($invalidSystemRoleIds === [] ? 'none' : implode(', ', $invalidSystemRoleIds))
                 .'; custom roles without an existing company: '

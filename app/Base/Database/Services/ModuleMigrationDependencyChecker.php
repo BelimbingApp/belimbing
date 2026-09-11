@@ -364,7 +364,7 @@ final class ModuleMigrationDependencyChecker
             $owners = [];
 
             foreach ($byModule as $module => $file) {
-                $owners[] = sprintf('%s (%s)', $module, $file);
+                $owners[] = sprintf('%s (%s)', $module, $this->displayPath($file));
             }
 
             $lines[] = sprintf(
@@ -384,5 +384,17 @@ final class ModuleMigrationDependencyChecker
     private function normalizePath(string $path): string
     {
         return rtrim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path), DIRECTORY_SEPARATOR);
+    }
+
+    private function displayPath(string $path): string
+    {
+        $normalizedPath = str_replace('\\', '/', $path);
+        $basePath = rtrim(str_replace('\\', '/', base_path()), '/').'/';
+
+        if (! str_starts_with($normalizedPath, $basePath)) {
+            return $normalizedPath;
+        }
+
+        return rtrim(base_path(), '/\\').DIRECTORY_SEPARATOR.substr($normalizedPath, strlen($basePath));
     }
 }

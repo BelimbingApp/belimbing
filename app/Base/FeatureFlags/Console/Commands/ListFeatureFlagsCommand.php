@@ -43,7 +43,7 @@ final class ListFeatureFlagsCommand extends Command
             array_map(static fn (array $row): array => [
                 $row['flag'],
                 $row['module'] ?? '—',
-                $row['default'] === null ? '—' : ($row['default'] ? 'true' : 'false'),
+                self::formatNullableBoolean($row['default']),
                 $row['enabled'] ? 'true' : 'false',
                 $row['overridden'] ? 'yes' : 'no',
                 $row['orphaned'] ? 'yes' : 'no',
@@ -52,5 +52,14 @@ final class ListFeatureFlagsCommand extends Command
         );
 
         return self::SUCCESS;
+    }
+
+    private static function formatNullableBoolean(mixed $value): string
+    {
+        if ($value === null) {
+            return '—';
+        }
+
+        return $value ? 'true' : 'false';
     }
 }

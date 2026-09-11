@@ -5,6 +5,10 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
+if (! class_exists(CompanyTenantIntegrityMigrationException::class, false)) {
+    final class CompanyTenantIntegrityMigrationException extends RuntimeException {}
+}
+
 return new class extends Migration
 {
     public function up(): void
@@ -20,7 +24,7 @@ return new class extends Migration
             ->all();
 
         if ($orphanTenantIds !== []) {
-            throw new RuntimeException(
+            throw new CompanyTenantIntegrityMigrationException(
                 'Cannot enforce company tenancy: companies reference missing tenant IDs ['
                 .implode(', ', $orphanTenantIds).']. Repair those assignments before retrying.'
             );
@@ -39,7 +43,7 @@ return new class extends Migration
             ->all();
 
         if ($invalidParents !== []) {
-            throw new RuntimeException(
+            throw new CompanyTenantIntegrityMigrationException(
                 'Cannot enforce tenant-safe company hierarchy: '.implode('; ', $invalidParents)
                 .'. Reassign or clear those parents before retrying.'
             );
