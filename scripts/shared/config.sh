@@ -10,9 +10,8 @@
 # - APP_ENV: local|staging|production|testing
 # - DATABASE_URL: PostgreSQL connection string
 # - JWT_SECRET, JWT_EXPIRATION_HOURS, JWT_REFRESH_EXPIRATION_DAYS
-# - FRONTEND_DOMAIN, BACKEND_DOMAIN
+# - FRONTEND_DOMAIN
 # - BACKEND_PORT, FRONTEND_PORT
-# - BACKEND_URL
 
 # Source version constants (must be sourced before using version-related functions)
 # Determine script directory from this file's location
@@ -100,46 +99,30 @@ get_frontend_port() {
 }
 
 
-# Get default domains for an environment
-# Returns: frontend_domain|backend_domain
-# Pattern: ${env}.blb.lara for frontend, ${env}.api.blb.lara for backend
-get_default_domains() {
+# Get the default domain for an environment
+# Pattern: ${env}.blb.lara, except production which drops the env prefix
+get_default_domain() {
     local env=$1
     case "$env" in
         production)
-            echo "app.blb.lara|api.blb.lara"
+            echo "app.blb.lara"
             ;;
         *)
-            echo "${env}.blb.lara|${env}.api.blb.lara"
+            echo "${env}.blb.lara"
             ;;
     esac
     return 0
 }
 
-# Derive the backend (API) domain from a frontend domain.
-# Convention: insert 'api.' after the first segment.
-# Example: local.blb.lara -> local.api.blb.lara
-derive_backend_domain() {
-    local frontend=$1
-    local first_segment="${frontend%%.*}"
-    local rest="${frontend#*.}"
-    echo "${first_segment}.api.${rest}"
-    return 0
-}
-
-# Save frontend and (optional) backend domains to .env, and derive APP_URL.
-# Keeps APP_URL in sync whenever domains change. An empty backend domain is
-# written through as empty, which is how the rest of setup knows the second
-# vhost was declined.
-# Usage: save_domains_to_env "frontend_domain" ["backend_domain"]
-save_domains_to_env() {
+# Save the domain to .env, and derive APP_URL.
+# Keeps APP_URL in sync whenever the domain changes.
+# Usage: save_domain_to_env "frontend_domain"
+save_domain_to_env() {
     local frontend_domain=$1
-    local backend_domain=${2:-}
     local app_scheme
     app_scheme=$(get_env_var "APP_SCHEME" "https")
 
     update_env_file "FRONTEND_DOMAIN" "$frontend_domain"
-    update_env_file "BACKEND_DOMAIN" "$backend_domain"
     update_env_file "APP_URL" "${app_scheme}://${frontend_domain}"
     return 0
 }

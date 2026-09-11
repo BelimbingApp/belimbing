@@ -56,12 +56,8 @@ The setup script will automatically configure the hosts file on the Linux system
 **Linux (Native installation):**
 ```bash
 # Add to /etc/hosts
-127.0.0.1 local.blb.lara local.api.blb.lara
+127.0.0.1 local.blb.lara
 ```
-
-`local.api.blb.lara` is optional — it is a second vhost serving the same
-application, and no routes are scoped to it. Include it only if you set
-`BACKEND_DOMAIN` in `.env`; otherwise `local.blb.lara` alone is enough.
 
 For WSL2 users, you need to configure the hosts file to access the app from the Windows browser. You need to use the **WSL2 IP address** instead of `127.0.0.1`.
 
@@ -73,7 +69,7 @@ For WSL2 users, you need to configure the hosts file to access the app from the 
 
 2. **Add to Windows hosts file** (`C:\Windows\System32\drivers\etc\hosts`):
    ```
-   172.25.114.176 local.blb.lara local.api.blb.lara
+   172.25.114.176 local.blb.lara
    ```
    *(Replace `172.25.114.176` with your actual WSL2 IP address)*
 
@@ -81,7 +77,7 @@ For WSL2 users, you need to configure the hosts file to access the app from the 
    - Open Notepad as Administrator (Win+R → `notepad` → Ctrl+Shift+Enter)
    - Or use PowerShell as Administrator:
      ```powershell
-     Add-Content -Path "C:\Windows\System32\drivers\etc\hosts" -Value "172.25.114.176 local.blb.lara local.api.blb.lara"
+     Add-Content -Path "C:\Windows\System32\drivers\etc\hosts" -Value "172.25.114.176 local.blb.lara"
      ```
 
 > **Why?** Windows `127.0.0.1` points to Windows localhost, not WSL2. Using the WSL2 IP allows Windows browsers to reach services running in WSL2.

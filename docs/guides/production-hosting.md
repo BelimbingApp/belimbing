@@ -130,11 +130,9 @@ All of these are environment variables. Do not edit the `Caddyfile`.
 | `TLS_DIRECTIVE` | *(empty)* | Empty means Caddy gets a free Let's Encrypt certificate automatically |
 | `CADDY_VITE_SNIPPET` | `scripts/caddy-snippets/vite-disabled.caddy` | Vite is a development-only process |
 | `APP_DOMAIN` | your real domain | |
-| `BACKEND_DOMAIN` | your real API domain | |
 
-The `Caddyfile` has **two site blocks**, so you need **two DNS records**, for
-example `app.example.my` and `api.example.my`. Both point to the same server
-IP address.
+The `Caddyfile` has **one site block**, so you need **one DNS record**, for
+example `app.example.my`, pointing to the server IP address.
 
 ### HTTPS certificates
 

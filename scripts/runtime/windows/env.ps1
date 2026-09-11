@@ -296,7 +296,6 @@ function Set-BLBCaddyEnvironment {
     $octaneMaxRequests = Get-BLBPositiveIntegerValue -Key 'OCTANE_MAX_REQUESTS' -Default 500
 
     $env:APP_DOMAIN = $script:FrontendDomain
-    $env:BACKEND_DOMAIN = $script:BackendDomain
     $env:APP_PORT = "$script:AppPort"
     $env:HTTPS_PORT = "$script:HttpsPort"
     $env:CADDY_SCHEME = $script:CaddyScheme
@@ -481,7 +480,6 @@ function Write-BLBInstallState {
         instanceName = $script:InstanceName
         ingressMode = $script:IngressMode
         frontendDomain = $script:FrontendDomain
-        backendDomain = $script:BackendDomain
         appPort = $script:AppPort
         httpsPort = $script:HttpsPort
         caddyAdminPort = $script:CaddyAdminPort
@@ -500,7 +498,6 @@ function Write-BLBInstallState {
 $script:AppEnv = (Get-BLBEnvValue -Key 'APP_ENV' -Default 'local').ToLowerInvariant()
 $script:IngressMode = (Get-BLBEnvValue -Key 'BLB_INGRESS_MODE' -Default 'direct').ToLowerInvariant()
 $script:FrontendDomain = Get-BLBEnvValue -Key 'FRONTEND_DOMAIN' -Default 'local.blb.lara'
-$script:BackendDomain = Get-BLBEnvValue -Key 'BACKEND_DOMAIN' -Default 'local.api.blb.lara'
 $script:AppPort = Get-BLBPortValue -Key 'APP_PORT' -Default 8000
 $script:VitePort = Get-BLBPortValue -Key 'VITE_PORT' -Default 5173
 $defaultHttpsPort = if ($script:AppEnv -in @('staging', 'production')) { $script:AppPort } else { 443 }

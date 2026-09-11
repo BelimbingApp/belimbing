@@ -68,22 +68,3 @@
 		php_server
 	}
 }
-
-{$CADDY_SCHEME:https}://{$BACKEND_DOMAIN:local.api.blb.lara}:{$HTTPS_PORT:443} {
-	bind {$CADDY_BIND_ADDRESS:127.0.0.1}
-	{$TLS_DIRECTIVE}
-
-	import security_headers
-
-	log {
-		output file {$CADDY_LOG_DIR:.caddy/logs}/access.log
-		format console
-	}
-
-	encode zstd gzip
-
-	handle {
-		root * public
-		php_server
-	}
-}

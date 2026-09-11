@@ -91,10 +91,8 @@ create_env_file() {
     fi
 
     # Domain configuration — drives APP_URL, Caddy routing, and /etc/hosts.
-    local default_domains default_frontend default_backend
-    default_domains=$(get_default_domains "$APP_ENV")
-    default_frontend=$(echo "$default_domains" | cut -d'|' -f1)
-    default_backend=$(echo "$default_domains" | cut -d'|' -f2)
+    local default_frontend
+    default_frontend=$(get_default_domain "$APP_ENV")
 
     local frontend_domain frontend_domain_default
     frontend_domain_default=$(get_env_var "FRONTEND_DOMAIN" "$default_frontend")
@@ -104,21 +102,7 @@ create_env_file() {
         frontend_domain="$frontend_domain_default"
     fi
 
-    # BACKEND_DOMAIN is an optional second vhost serving the same app. Default
-    # it to whatever .env already has — blank for a fresh install — so a new
-    # machine is not asked to add a hosts entry nothing routes on.
-    local derived_backend
-    derived_backend=$(derive_backend_domain "$frontend_domain")
-    local backend_domain backend_domain_default
-    backend_domain_default=$(get_env_var "BACKEND_DOMAIN" "")
-    if [[ -t 0 ]]; then
-        echo -e "${CYAN}ℹ${NC} BACKEND_DOMAIN is optional (suggested: ${derived_backend}); blank to skip." >&2
-        backend_domain=$(ask_input "BACKEND_DOMAIN (blank to skip)" "$backend_domain_default")
-    else
-        backend_domain="$backend_domain_default"
-    fi
-
-    save_domains_to_env "$frontend_domain" "$backend_domain"
+    save_domain_to_env "$frontend_domain"
 
     update_env_file_if_missing "DB_HOST" "127.0.0.1"
     update_env_file_if_missing "DB_PORT" "5432"

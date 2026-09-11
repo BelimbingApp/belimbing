@@ -23,7 +23,6 @@ param(
     [string] $Environment = 'local',
 
     [string] $FrontendDomain = 'local.blb.lara',
-    [string] $BackendDomain = 'local.api.blb.lara',
     [int] $AppPort = 8000,
     [int] $VitePort = 5173,
     [ValidateSet('direct', 'shared', 'tunnel', 'proxy', 'standalone', 'private')]
@@ -571,7 +570,6 @@ function ConvertTo-TaskToken {
 # "user changed this" from "default value that should not stomp .env".
 $explicitEnvironment    = $PSBoundParameters.ContainsKey('Environment')
 $explicitFrontendDomain = $PSBoundParameters.ContainsKey('FrontendDomain')
-$explicitBackendDomain  = $PSBoundParameters.ContainsKey('BackendDomain')
 $explicitAppPort        = $PSBoundParameters.ContainsKey('AppPort')
 $explicitVitePort       = $PSBoundParameters.ContainsKey('VitePort')
 $explicitIngressMode    = $PSBoundParameters.ContainsKey('IngressMode')
@@ -836,7 +834,6 @@ variables_order=EGPCS
         [pscustomobject]@{ Key = 'APP_ENV';               Value = $Environment;            OnlyIfAbsent = (-not $explicitEnvironment) },
         [pscustomobject]@{ Key = 'APP_URL';               Value = "https://$FrontendDomain"; OnlyIfAbsent = (-not $explicitFrontendDomain) },
         [pscustomobject]@{ Key = 'FRONTEND_DOMAIN';       Value = $FrontendDomain;         OnlyIfAbsent = (-not $explicitFrontendDomain) },
-        [pscustomobject]@{ Key = 'BACKEND_DOMAIN';        Value = $BackendDomain;          OnlyIfAbsent = (-not $explicitBackendDomain) },
         [pscustomobject]@{ Key = 'APP_PORT';              Value = "$AppPort";              OnlyIfAbsent = (-not $explicitAppPort) },
         [pscustomobject]@{ Key = 'VITE_PORT';             Value = "$VitePort";             OnlyIfAbsent = (-not $explicitVitePort) },
         [pscustomobject]@{ Key = 'BLB_INSTANCE_NAME';     Value = $resolvedInstanceName;   OnlyIfAbsent = (-not $explicitInstanceName) },
@@ -866,7 +863,6 @@ variables_order=EGPCS
         instanceName = $resolvedInstanceName
         ingressMode = $IngressMode
         frontendDomain = $FrontendDomain
-        backendDomain = $BackendDomain
         appPort = $AppPort
         vitePort = $VitePort
         httpsPort = $resolvedHttpsPort
@@ -898,8 +894,8 @@ variables_order=EGPCS
         Write-Ok "SQLite database: $DatabasePath"
     }
 
-    Write-Step "Configuring local domains"
-    Add-HostsEntry -Domains @($FrontendDomain, $BackendDomain) -Skip:$SkipHosts
+    Write-Step "Configuring the local domain"
+    Add-HostsEntry -Domains @($FrontendDomain) -Skip:$SkipHosts
 
     if (-not $SkipComposerInstall) {
         Write-Step "Installing Composer locally if needed"

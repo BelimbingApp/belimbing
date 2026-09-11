@@ -420,60 +420,6 @@ validate_required_tools() {
     fi
 }
 
-# Check if .env file has required variables
-validate_env_file() {
-    local env_file=${1:-.env}
-
-    if [[ ! -f "$env_file" ]]; then
-        echo -e "${RED}${CROSS_MARK} File not found: $env_file${NC}"
-        return 1
-    fi
-
-    local required_vars=(
-        "APP_ENV"
-        "DATABASE_URL"
-        "JWT_SECRET"
-        "FRONTEND_DOMAIN"
-        "BACKEND_DOMAIN"
-        "BACKEND_PORT"
-        "FRONTEND_PORT"
-    )
-
-    local missing=()
-    for var in "${required_vars[@]}"; do
-        # Check if variable is set and not commented out
-        # Look for uncommented line (starts with optional whitespace, then var=, no # before it)
-        local uncommented_line
-        uncommented_line=$(grep -E "^[[:space:]]*$var=" "$env_file" | grep -vE "^[[:space:]]*#" | head -1)
-
-        if [[ -n "$uncommented_line" ]]; then
-            # Variable exists and is not commented - check if it has a value
-            local value
-            value=$(echo "$uncommented_line" | cut -d'=' -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-            if [[ -z "$value" ]]; then
-                missing+=("$var (empty)")
-            fi
-        else
-            # Variable is missing or commented out
-            if grep -qE "^[[:space:]]*#.*$var=" "$env_file"; then
-                missing+=("$var (commented out)")
-            else
-                missing+=("$var")
-            fi
-        fi
-    done
-
-    if [[ ${#missing[@]} -gt 0 ]]; then
-        echo -e "${RED}${CROSS_MARK} Missing required variables in $env_file:${NC}"
-        for var in "${missing[@]}"; do
-            echo -e "  ${BULLET} $var"
-        done
-        return 1
-    fi
-
-    return 0
-}
-
 # Detect OS type
 detect_os() {
     if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -483,67 +429,6 @@ detect_os() {
     else
         echo "unknown"
     fi
-    return 0
-}
-
-# Detect existing reverse proxy
-detect_proxy() {
-    if systemctl is-active --quiet nginx 2>/dev/null || pgrep nginx >/dev/null 2>&1; then
-        echo "nginx"
-    elif systemctl is-active --quiet apache2 2>/dev/null || pgrep apache2 >/dev/null 2>&1; then
-        echo "apache"
-    elif systemctl is-active --quiet traefik 2>/dev/null || pgrep traefik >/dev/null 2>&1; then
-        echo "traefik"
-    elif pgrep caddy >/dev/null 2>&1; then
-        echo "caddy"
-    else
-        echo "none"
-    fi
-    return 0
-}
-
-# Validate manual proxy configuration
-validate_manual_proxy() {
-    local proxy_type=$1
-    local frontend_domain=$2
-    local backend_domain=$3
-    local https_port=$4
-
-    # Check if proxy is running
-    local detected_proxy
-    detected_proxy=$(detect_proxy)
-    if [[ "$detected_proxy" = "none" ]]; then
-        echo -e "${YELLOW}${WARNING_MARK} No reverse proxy detected as running${NC}"
-        echo -e "  Expected: $proxy_type"
-        return 1
-    fi
-
-    # Check if detected proxy matches expected type
-    if [[ "$proxy_type" != "manual" ]] && [[ "$detected_proxy" != "$proxy_type" ]]; then
-        echo -e "${YELLOW}${WARNING_MARK} Proxy type mismatch${NC}"
-        echo -e "  Expected: $proxy_type"
-        echo -e "  Detected: $detected_proxy"
-        return 1
-    fi
-
-    # Check if domains are in /etc/hosts
-    if ! domain_in_hosts "$frontend_domain"; then
-        echo -e "${YELLOW}${WARNING_MARK} Frontend domain not in /etc/hosts: $frontend_domain${NC}"
-        return 1
-    fi
-
-    if ! domain_in_hosts "$backend_domain"; then
-        echo -e "${YELLOW}${WARNING_MARK} Backend domain not in /etc/hosts: $backend_domain${NC}"
-        return 1
-    fi
-
-    # Check if HTTPS port is accessible (basic check)
-    if [[ "$https_port" -lt 1024 ]] && ! is_root; then
-        # Can't check privileged ports without root, but warn
-        echo -e "${CYAN}${INFO_MARK} Using privileged port $https_port${NC}"
-        echo -e "  Ensure $proxy_type is configured to listen on this port"
-    fi
-
     return 0
 }
 
@@ -671,11 +556,11 @@ add_domains_to_windows_hosts() {
         echo -e "${CYAN}If you have existing entries with 127.0.0.1, please remove them first.${NC}"
         echo ""
         echo -e "${CYAN}Option 1 - PowerShell (Run as Administrator):${NC}"
-        echo -e "  ${YELLOW}\$line = \"$hosts_line\"; Add-Content -Path \"C:\\Windows\\System32\\drivers\\etc\\hosts\" -Value \$line${NC}"
+        echo -e "  ${YELLOW}\$line = \"$hosts_line\"; Add-Content -Path \"C:\\Windows\\System32\\drivers\\\\etc\\hosts\" -Value \$line${NC}"
         echo ""
         echo -e "${CYAN}Option 2 - Notepad (Run as Administrator):${NC}"
         echo -e "  1. Press Win+R, type ${YELLOW}notepad${NC}, press Ctrl+Shift+Enter"
-        echo -e "  2. File → Open → ${YELLOW}C:\\Windows\\System32\\drivers\\etc\\hosts${NC}"
+        echo -e "  2. File → Open → ${YELLOW}C:\\Windows\\System32\\drivers\\\\etc\\hosts${NC}"
         echo -e "  3. Remove any existing lines with ${YELLOW}127.0.0.1 local.blb.lara${NC}"
         echo -e "  4. Add: ${YELLOW}$hosts_line${NC}"
         echo -e "  5. Save and close"
@@ -684,39 +569,22 @@ add_domains_to_windows_hosts() {
     fi
 }
 
-# Check and prompt to add domains to /etc/hosts (and Windows hosts if WSL2)
-# Usage: ensure_domains_in_hosts "frontend_domain" "backend_domain"
+# Check and prompt to add a domain to /etc/hosts (and Windows hosts if WSL2)
+# Usage: ensure_domain_in_hosts "domain"
 # Returns: 0 if Linux hosts are ready; Windows hosts failure on WSL2 is non-fatal (instructions shown).
-ensure_domains_in_hosts() {
-    local frontend_domain=$1
-    # The backend/API vhost is optional; an empty value means it was declined
-    # and must not become a hosts entry the user is then nagged about.
-    local backend_domain=${2:-}
-    local domains_to_add=()
+ensure_domain_in_hosts() {
+    local domain=$1
     local result=0
 
-    # Check Linux /etc/hosts
-    if ! domain_in_hosts "$frontend_domain"; then
-        domains_to_add+=("$frontend_domain")
-    fi
-
-    if [[ -n "$backend_domain" ]] && ! domain_in_hosts "$backend_domain"; then
-        domains_to_add+=("$backend_domain")
-    fi
-
-    # Add to Linux /etc/hosts if needed (failure is fatal)
-    if [[ ${#domains_to_add[@]} -gt 0 ]]; then
-        add_domains_to_hosts "${domains_to_add[@]}" || result=1
+    # Check Linux /etc/hosts (failure to add is fatal)
+    if ! domain_in_hosts "$domain"; then
+        add_domains_to_hosts "$domain" || result=1
     fi
 
     # If running in WSL2, also try Windows hosts file (best-effort; permission denied is common)
     if is_wsl2; then
         echo ""
-        if [[ -n "$backend_domain" ]]; then
-            add_domains_to_windows_hosts "$frontend_domain" "$backend_domain" || true
-        else
-            add_domains_to_windows_hosts "$frontend_domain" || true
-        fi
+        add_domains_to_windows_hosts "$domain" || true
     fi
 
     return $result
