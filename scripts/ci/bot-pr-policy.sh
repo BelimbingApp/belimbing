@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Accept a bot-maintenance PR whose diff is confined to one machine-generated
-# profile (#728): coverage baseline, Unit/Feature shard timings + membership, Pest
+# profile (#728): Unit/Feature shard timings + membership, Pest
 # timing baseline, Livewire action-debt baselines (#775), or a Domain descriptor
 # + composed surface.
 # Anything else — an extra path, a mix of profiles, or an empty diff — fails and
@@ -28,9 +28,6 @@ if ((${#changed[@]} == 0)); then
   exit 1
 fi
 
-coverage_profile=(
-  tests/ci/platform-coverage-baseline.json
-)
 timing_profile=(
   scripts/ci/platform-feature-shard-timings.json
   scripts/ci/platform-feature-shards.json
@@ -70,12 +67,12 @@ is_subset_of() {
   return 0
 }
 
-if is_subset_of coverage_profile || is_subset_of timing_profile || is_subset_of pin_profile || is_subset_of pest_timing_profile || is_subset_of livewire_actions_profile; then
+if is_subset_of timing_profile || is_subset_of pin_profile || is_subset_of pest_timing_profile || is_subset_of livewire_actions_profile; then
   printf 'bot-pr-policy: accepted (%s)\n' "$(IFS=','; echo "${changed[*]}")"
   exit 0
 fi
 
-union=("${coverage_profile[@]}" "${timing_profile[@]}" "${pin_profile[@]}" "${pest_timing_profile[@]}" "${livewire_actions_profile[@]}")
+union=("${timing_profile[@]}" "${pin_profile[@]}" "${pest_timing_profile[@]}" "${livewire_actions_profile[@]}")
 extras=()
 for path in "${changed[@]}"; do
   in_union=0
