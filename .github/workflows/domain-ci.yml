@@ -109,13 +109,16 @@ jobs:
       - name: Compose exact cross-domain dependencies
         run: |
           php scripts/ci/compose-domain.php --domain-path="$DOMAIN_PATH" > extra-repos.tsv
-          while IFS=$'\t' read -r repo path; do
-            [ -z "$repo" ] && continue
-            echo "Materializing $repo@default -> $path"
-            git clone --quiet --depth 1 "https://github.com/${repo}.git" "$path"
-            ref=$(git -C "$path" rev-parse HEAD)
-            printf '%s\t%s\t%s\n' "$repo" "$ref" "$path" >> materialization.tsv
-          done < extra-repos.tsv
+          ids=$(cut -f1 extra-repos.tsv | paste -sd, -)
+          if [ -n "$ids" ]; then
+            # --materialize, never a bare clone: it is what walks the
+            # remaining candidate owners (#943 review).
+            php scripts/ci/domain-registry.php --materialize="$ids" > materialized.tsv
+            while IFS=$'\t' read -r id repo path ref; do
+              [ -z "$repo" ] && continue
+              printf '%s\t%s\t%s\n' "$repo" "$ref" "$path" >> materialization.tsv
+            done < materialized.tsv
+          fi
           printf '%s\t%s\t%s\n' "${{ inputs.platform-repo }}" "${{ inputs.platform-ref }}" "." >> materialization.tsv
           printf '%s\t%s\t%s\n' "${{ github.repository }}" "${{ github.sha }}" "$DOMAIN_PATH" >> materialization.tsv
 
@@ -238,11 +241,8 @@ jobs:
       # their exact checkout; missing siblings are materialized at their pins.
       - name: Module smoke composition
         run: |
+          php scripts/ci/domain-registry.php --materialize >/dev/null
           while IFS=$'\t' read -r domain_id repo domain_path; do
-            if [ ! -d "$domain_path" ]; then
-              mkdir -p "$(dirname "$domain_path")"
-              git clone --quiet --depth 1 "https://github.com/${repo}.git" "$domain_path"
-            fi
 
             while IFS= read -r module_path; do
               module_id=''
@@ -389,10 +389,10 @@ jobs:
       - name: Compose exact cross-domain dependencies
         run: |
           php scripts/ci/compose-domain.php --domain-path="$DOMAIN_PATH" > extra-repos.tsv
-          while IFS=$'\t' read -r repo path; do
-            [ -z "$repo" ] && continue
-            git clone --quiet --depth 1 "https://github.com/${repo}.git" "$path"
-          done < extra-repos.tsv
+          ids=$(cut -f1 extra-repos.tsv | paste -sd, -)
+          if [ -n "$ids" ]; then
+            php scripts/ci/domain-registry.php --materialize="$ids" >/dev/null
+          fi
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2 # NOSONAR — well-known community PHP action; tag pinning is acceptable for internal projects

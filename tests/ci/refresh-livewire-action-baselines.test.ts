@@ -21,8 +21,8 @@ test("livewire baseline refresh is dispatch-only, opens a PR, and never pushes t
     expect(platform.run).toContain("tests/ci/livewire-actions-baselines/platform.json");
 
     const compose = steps.find((step: any) => step.name === "Compose the Domains");
-    expect(compose.run).toContain("scripts/ci/domain-registry.php --tsv");
-    expect(compose.run).toContain("git clone --quiet --depth 1");
+    expect(compose.run).toContain("scripts/ci/domain-registry.php --materialize");
+    expect(compose.run).not.toContain("git clone");
 
     const domains = steps.find((step: any) => step.name === "Refresh Domain baselines");
     expect(domains.run).toContain("--domain=");

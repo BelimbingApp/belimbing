@@ -89,12 +89,9 @@ jobs:
         run: |
           php scripts/ci/composed-smoke.php --scan-only
           php -r 'require "vendor/autoload.php";' >/dev/null
-          while IFS=$'\t' read -r id repo path; do
-            [ -z "$repo" ] && continue
-            echo "Materializing $repo@default -> $path"
-            git clone --quiet --depth 1 "https://github.com/${repo}.git" "$path"
-            echo "  $id at $(git -C "$path" rev-parse --short HEAD)"
-          done < <(php scripts/ci/domain-registry.php --tsv)
+          # The materializer walks every candidate owner; a bare clone of
+          # the first one has no fallback (#943 review).
+          php scripts/ci/domain-registry.php --materialize
           composer dump-autoload --optimize
 
       - name: Boot the composed application

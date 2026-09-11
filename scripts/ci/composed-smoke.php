@@ -88,47 +88,34 @@ function run(array $command, ?string $cwd = null): array
 }
 
 /**
- * Clone each selected Domain at its default branch, or accept an existing
- * mount as it stands. Candidates are tried in remote order (origin's owner,
- * then upstream's), so a fork that hosts only some of its Domains still
- * resolves the rest from the repository it forked.
+ * Put each selected Domain on disk through the shared materializer, so this
+ * path and the workflow paths try the same candidate owners in the same order
+ * (#943 review). An existing mount is accepted as it stands.
  *
  * @param  array<string, array{repo: string, path: string, repo_candidates: list<string>}>  $domains
- * @return array<string, string> domain id => mount path
+ * @return list<string> materialized domain ids
  */
 function materialize(array $domains, array $domainIds, string $root): array
 {
-    $mounts = [];
+    $mounted = [];
 
     foreach ($domainIds as $id) {
         $domain = $domains[$id] ?? fail("descriptor does not list domain [{$id}]");
-        $path = $root.'/'.trim($domain['path'], '/');
-
-        if (! is_dir($path)) {
-            $cloned = false;
-            $errors = [];
-            foreach ($domain['repo_candidates'] as $repo) {
-                fwrite(STDERR, "composed-smoke: materializing {$repo} -> {$domain['path']}\n");
-                [$code, , $error] = run(['git', 'clone', '--quiet', '--depth', '1', "https://github.com/{$repo}.git", $path]);
-                if ($code === 0) {
-                    $cloned = true;
-
-                    break;
-                }
-                $errors[] = "{$repo}: ".trim($error);
-            }
-            if (! $cloned) {
-                fail("clone of {$id} failed:\n  ".implode("\n  ", $errors));
-            }
+        $result = materializeDomain($domain, $root);
+        if (! $result['ok']) {
+            fail("clone of {$id} failed:\n  ".implode("\n  ", $result['errors']));
         }
 
-        [, $head] = run(['git', '-C', $path, 'rev-parse', 'HEAD']);
-        fwrite(STDERR, sprintf("composed-smoke: %s mounted at %s\n", $id, substr(trim($head), 0, 8) ?: 'unknown'));
+        fwrite(STDERR, sprintf(
+            "composed-smoke: %s mounted at %s\n",
+            $id,
+            substr((string) $result['sha'], 0, 8) ?: 'unknown',
+        ));
 
-        $mounts[$id] = $path;
+        $mounted[] = $id;
     }
 
-    return $mounts;
+    return $mounted;
 }
 
 /**
@@ -168,7 +155,7 @@ if (! $options['scan-only']) {
     $domainIds = $options['domains'] === null
         ? array_keys($registry['domains'])
         : array_values(array_filter(array_map('trim', explode(',', (string) $options['domains']))));
-    $mounted = array_keys(materialize($registry['domains'], $domainIds, $root));
+    $mounted = materialize($registry['domains'], $domainIds, $root);
 }
 
 $duplicates = duplicateMigrations($root);

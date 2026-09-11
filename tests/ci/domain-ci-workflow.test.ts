@@ -125,7 +125,10 @@ test("module smoke checks every listed Domain after its suite", () => {
     expect(domainRegistry.domains.length).toBeGreaterThan(0);
     expect(smoke.run).toContain("php scripts/ci/domain-registry.php --tsv");
     expect(smoke.run).toContain("domain_id repo domain_path");
-    expect(smoke.run).toContain("git clone --quiet --depth 1");
+    // Materialized through the candidate-aware path, never a bare clone that
+    // would try only the first owner (#943 review).
+    expect(smoke.run).toContain("php scripts/ci/domain-registry.php --materialize");
+    expect(smoke.run).not.toContain("git clone");
     // No pin: the smoke composes each Domain at its default branch (#940).
     expect(smoke.run).not.toContain("checkout --quiet --detach");
     expect(smoke.run).toContain('php artisan blb:module-check "$module_id"');
