@@ -2,6 +2,7 @@
 
 use App\Base\Foundation\Contracts\DomainRuntimeReloader;
 use App\Base\Foundation\Livewire\Domains;
+use App\Base\Foundation\RuntimeRequirements\RuntimeRequirementVerifier;
 use App\Base\Foundation\Services\ExtensionInstaller;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\Models\Setting;
@@ -35,7 +36,8 @@ afterEach(function (): void {
     File::deleteDirectory(base_path(EXTENSION_INSTALL_BASE_PATH.EXTENSION_INSTALL_FOLDER));
 });
 
-function createExtensionInstallFakeCheckout(): string
+/** @param list<string> $runtimeRequirements */
+function createExtensionInstallFakeCheckout(array $runtimeRequirements = []): string
 {
     $base = base_path(EXTENSION_INSTALL_BASE_PATH.EXTENSION_INSTALL_FOLDER);
     $module = $base.'/Sample';
@@ -55,6 +57,16 @@ function createExtensionInstallFakeCheckout(): string
         class ServiceProvider extends BaseServiceProvider {}
         PHP,
     );
+
+    file_put_contents($module.'/composer.json', json_encode([
+        'name' => 'zzowner/sample',
+        'extra' => [
+            'blb' => [
+                'module' => 'zzkiat/sample',
+                'runtime-requirements' => $runtimeRequirements,
+            ],
+        ],
+    ], JSON_THROW_ON_ERROR));
 
     file_put_contents(
         $module.'/Database/Migrations/'.EXTENSION_INSTALL_MIGRATION.'.php',
@@ -90,7 +102,7 @@ function createExtensionInstallFakeCheckout(): string
             'editable' => [
                 'zzkiat' => [
                     'fields' => [
-                        ['key' => 'zzkiat.option', 'label' => 'Option', 'type' => 'text'],
+                        ['key' => 'zzkiat.option', 'label' => 'Option', 'help' => 'Test option.', 'type' => 'text'],
                     ],
                 ],
             ],
@@ -143,6 +155,47 @@ it('clones an extension with the stored github token and redirects', function ()
         && $process->environment === $expectedAuthEnvironment);
     Process::assertDidntRun(fn ($process): bool => collect($process->command)
         ->contains(fn (string $argument): bool => str_contains($argument, EXTENSION_INSTALL_TOKEN)));
+});
+
+it('removes an extension checkout before migrations when a declared host runtime is unavailable', function (): void {
+    Process::fake(function ($process) {
+        if (in_array('clone', $process->command, true)) {
+            createExtensionInstallFakeCheckout([RuntimeRequirementVerifier::PHP_CLI_SQLSRV]);
+        }
+
+        return Process::result();
+    });
+
+    $result = app(ExtensionInstaller::class)->install(EXTENSION_INSTALL_FOLDER);
+
+    expect($result['ok'])->toBeFalse()
+        ->and($result['log'])->toContain('The system PHP CLI does not have sqlsrv and pdo_sqlsrv available.')
+        ->and($result['log'])->toContain('./scripts/setup-steps/16-sqlsrv-cli.sh')
+        ->and(is_dir(base_path(EXTENSION_INSTALL_BASE_PATH.EXTENSION_INSTALL_FOLDER)))->toBeFalse();
+    Process::assertDidntRun(fn ($process): bool => in_array('migrate', $process->command, true));
+});
+
+it('reports the checkout path when an unmet runtime prerequisite cannot be cleaned up', function (): void {
+    Process::fake(function ($process) {
+        if (in_array('clone', $process->command, true)) {
+            createExtensionInstallFakeCheckout([RuntimeRequirementVerifier::PHP_CLI_SQLSRV]);
+        }
+
+        return Process::result();
+    });
+    $path = base_path(EXTENSION_INSTALL_BASE_PATH.EXTENSION_INSTALL_FOLDER);
+    File::partialMock()
+        ->shouldReceive('deleteDirectory')
+        ->once()
+        ->with($path)
+        ->andReturnFalse();
+
+    $result = app(ExtensionInstaller::class)->install(EXTENSION_INSTALL_FOLDER);
+
+    expect($result['ok'])->toBeFalse()
+        ->and($result['log'])->toContain('could not be removed')
+        ->and($result['log'])->toContain('app/Extensions/'.EXTENSION_INSTALL_FOLDER);
+    Process::assertDidntRun(fn ($process): bool => in_array('migrate', $process->command, true));
 });
 
 it('does not reload runtime after an extension migration fails', function (): void {

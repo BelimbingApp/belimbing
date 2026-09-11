@@ -4,6 +4,8 @@ namespace App\Base\Foundation\Services;
 
 use App\Base\Foundation\ApplicationTopology;
 use App\Base\Foundation\Contracts\DomainRuntimeReloader;
+use App\Base\Foundation\ModuleManifest\ModuleManifestReader;
+use App\Base\Foundation\RuntimeRequirements\RuntimeRequirementVerifier;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\Models\Setting;
 use App\Base\Support\Git\GitRepository;
@@ -33,6 +35,7 @@ class ExtensionInstaller
         private readonly DomainResidueScanner $scanner,
         private readonly DomainRuntimeReloader $runtimeReloader,
         private readonly NestedCheckoutGitState $gitState,
+        private readonly RuntimeRequirementVerifier $runtimeRequirements,
     ) {}
 
     /**
@@ -139,6 +142,22 @@ class ExtensionInstaller
 
         if (! $clone->ok) {
             $log[] = (string) __('FAILED — could not clone :folder. Check the repository URL and that a GitHub token is stored for its owner under GitHub Access.', ['folder' => $folder]);
+
+            return ['ok' => false, 'log' => implode("\n", array_filter($log))];
+        }
+
+        $requirements = $this->runtimeRequirementsFor($path);
+        $unmetRequirements = $this->runtimeRequirements->unmet($requirements);
+        if ($unmetRequirements !== []) {
+            $cleaned = File::deleteDirectory($path);
+            $log[] = implode("\n", $unmetRequirements);
+            $setupCommands = $this->runtimeRequirements->setupCommands($requirements);
+            if ($setupCommands !== []) {
+                $log[] = 'No migrations ran. Run '.implode(' then ', $setupCommands).' as the deployment operator, set BLB_SYSTEM_PHP_BINARY when that CLI is not on PATH, then retry the Extension install.';
+            }
+            $log[] = $cleaned
+                ? (string) __('The checkout was removed because its host-runtime prerequisites are not ready.')
+                : (string) __('The checkout has unmet host-runtime prerequisites and could not be removed. Remove :path before retrying.', ['path' => $this->relativePath($path)]);
 
             return ['ok' => false, 'log' => implode("\n", array_filter($log))];
         }
@@ -260,6 +279,27 @@ class ExtensionInstaller
     private function extensionPath(string $folder): string
     {
         return ApplicationTopology::extensionPath($folder);
+    }
+
+    private function relativePath(string $path): string
+    {
+        $base = rtrim(str_replace('\\', '/', base_path()), '/').'/';
+        $normalized = str_replace('\\', '/', $path);
+
+        return str_starts_with($normalized, $base) ? substr($normalized, strlen($base)) : $normalized;
+    }
+
+    /** @return list<string> */
+    private function runtimeRequirementsFor(string $path): array
+    {
+        $manifests = (new ModuleManifestReader([$path]))->all();
+        $requirements = [];
+
+        foreach ($manifests as $manifest) {
+            $requirements = [...$requirements, ...$manifest->runtimeRequirements];
+        }
+
+        return array_values(array_unique($requirements));
     }
 
     /**

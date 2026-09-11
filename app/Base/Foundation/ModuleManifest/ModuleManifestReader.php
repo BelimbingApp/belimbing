@@ -212,6 +212,7 @@ class ModuleManifestReader
             publishesEvents: $this->normaliseStringList($blb['publishes-events'] ?? []),
             consumesEvents: $this->normaliseStringList($blb['consumes-events'] ?? []),
             sharedTables: $this->normaliseStringList($blb['shared-tables'] ?? []),
+            runtimeRequirements: $this->normaliseStringList($blb['runtime-requirements'] ?? []),
             featureFlags: $this->normaliseFeatureFlags($blb['feature-flags'] ?? []),
         );
     }
