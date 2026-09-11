@@ -68,7 +68,8 @@ caddy_render_tls_directive() {
 caddy_render_system_site_snippet() {
     local project_root=$1
     local frontend_domain=$2
-    local backend_domain=$3
+    # Optional; an empty value renders no second site block.
+    local backend_domain=${3:-}
     local app_port=$4
     local app_env=$5
     local tls_directive
@@ -79,12 +80,18 @@ ${frontend_domain} {
 ${tls_directive}
     reverse_proxy 127.0.0.1:${app_port}
 }
+EOF
+
+    if [[ -n "$backend_domain" ]]; then
+        cat <<EOF
 
 ${backend_domain} {
 ${tls_directive}
     reverse_proxy 127.0.0.1:${app_port}
 }
 EOF
+    fi
+
     return 0
 }
 

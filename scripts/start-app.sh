@@ -30,6 +30,7 @@ APP_PORT=""
 VITE_PORT=""
 FRONTEND_DOMAIN=""
 BACKEND_DOMAIN=""
+BACKEND_DOMAIN_CONFIGURED=0
 HTTPS_PORT=""
 APP_BIND_HOST=""
 BLB_INGRESS_MODE=""
@@ -287,8 +288,18 @@ read_app_env() {
             FRONTEND_DOMAIN="${APP_ENV}.blb.lara"
         fi
     fi
-    if [[ -z "$BACKEND_DOMAIN" ]]; then
-        if command -v get_default_domains >/dev/null 2>&1; then
+    # The API vhost is opt-in: only a BACKEND_DOMAIN in .env makes it something
+    # the user must put in a hosts file and gets told about. Caddy's site block
+    # still needs a concrete hostname though — left empty its address would
+    # become a catch-all that collides with the frontend vhost — so derive one
+    # that simply nobody has to resolve.
+    if [[ -n "$BACKEND_DOMAIN" ]]; then
+        BACKEND_DOMAIN_CONFIGURED=1
+    else
+        BACKEND_DOMAIN_CONFIGURED=0
+        if command -v derive_backend_domain >/dev/null 2>&1; then
+            BACKEND_DOMAIN=$(derive_backend_domain "$FRONTEND_DOMAIN")
+        elif command -v get_default_domains >/dev/null 2>&1; then
             BACKEND_DOMAIN=$(get_default_domains "$APP_ENV" | cut -d'|' -f2)
         else
             BACKEND_DOMAIN="${APP_ENV}.api.blb.lara"
@@ -296,7 +307,7 @@ read_app_env() {
     fi
 
     # Log environment info (important for troubleshooting)
-    log "Environment: $APP_ENV, Frontend: $FRONTEND_DOMAIN, Backend: $BACKEND_DOMAIN, Ingress: $BLB_INGRESS_MODE"
+    log "Environment: $APP_ENV, Frontend: $FRONTEND_DOMAIN, Backend: $BACKEND_DOMAIN (configured=$BACKEND_DOMAIN_CONFIGURED), Ingress: $BLB_INGRESS_MODE"
 
     echo -e "${GREEN}Using environment: ${APP_ENV}${NC}"
     return 0
@@ -316,7 +327,7 @@ check_hosts_entries() {
         missing_hosts+=("$FRONTEND_DOMAIN")
     fi
 
-    if ! domain_in_hosts "$BACKEND_DOMAIN"; then
+    if [[ "$BACKEND_DOMAIN_CONFIGURED" = "1" ]] && ! domain_in_hosts "$BACKEND_DOMAIN"; then
         missing_hosts+=("$BACKEND_DOMAIN")
     fi
 
@@ -359,6 +370,11 @@ check_hosts_entries() {
         wsl_ip=$(get_wsl2_ip)
         local win_missing=()
         local win_wrong_ip=()
+        # Only advertise domains the user actually has to resolve.
+        local hosts_domains="$FRONTEND_DOMAIN"
+        if [[ "$BACKEND_DOMAIN_CONFIGURED" = "1" ]]; then
+            hosts_domains="$FRONTEND_DOMAIN $BACKEND_DOMAIN"
+        fi
 
         if [[ -z "$wsl_ip" ]]; then
             echo -e "${YELLOW}⚠${NC} Could not determine WSL2 IP address for Windows hosts file check"
@@ -373,7 +389,9 @@ check_hosts_entries() {
             win_wrong_ip+=("$FRONTEND_DOMAIN")
         fi
 
-        if ! domain_in_windows_hosts "$BACKEND_DOMAIN"; then
+        if [[ "$BACKEND_DOMAIN_CONFIGURED" != "1" ]]; then
+            : # optional API vhost not configured; nothing to verify
+        elif ! domain_in_windows_hosts "$BACKEND_DOMAIN"; then
             win_missing+=("$BACKEND_DOMAIN")
         elif grep -E "^[[:space:]]*127\.0\.0\.1[[:space:]]+.*${BACKEND_DOMAIN//./\\.}" "$win_hosts" 2>/dev/null | grep -v "^#" > /dev/null; then
             win_wrong_ip+=("$BACKEND_DOMAIN")
@@ -395,7 +413,7 @@ check_hosts_entries() {
             echo -e "${CYAN}WSL2 IP address: ${YELLOW}$wsl_ip${NC}"
             echo ""
             echo -e "${CYAN}Add/update this line in Windows hosts file:${NC}"
-            echo -e "  ${YELLOW}$wsl_ip $FRONTEND_DOMAIN $BACKEND_DOMAIN${NC}"
+            echo -e "  ${YELLOW}$wsl_ip $hosts_domains${NC}"
             echo ""
             echo -e "${CYAN}Windows hosts file location:${NC}"
             echo -e "  ${YELLOW}C:\\Windows\\System32\\drivers\\etc\\hosts${NC}"
@@ -406,14 +424,14 @@ check_hosts_entries() {
             if [[ ${#win_wrong_ip[@]} -gt 0 ]]; then
                 echo -e "  3. Remove/comment lines with ${YELLOW}127.0.0.1${NC} for these domains"
             fi
-            echo -e "  4. Add: ${YELLOW}$wsl_ip $FRONTEND_DOMAIN $BACKEND_DOMAIN${NC}"
+            echo -e "  4. Add: ${YELLOW}$wsl_ip $hosts_domains${NC}"
             echo -e "  5. Save and close"
             echo ""
             echo -e "${CYAN}Or use PowerShell (Run as Administrator):${NC}"
             if [[ ${#win_wrong_ip[@]} -gt 0 ]]; then
                 echo -e "  ${YELLOW}\$content = Get-Content \"C:\\Windows\\System32\\drivers\\etc\\hosts\"; \$content = \$content | Where-Object { \$_ -notmatch \"127\\.0\\.0\\.1.*local\\.blb\\.lara\" -and \$_ -notmatch \"127\\.0\\.0\\.1.*local\\.api\\.blb\\.lara\" }; \$content | Set-Content \"C:\\Windows\\System32\\drivers\\etc\\hosts\"${NC}"
             fi
-            echo -e "  ${YELLOW}Add-Content -Path \"C:\\Windows\\System32\\drivers\\etc\\hosts\" -Value \"$wsl_ip $FRONTEND_DOMAIN $BACKEND_DOMAIN\"${NC}"
+            echo -e "  ${YELLOW}Add-Content -Path \"C:\\Windows\\System32\\drivers\\etc\\hosts\" -Value \"$wsl_ip $hosts_domains\"${NC}"
             echo ""
             log "WARNING: Windows hosts file may need configuration. WSL2 IP: $wsl_ip"
             result=1
@@ -781,7 +799,9 @@ print_runtime_summary() {
     echo ""
     echo -e "${CYAN}Access your application:${NC}"
     echo -e "  ${GREEN}Frontend:${NC} ${YELLOW}${PUBLIC_APP_URL}${NC}"
-    echo -e "  ${GREEN}Backend:${NC}  ${YELLOW}${PUBLIC_BACKEND_URL}${NC}"
+    if [[ "$BACKEND_DOMAIN_CONFIGURED" = "1" ]]; then
+        echo -e "  ${GREEN}Backend:${NC}  ${YELLOW}${PUBLIC_BACKEND_URL}${NC}"
+    fi
     echo ""
     echo -e "${CYAN}Services:${NC}"
 

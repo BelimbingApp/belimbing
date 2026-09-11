@@ -354,7 +354,8 @@ render_tls_directive() {
 
 generate_site_fragment() {
     local frontend_domain=$1
-    local backend_domain=$2
+    # Optional; an empty value emits no second site block.
+    local backend_domain=${2:-}
     local app_port=$3
     local cert_dir="${4:-$PROJECT_ROOT/certs}"
     local fragment_path
@@ -372,12 +373,17 @@ ${frontend_domain} {
 $( [[ -n "$tls_directive" ]] && printf '    %s\n' "$tls_directive" )
     reverse_proxy 127.0.0.1:${app_port}
 }
+EOF
+
+    if [[ -n "$backend_domain" ]]; then
+        cat >> "$fragment_path" <<EOF
 
 ${backend_domain} {
 $( [[ -n "$tls_directive" ]] && printf '    %s\n' "$tls_directive" )
     reverse_proxy 127.0.0.1:${app_port}
 }
 EOF
+    fi
 
     echo -e "${GREEN}✓${NC} Generated BLB Caddy site fragment: ${CYAN}${fragment_path}${NC}" >&2
     printf '%s\n' "$fragment_path"
@@ -599,8 +605,9 @@ configure_shared_ingress() {
     local backend_domain
     backend_domain=$(get_env_var 'BACKEND_DOMAIN' '')
 
-    if [[ -z "$frontend_domain" ]] || [[ -z "$backend_domain" ]]; then
-        echo -e "${RED}✗${NC} FRONTEND_DOMAIN and BACKEND_DOMAIN must be configured before shared ingress setup" >&2
+    # BACKEND_DOMAIN is optional — it only adds a second site block.
+    if [[ -z "$frontend_domain" ]]; then
+        echo -e "${RED}✗${NC} FRONTEND_DOMAIN must be configured before shared ingress setup" >&2
         return 1
     fi
 

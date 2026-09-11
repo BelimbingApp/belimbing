@@ -689,7 +689,9 @@ add_domains_to_windows_hosts() {
 # Returns: 0 if Linux hosts are ready; Windows hosts failure on WSL2 is non-fatal (instructions shown).
 ensure_domains_in_hosts() {
     local frontend_domain=$1
-    local backend_domain=$2
+    # The backend/API vhost is optional; an empty value means it was declined
+    # and must not become a hosts entry the user is then nagged about.
+    local backend_domain=${2:-}
     local domains_to_add=()
     local result=0
 
@@ -698,7 +700,7 @@ ensure_domains_in_hosts() {
         domains_to_add+=("$frontend_domain")
     fi
 
-    if ! domain_in_hosts "$backend_domain"; then
+    if [[ -n "$backend_domain" ]] && ! domain_in_hosts "$backend_domain"; then
         domains_to_add+=("$backend_domain")
     fi
 
@@ -710,7 +712,11 @@ ensure_domains_in_hosts() {
     # If running in WSL2, also try Windows hosts file (best-effort; permission denied is common)
     if is_wsl2; then
         echo ""
-        add_domains_to_windows_hosts "$frontend_domain" "$backend_domain" || true
+        if [[ -n "$backend_domain" ]]; then
+            add_domains_to_windows_hosts "$frontend_domain" "$backend_domain" || true
+        else
+            add_domains_to_windows_hosts "$frontend_domain" || true
+        fi
     fi
 
     return $result

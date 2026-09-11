@@ -39,7 +39,13 @@ readonly MKCERT_MODE="mkcert"
 # Prompt user for custom domains with defaults
 # Returns: frontend_domain|backend_domain (only this goes to stdout)
 # Defaults: from .env ($FRONTEND_DOMAIN_KEY, $BACKEND_DOMAIN_KEY) if set, else from get_default_domains.
-# When both domains are already set in .env, returns them without prompting.
+# When the frontend domain is already set in .env, returns without prompting.
+#
+# The backend domain is optional. Nothing in the application routes on it —
+# the Caddy site block it feeds serves the same Laravel app as the frontend
+# vhost — so requiring it only bought every developer a second hosts entry
+# (and, on WSL2, a second elevated edit of the Windows hosts file). An empty
+# value here means "no second vhost to configure".
 prompt_for_domains() {
     local default_domains
     default_domains=$(get_default_domains "$APP_ENV")
@@ -52,12 +58,17 @@ prompt_for_domains() {
     default_frontend=$(get_env_var "$FRONTEND_DOMAIN_KEY" "$default_frontend")
     default_backend=$(get_env_var "$BACKEND_DOMAIN_KEY" "$default_backend")
 
-    # If both domains are already configured (e.g., by 05-environment.sh), reuse silently.
+    # If the frontend domain is already configured (e.g., by 05-environment.sh),
+    # reuse silently. An existing install that has a backend domain keeps it.
     local existing_frontend existing_backend
     existing_frontend=$(get_env_var "$FRONTEND_DOMAIN_KEY" "")
     existing_backend=$(get_env_var "$BACKEND_DOMAIN_KEY" "")
-    if [[ -n "$existing_frontend" ]] && [[ -n "$existing_backend" ]]; then
-        echo -e "${GREEN}✓${NC} Using domains from .env: ${CYAN}${existing_frontend}${NC} / ${CYAN}${existing_backend}${NC}" >&2
+    if [[ -n "$existing_frontend" ]]; then
+        if [[ -n "$existing_backend" ]]; then
+            echo -e "${GREEN}✓${NC} Using domains from .env: ${CYAN}${existing_frontend}${NC} / ${CYAN}${existing_backend}${NC}" >&2
+        else
+            echo -e "${GREEN}✓${NC} Using domain from .env: ${CYAN}${existing_frontend}${NC}" >&2
+        fi
         echo "${existing_frontend}|${existing_backend}"
         return 0
     fi
@@ -72,24 +83,24 @@ prompt_for_domains() {
         [[ -z "$custom_frontend" ]] && custom_frontend="$default_frontend"
 
         echo "" >&2
+        echo -e "${CYAN}ℹ${NC} A separate API domain is optional — it serves the same app." >&2
+        echo -e "  ${CYAN}Leave blank to skip it (suggested: ${default_backend}).${NC}" >&2
         local custom_backend
-        custom_backend=$(ask_input "Backend domain" "$default_backend")
-        # Use default if empty (shouldn't happen since default is provided, but safety check)
-        [[ -z "$custom_backend" ]] && custom_backend="$default_backend"
+        custom_backend=$(ask_input "Backend domain (blank to skip)" "")
 
         # Validate domains (output to stderr)
         if ! is_valid_domain "$custom_frontend"; then
             echo -e "${YELLOW}⚠${NC} Frontend domain format may be invalid: ${CYAN}$custom_frontend${NC}" >&2
         fi
-        if ! is_valid_domain "$custom_backend"; then
+        if [[ -n "$custom_backend" ]] && ! is_valid_domain "$custom_backend"; then
             echo -e "${YELLOW}⚠${NC} Backend domain format may be invalid: ${CYAN}$custom_backend${NC}" >&2
         fi
 
         # Only the result goes to stdout
         echo "${custom_frontend}|${custom_backend}"
     else
-        # Non-interactive: use defaults
-        echo "${default_frontend}|${default_backend}"
+        # Non-interactive: frontend default only; the optional vhost is opt-in.
+        echo "${default_frontend}|"
     fi
     return 0
 }
@@ -137,7 +148,7 @@ trust_mkcert_root() {
 
 ensure_tls_certs() {
     local frontend_domain=$1
-    local backend_domain=$2
+    local backend_domain=${2:-}
     local certs_dir="$PROJECT_ROOT/certs"
     mkdir -p "$certs_dir"
 
@@ -156,10 +167,13 @@ ensure_tls_certs() {
         return 0
     fi
 
+    local cert_names=("$frontend_domain")
+    [[ -n "$backend_domain" ]] && cert_names+=("$backend_domain")
+
     echo -e "${CYAN}Generating $MKCERT_MODE certificates...${NC}"
     if "$MKCERT_MODE" -cert-file "$certs_dir/${frontend_domain}.pem" \
            -key-file "$certs_dir/${frontend_domain}-key.pem" \
-           "$frontend_domain" "$backend_domain"; then
+           "${cert_names[@]}"; then
         echo -e "${GREEN}✓${NC} TLS certificates generated (trusted by $MKCERT_MODE)"
         update_env_file "$TLS_MODE_KEY" "$MKCERT_MODE"
         save_to_setup_state "$TLS_MODE_KEY" "$MKCERT_MODE"
@@ -199,7 +213,11 @@ main() {
     echo ""
     echo -e "${GREEN}✓${NC} Domains configured"
     echo -e "  ${CYAN}Frontend: ${frontend_domain}${NC}"
-    echo -e "  ${CYAN}Backend:  ${backend_domain}${NC}"
+    if [[ -n "$backend_domain" ]]; then
+        echo -e "  ${CYAN}Backend:  ${backend_domain}${NC}"
+    else
+        echo -e "  ${CYAN}Backend:  (none — set ${BACKEND_DOMAIN_KEY} in .env to add an API vhost)${NC}"
+    fi
     echo ""
     echo -e "${GREEN}✓ Domains & TLS setup complete!${NC}"
     return 0

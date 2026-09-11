@@ -75,6 +75,10 @@ The setup script will automatically configure the hosts file on the Linux system
 127.0.0.1 local.blb.lara local.api.blb.lara
 ```
 
+`local.api.blb.lara` is optional — it is a second vhost serving the same
+application, and no routes are scoped to it. Include it only if you set
+`BACKEND_DOMAIN` in `.env`; otherwise `local.blb.lara` alone is enough.
+
 For WSL2 users, you need to configure the hosts file to access the app from the Windows browser. You need to use the **WSL2 IP address** instead of `127.0.0.1`.
 
 1. **Find your WSL2 IP address:**

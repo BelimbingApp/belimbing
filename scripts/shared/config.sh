@@ -127,12 +127,14 @@ derive_backend_domain() {
     return 0
 }
 
-# Save frontend and backend domains to .env, and derive APP_URL.
-# Keeps APP_URL in sync whenever domains change.
-# Usage: save_domains_to_env "frontend_domain" "backend_domain"
+# Save frontend and (optional) backend domains to .env, and derive APP_URL.
+# Keeps APP_URL in sync whenever domains change. An empty backend domain is
+# written through as empty, which is how the rest of setup knows the second
+# vhost was declined.
+# Usage: save_domains_to_env "frontend_domain" ["backend_domain"]
 save_domains_to_env() {
     local frontend_domain=$1
-    local backend_domain=$2
+    local backend_domain=${2:-}
     local app_scheme
     app_scheme=$(get_env_var "APP_SCHEME" "https")
 
