@@ -4,12 +4,14 @@ use App\Base\Audit\Models\AuditAction;
 use App\Base\Audit\Services\AuditBuffer;
 use App\Base\Foundation\ApplicationTopology;
 use App\Base\Foundation\Contracts\DomainRuntimeReloader;
+use App\Base\Foundation\Services\DomainCatalog;
 use App\Base\Foundation\Services\DomainInstaller;
 use App\Base\Foundation\Services\DomainState;
 use App\Base\Settings\Models\Setting;
 use App\Base\Support\PhpCli;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Schema;
 use Tests\Support\FakeDomainRuntimeReloader;
@@ -34,6 +36,25 @@ function domainInstaller(): DomainInstaller
     return app(DomainInstaller::class);
 }
 
+/**
+ * Publish the fixture Domain the way a real one is published: a repository
+ * named blb-<id> in an owner organisation, carrying the blb-domain topic.
+ * There is no catalog config to set any more (#941).
+ */
+function seedDomainCatalog(array $repos = []): void
+{
+    config(['domains.owners' => ['FixtureOrg']]);
+
+    Http::fake(['api.github.com/orgs/FixtureOrg/repos*' => Http::response($repos !== [] ? $repos : [[
+        'name' => 'blb-zz-installable',
+        'topics' => [DomainCatalog::TOPIC],
+        'clone_url' => DOMAIN_INSTALLER_FIXTURE_REPO,
+        'description' => DOMAIN_INSTALLER_FIXTURE_DESCRIPTION,
+    ]])]);
+
+    app(DomainCatalog::class)->forget();
+}
+
 function domainInstallerRuntimeReloader(): FakeDomainRuntimeReloader
 {
     return app(DomainRuntimeReloader::class);
@@ -48,9 +69,7 @@ function flushDomainInstallerAuditBuffer(): void
 }
 
 it('lists catalog entries without a checkout as available', function (): void {
-    config(['domains.catalog' => [
-        DOMAIN_INSTALLER_FIXTURE_DOMAIN => ['repo' => DOMAIN_INSTALLER_FIXTURE_REPO, 'description' => DOMAIN_INSTALLER_FIXTURE_DESCRIPTION],
-    ]]);
+    seedDomainCatalog();
 
     expect(domainInstaller()->available())->toHaveKey(DOMAIN_INSTALLER_FIXTURE_DOMAIN);
 
@@ -60,9 +79,7 @@ it('lists catalog entries without a checkout as available', function (): void {
 });
 
 it('installs by cloning the catalog repo and migrating in a subprocess', function (): void {
-    config(['domains.catalog' => [
-        DOMAIN_INSTALLER_FIXTURE_DOMAIN => ['repo' => DOMAIN_INSTALLER_FIXTURE_REPO, 'description' => DOMAIN_INSTALLER_FIXTURE_DESCRIPTION],
-    ]]);
+    seedDomainCatalog();
 
     Process::fake();
     DomainState::disable(DOMAIN_INSTALLER_FIXTURE_DOMAIN);
@@ -81,9 +98,7 @@ it('installs by cloning the catalog repo and migrating in a subprocess', functio
 });
 
 it('does not reload runtime after an install migration fails', function (): void {
-    config(['domains.catalog' => [
-        DOMAIN_INSTALLER_FIXTURE_DOMAIN => ['repo' => DOMAIN_INSTALLER_FIXTURE_REPO, 'description' => DOMAIN_INSTALLER_FIXTURE_DESCRIPTION],
-    ]]);
+    seedDomainCatalog();
     Process::fake(fn ($process) => $process->command === PhpCli::current()->artisan(['migrate', '--force'])
         ? Process::result(errorOutput: 'migration failed', exitCode: 1)
         : Process::result());
@@ -96,9 +111,7 @@ it('does not reload runtime after an install migration fails', function (): void
 });
 
 it('records retained audit actions for domain install and uninstall', function (): void {
-    config(['domains.catalog' => [
-        DOMAIN_INSTALLER_FIXTURE_DOMAIN => ['repo' => DOMAIN_INSTALLER_FIXTURE_REPO, 'description' => DOMAIN_INSTALLER_FIXTURE_DESCRIPTION],
-    ]]);
+    seedDomainCatalog();
 
     Process::fake();
 
@@ -148,9 +161,7 @@ it('records and reloads domain enable and disable actions', function (): void {
 });
 
 it('rejects installing unknown or already-installed domains', function (): void {
-    config(['domains.catalog' => [
-        DOMAIN_INSTALLER_FIXTURE_DOMAIN => ['repo' => DOMAIN_INSTALLER_FIXTURE_REPO, 'description' => DOMAIN_INSTALLER_FIXTURE_DESCRIPTION],
-    ]]);
+    seedDomainCatalog();
 
     expect(fn () => domainInstaller()->install('ZzNotInCatalog'))
         ->toThrow(InvalidArgumentException::class, 'not in the catalog');

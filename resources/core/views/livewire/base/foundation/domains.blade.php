@@ -582,6 +582,19 @@
             </section>
         @endif
 
+        @unless ($catalogComplete)
+            <x-ui.alert variant="warning">
+                <div>{{ __('The Domain catalog is incomplete: some owners could not be asked, so Domains they publish are not listed below. This is a lookup failure, not an empty catalog.') }}</div>
+                @if (count($catalogProblems) > 0)
+                    <ul class="mt-1 list-disc pl-5 text-sm">
+                        @foreach ($catalogProblems as $problem)
+                            <li>{{ $problem }}</li>
+                        @endforeach
+                    </ul>
+                @endif
+            </x-ui.alert>
+        @endunless
+
         @if (count($available) > 0)
             <section class="space-y-2">
                 <h2 class="text-lg font-semibold text-ink">{{ __('Available Domains') }}</h2>

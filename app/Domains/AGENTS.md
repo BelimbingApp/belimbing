@@ -2,6 +2,41 @@
 
 Applies to optional Domain Modules under `app/Domains/{Domain}/{Module}`. A Domain is an installable, enableable, disableable, and updateable enterprise boundary; it contains one or more Modules. Core is the required Domain but lives separately under `app/Core/{Module}`; Extension Modules live under `app/Extensions/{Extension}/{Module}`. Read with root `AGENTS.md` (Four-Root Application Placement) and `docs/architecture/module-system.md`.
 
+## Publishing a Domain repository
+
+A Domain lives in its own repository, mounted here as a nested checkout. The platform ships no list of which Domains exist: it discovers them by asking GitHub for repositories that carry the topic **`blb-domain`**, in the organisation this checkout's own git remotes point at — `origin` first, then `upstream`. A fork therefore discovers its own Domains and falls back to the repository it forked.
+
+Two conventions make a repository discoverable:
+
+| Rule | Example |
+|------|---------|
+| Repository name is `blb-<id>`, lowercase and hyphenated | `blb-people-connector` |
+| It carries the GitHub topic `blb-domain` | — |
+
+The id determines everything else, so nothing needs to be written down twice: `blb-people-connector` mounts at `app/Domains/PeopleConnector` and scans as `<owner>_blb-people-connector` in SonarCloud. Adding a Domain that follows this shape needs no platform change.
+
+### Setting the topic
+
+A topic is repository metadata, not a file in the repository. It lives in GitHub's database, so setting one makes no commit, opens no pull request, and appears in no diff. You need `admin` on the repository.
+
+```bash
+gh repo edit "BelimbingApp/blb-<id>" --add-topic blb-domain
+```
+
+Use `gh repo edit --add-topic`, not the REST endpoint directly. `PUT /repos/{owner}/{repo}/topics` **replaces** the entire topic list; `--add-topic` reads the current list and writes the union, so it cannot silently drop topics a repository already has. Remove it again with `--remove-topic`. GitHub validates the name: lowercase letters, digits and hyphens, starting with a letter or digit, 50 characters maximum, at most 20 topics per repository.
+
+Confirm what a repository actually carries:
+
+```bash
+gh api repos/BelimbingApp/blb-<id>/topics --jq '.names|join(",")'
+```
+
+### What the topic does and does not do
+
+A repository without the topic is simply invisible to the install screen. Nothing else breaks: an already-mounted checkout keeps working, its Modules are still discovered from disk, and its own CI is unaffected. Discovery is about what an operator can *install*, not about what runs.
+
+Because the topic is repository metadata it is not versioned, does not appear in code review, and can be removed by anyone with `admin` — which would quietly empty the install screen. That is an accepted trade for first-party Domains inside an organisation you control, where "published in this organisation" is what does the authorising. It is explicitly **not** a trust model for third-party Extensions: those are private, live under unrelated owners, and are installed by an operator naming the repository and supplying a credential — see `app/Extensions/AGENTS.md`, which records why there is no `blb-extension` topic. On a public repository the topic is public: it appears on the repository page and in GitHub topic search.
+
 ## Contribution Surfaces
 
 A module plugs into shared platform surfaces through convention-discovered files — no central registration:

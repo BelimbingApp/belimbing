@@ -18,9 +18,9 @@ use InvalidArgumentException;
  *
  * A fresh Belimbing clone ships the Platform Baseline (Base + Core). Each
  * add-in domain is a nested git checkout mounted at app/Domains/{Domain};
- * installing clones the repo from the catalog (config: domains.catalog) and
- * runs pending migrations; uninstalling deletes the checkout and — only when
- * explicitly requested — drops the tables, ledger rows, and settings the
+ * installing clones the repo from the discovered catalog ({@see DomainCatalog})
+ * and runs pending migrations; uninstalling deletes the checkout and — only
+ * when explicitly requested — drops the tables, ledger rows, and settings the
  * deleted code claimed.
  *
  * Uninstall cleanup goes through DomainResidueScanner's re-validating
@@ -34,10 +34,11 @@ class DomainInstaller
         private readonly DomainLifecycleLedger $lifecycleLedger,
         private readonly DomainRuntimeReloader $runtimeReloader,
         private readonly NestedCheckoutGitState $gitState,
+        private readonly DomainCatalog $catalog,
     ) {}
 
     /**
-     * Installable domains: catalog entries without a checkout.
+     * Installable domains: discovered catalog entries without a checkout.
      *
      * @return array<string, array{repo: string, description: string}>
      */
@@ -45,18 +46,38 @@ class DomainInstaller
     {
         $available = [];
 
-        foreach ((array) config('domains.catalog', []) as $domain => $entry) {
-            if (! is_string($domain) || $this->isInstalled($domain)) {
+        foreach ($this->catalog->entries() as $domain => $entry) {
+            if ($this->isInstalled($domain)) {
                 continue;
             }
 
             $available[$domain] = [
-                'repo' => (string) ($entry['repo'] ?? ''),
-                'description' => (string) ($entry['description'] ?? ''),
+                'repo' => $entry['repo'],
+                'description' => $entry['description'],
             ];
         }
 
         return $available;
+    }
+
+    /**
+     * False when any owner the catalog searches could not be asked. An empty
+     * list of installable domains and a lookup that did not complete are
+     * different facts and the operator has to be able to tell them apart.
+     */
+    public function catalogComplete(): bool
+    {
+        return $this->catalog->complete();
+    }
+
+    /**
+     * Why the catalog is incomplete, one line per owner. Empty when it is not.
+     *
+     * @return list<string>
+     */
+    public function catalogProblems(): array
+    {
+        return $this->catalog->problems();
     }
 
     /**
@@ -130,9 +151,12 @@ class DomainInstaller
      */
     public function install(string $domain): array
     {
-        $entry = config('domains.catalog.'.$domain);
+        // DomainCatalog types every entry's repo as a string, so the only
+        // refusals left are the ones it cannot rule out: a Domain the catalog
+        // does not list, and an entry whose repository is blank.
+        $entry = $this->catalog->entries()[$domain] ?? null;
 
-        if (! is_array($entry) || ! is_string($entry['repo'] ?? null)) {
+        if ($entry === null || $entry['repo'] === '') {
             throw new InvalidArgumentException("Domain [$domain] is not in the catalog.");
         }
 

@@ -1,12 +1,6 @@
 parameters:
 	ignoreErrors:
 		-
-			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
-			identifier: larastan.noEnvCallsOutsideOfConfig
-			count: 6
-			path: app/Base/AI/Config/ai.php
-
-		-
 			message: '#^Call to function is_array\(\) with array\<string, mixed\> will always evaluate to true\.$#'
 			identifier: function.alreadyNarrowedType
 			count: 1
@@ -515,18 +509,6 @@ parameters:
 			identifier: trait.unused
 			count: 1
 			path: app/Base/Database/Concerns/TracksExternalSource.php
-
-		-
-			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
-			identifier: larastan.noEnvCallsOutsideOfConfig
-			count: 3
-			path: app/Base/Database/Config/backup.php
-
-		-
-			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
-			identifier: larastan.noEnvCallsOutsideOfConfig
-			count: 3
-			path: app/Base/Database/Config/data_share.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$seeder_class\.$#'
@@ -1535,12 +1517,6 @@ parameters:
 			identifier: booleanAnd.rightAlwaysTrue
 			count: 2
 			path: app/Base/Menu/Services/PinMetadataNormalizer.php
-
-		-
-			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
-			identifier: larastan.noEnvCallsOutsideOfConfig
-			count: 4
-			path: app/Base/Pdf/Config/pdf.php
 
 		-
 			message: '#^Offset ''ok'' on array\{ok\: bool, action\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
