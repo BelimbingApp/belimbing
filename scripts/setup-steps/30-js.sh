@@ -96,6 +96,40 @@ add_bun_to_path_permanently() {
     fi
 }
 
+# The bun.sh installer downloads a .zip and shells out to unzip. Fresh WSL and
+# Linux images often ship without it, so install it before the installer runs.
+ensure_unzip_available() {
+    if command_exists unzip; then
+        return 0
+    fi
+
+    echo -e "${CYAN}→${NC} Installing unzip (required by the Bun installer)..."
+
+    # Failures fall through to the manual-install hint below.
+    if command_exists apt-get; then
+        { sudo apt-get update -qq && sudo apt-get install -y -qq unzip; } || true
+    elif command_exists dnf; then
+        sudo dnf install -y unzip || true
+    elif command_exists yum; then
+        sudo yum install -y unzip || true
+    elif command_exists pacman; then
+        sudo pacman -S --noconfirm unzip || true
+    elif command_exists zypper; then
+        sudo zypper install -y unzip || true
+    elif command_exists apk; then
+        sudo apk add unzip || true
+    fi
+
+    if command_exists unzip; then
+        echo -e "${GREEN}✓${NC} unzip installed"
+        return 0
+    fi
+
+    echo -e "${RED}✗${NC} unzip is required to install Bun but could not be installed" >&2
+    echo -e "  Install it manually, e.g. ${CYAN}sudo apt-get install unzip${NC}, then re-run this step." >&2
+    return 1
+}
+
 # Install Bun
 install_bun() {
     # Check if Bun is already installed at default location
@@ -147,6 +181,7 @@ install_bun() {
             fi
             ;;
         linux|wsl2)
+            ensure_unzip_available || return 1
             # Use official installer
             echo -e "${CYAN}Installing Bun via official installer...${NC}"
             curl -fsSL --proto '=https' --proto-redir '=https' https://bun.sh/install | bash || {
@@ -251,6 +286,7 @@ upgrade_bun() {
             fi
             ;;
         linux|wsl2)
+            ensure_unzip_available || return 1
             curl -fsSL --proto '=https' --proto-redir '=https' https://bun.sh/install | bash || {
                 echo -e "${RED}✗${NC} Failed to upgrade Bun" >&2
                 return 1
