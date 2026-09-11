@@ -61,7 +61,7 @@ final class MigrationSourceParser
             );
         }
 
-        $class = (new NodeFinder)->findFirstInstanceOf($nodes, Node\Stmt\Class_::class);
+        $class = $this->findMigrationClass($nodes);
 
         if (! $class instanceof Node\Stmt\Class_) {
             return new ParsedMigration(
@@ -105,6 +105,31 @@ final class MigrationSourceParser
         $traverser->addVisitor(new NameResolver);
 
         return $traverser->traverse($nodes);
+    }
+
+    /** @param  list<Node\Stmt>  $nodes */
+    private function findMigrationClass(array $nodes): ?Node\Stmt\Class_
+    {
+        $classes = (new NodeFinder)->findInstanceOf($nodes, Node\Stmt\Class_::class);
+
+        foreach ($classes as $class) {
+            if ($class->isAnonymous() && $this->classDeclaresMethod($class, 'up')) {
+                return $class;
+            }
+        }
+
+        foreach ($classes as $class) {
+            if ($this->classDeclaresMethod($class, 'up')) {
+                return $class;
+            }
+        }
+
+        return $classes[0] ?? null;
+    }
+
+    private function classDeclaresMethod(Node\Stmt\Class_ $class, string $method): bool
+    {
+        return $class->getMethod($method) instanceof Node\Stmt\ClassMethod;
     }
 
     private function loadClassMembers(Node\Stmt\Class_ $class): void
