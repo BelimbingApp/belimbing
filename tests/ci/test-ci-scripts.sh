@@ -796,7 +796,7 @@ fi
 
 
 # Platform coverage ratchet (#629): fail-first when coverage drops below the
-# checked-in baseline, then pass at/above baseline; main update raises only.
+# checked-in baseline, then pass at/above baseline; explicit update raises only.
 python3 - <<'PY'
 from pathlib import Path
 import json
@@ -812,20 +812,10 @@ workflow = (root / '.github/workflows/tests.yml').read_text(encoding='utf-8')
 assert script.is_file(), 'missing platform-coverage-ratchet.py'
 assert baseline_path.is_file(), 'missing platform-coverage-baseline.json'
 assert 'platform-coverage-ratchet.py check' in workflow
-assert 'platform-coverage-ratchet.py update' in workflow
-assert 'Raise platform coverage baseline on main' in workflow
 assert 'Upsert PR timing and coverage comment' in workflow
 assert 'upsert-pr-ci-summary-comment.py' in workflow
-assert 'ci/raise-coverage-baseline' in workflow
-assert 'gh pr create' in workflow
-assert 'gh pr merge' in workflow
-assert 'COVERAGE_BASELINE_RAISE_TOKEN: ${{ secrets.COVERAGE_BASELINE_RAISE_TOKEN }}' in workflow, 'raise token must be wired from secrets, not only mentioned'
-assert 'AI-Team-Lane-Issue: none' in workflow
-assert 'task:ready' in workflow
-assert 'bot-maintenance' in workflow
 assert 'git push origin HEAD:main' not in workflow
 assert 'coverage-feature-a.xml' in workflow and 'coverage-feature-b.xml' in workflow
-assert 'paths-ignore' in workflow and 'platform-coverage-baseline.json' in workflow
 
 baseline = json.loads(baseline_path.read_text(encoding='utf-8'))
 assert 'line_rate' in baseline and 'tolerance_pp' in baseline
@@ -1100,14 +1090,11 @@ policy = root / 'scripts/ci/bot-pr-policy.sh'
 assert policy.is_file(), 'missing scripts/ci/bot-pr-policy.sh'
 assert policy.stat().st_mode & 0o111, 'bot-pr-policy.sh must be executable'
 
-tests_yml = (root / '.github/workflows/tests.yml').read_text(encoding='utf-8')
 timings_yml = (root / '.github/workflows/refresh-feature-shard-timings.yml').read_text(encoding='utf-8')
 livewire_yml = (root / '.github/workflows/refresh-livewire-action-baselines.yml').read_text(
     encoding='utf-8'
 )
 review_yml = (root / '.github/workflows/ai-team-independent-review.yml').read_text(encoding='utf-8')
-assert '--label bot-maintenance' in tests_yml, 'coverage raise must apply bot-maintenance'
-assert '--add-label bot-maintenance' in tests_yml
 assert '--label bot-maintenance' in timings_yml, 'timings refresh must apply bot-maintenance'
 assert 'AI-Team-Lane-Issue: none' in timings_yml
 assert '--label bot-maintenance' in livewire_yml, 'livewire refresh must apply bot-maintenance'
@@ -1157,8 +1144,9 @@ with tempfile.TemporaryDirectory() as tmp:
             '{"line_rate":1}\n', encoding='utf-8'
         ),
     )
-    passed = run_policy(head)
-    assert passed.returncode == 0, passed.stdout + passed.stderr
+    failed = run_policy(head)
+    assert failed.returncode == 1, failed.stdout + failed.stderr
+    assert 'platform-coverage-baseline.json' in failed.stderr
 
     def baseline_plus_extra():
         (repo / 'tests/ci/platform-coverage-baseline.json').write_text(
