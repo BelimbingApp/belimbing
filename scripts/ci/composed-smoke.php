@@ -4,61 +4,37 @@
 declare(strict_types=1);
 
 /**
- * Composed-application smoke test (belimbing#600).
+ * Composed-application smoke test (belimbing#600, reshaped by #940).
  *
  * Nothing else proves, as one assertion, that the platform boots with every
- * pinned Domain mounted and exposes the surface the pins promise. Route
- * discovery refuses a collision (#570), the migration preflight refuses a
- * duplicate migration name at migrate time (#117), and the descriptor pins
- * immutable refs (#574, #582, #591) — but each fires on its own, in its own
- * run. This script composes the descriptor's domains at their exact refs,
- * boots the application once, and holds the result to a checked-in surface:
+ * controlled Domain mounted at once. Route discovery refuses a collision
+ * (#570) and the migration preflight refuses a duplicate migration name at
+ * migrate time (#117), but each fires on its own, in its own run — and a
+ * collision between two Domains is invisible to either Domain's own CI,
+ * because each one is perfectly fine alone. This script mounts them together,
+ * boots the application once, and reports what refused.
  *
  *   - the boot succeeds (a RouteCollisionException or a shared-table refusal
  *     surfaces here as a failed boot with its message);
- *   - the route table contains every expected Domain route name and exactly
- *     the expected number of Domain routes (platform routes are counted but
- *     not held to the surface: a Base or Core route landing on main is not a
- *     composition change, a Domain route appearing or vanishing is);
  *   - no migration basename appears in more than one migration directory
  *     across Base, Core, the mounted Domains and Extensions (the preflight's
  *     rule, applied without waiting for a migrate run).
  *
- * Domains are materialized from scripts/ci/domain-repos.json the way
- * domain-ci does (clone, detach at the ref). A mount that already exists is
- * accepted only when its HEAD is the pinned ref, so a stale local mount
- * cannot pass for the pin.
+ * Domains are materialized at their `main`. There is deliberately no pinned
+ * ref and no checked-in route surface: this asserts that the composed world
+ * works, not that a Domain has a particular set of routes. A Domain's own
+ * route inventory is that Domain's business and belongs in its own suite
+ * (#940). The cost of composing at `main` is stated plainly: a red run here
+ * does not tell you whether the platform or a Domain caused it, and it cannot
+ * be re-run against a fixed past state. The gain is that nothing goes stale.
  *
- *   php scripts/ci/composed-smoke.php [--registry=<json>] [--surface=<json>]
- *       [--domains=<optional comma-separated subset>] [--root=<platform checkout>]
- *       [--scan-only] [--print-surface]
- *       [--routes=<route:list json>|--routes-json=<route:list json>]
+ *   php scripts/ci/composed-smoke.php [--registry=<json>] [--root=<platform checkout>]
+ *       [--domains=<optional comma-separated subset>] [--scan-only]
  *
  * --scan-only skips materialization and the boot and runs the migration scan
  * alone, so a fixture tree can prove the duplicate rule without a network.
- * --print-surface boots and writes the observed surface as JSON to stdout
- * instead of judging it: the way to regenerate composed-surface.json after a
- * pin advances.
- * --routes / --routes-json judges a saved `route:list --json` table instead of
- * booting, so tests/ci/test-ci-scripts.sh can drive every surface guard (pin
- * agreement, mount at the pinned ref, domain route count, expected route
- * names) against fixtures without a network or a boot — including the
- * deliberate missing-name and wrong-count mutations that must turn red.
- * Production runs never pass it.
  */
-/**
- * Naming prefixes that mark a live route as Domain surface (#870, #916).
- *
- * Domain surface membership is the live route table filtered by this prefix
- * list — not a text scan of `->name()` literals. Assembled names from
- * `Route::name()->group` / `Route::resource` never appear as one literal in
- * Routes files; counting only literals silently under-counts and lets new
- * Domain routes ride in without a surface bump (#920). Base Integration uses
- * `admin.integration.*` and must never appear here (#916).
- * {@see declaredDomainRouteNames()} still refuses Domain Routes declarations
- * outside this list so an unconventional prefix fails loudly (#870).
- */
-const DOMAIN_ROUTE_NAME = '/^(people\.|people-connector\.|admin\.people-connector\.|commerce\.|it\.|quality\.)/';
+require_once __DIR__.'/domain-registry.php';
 
 function fail(string $message): never
 {
@@ -66,98 +42,34 @@ function fail(string $message): never
     exit(1);
 }
 
-/**
- * Every `->name('…')` / `->name("…")` declared under Domain Routes trees.
- *
- * @return list<string>
- */
-function declaredDomainRouteNames(string $root): array
-{
-    $names = [];
-
-    foreach (glob($root.'/app/Domains/*/*/Routes/*.php') ?: [] as $file) {
-        $contents = (string) file_get_contents($file);
-        if (preg_match_all("/->name\\('([^']+)'\\)/", $contents, $single) > 0) {
-            foreach ($single[1] as $name) {
-                $names[] = $name;
-            }
-        }
-        if (preg_match_all('/->name\\("([^"]+)"\\)/', $contents, $double) > 0) {
-            foreach ($double[1] as $name) {
-                $names[] = $name;
-            }
-        }
-    }
-
-    $names = array_values(array_unique($names));
-    sort($names);
-
-    return $names;
-}
-
-/**
- * Declared Domain route names the prefix filter does not own (#870).
- *
- * @param  list<string>  $declared
- * @return list<string>
- */
-function unmatchedDeclaredDomainRouteNames(array $declared): array
-{
-    return array_values(array_filter(
-        $declared,
-        static fn (string $name): bool => preg_match(DOMAIN_ROUTE_NAME, $name) !== 1,
-    ));
-}
-
-/** @return array<string, string> */
+/** @return array<string, string|bool|null> */
 function options(array $argv): array
 {
     $options = [
         'registry' => null,
-        'surface' => null,
         'domains' => null,
         'root' => dirname(__DIR__, 2),
-        'routes' => null,
         'scan-only' => false,
-        'print-surface' => false,
     ];
 
     foreach (array_slice($argv, 1) as $argument) {
-        if ($argument === '--scan-only' || $argument === '--print-surface') {
-            $options[substr($argument, 2)] = true;
+        if ($argument === '--scan-only') {
+            $options['scan-only'] = true;
 
             continue;
         }
         if (! preg_match('/^--([a-z-]+)=(.+)$/', $argument, $match)) {
             fail("unknown argument {$argument}");
         }
-        $key = $match[1] === 'routes-json' ? 'routes' : $match[1];
-        if (! array_key_exists($key, $options)) {
+        if (! array_key_exists($match[1], $options)) {
             fail("unknown argument {$argument}");
         }
-        $options[$key] = $match[2];
+        $options[$match[1]] = $match[2];
     }
 
     $options['root'] = rtrim((string) realpath((string) $options['root']), '/');
-    $options['registry'] ??= $options['root'].'/scripts/ci/domain-repos.json';
-    $options['surface'] ??= $options['root'].'/scripts/ci/composed-surface.json';
 
     return $options;
-}
-
-/** @return array<string, mixed> */
-function readJson(string $path): array
-{
-    $contents = @file_get_contents($path);
-    if ($contents === false) {
-        fail("cannot read {$path}");
-    }
-    $data = json_decode($contents, true);
-    if (! is_array($data)) {
-        fail("{$path} is not valid JSON");
-    }
-
-    return $data;
 }
 
 function run(array $command, ?string $cwd = null): array
@@ -176,45 +88,34 @@ function run(array $command, ?string $cwd = null): array
 }
 
 /**
- * Clone each selected domain at its pinned ref, or accept an existing mount
- * whose HEAD is that ref.
+ * Put each selected Domain on disk through the shared materializer, so this
+ * path and the workflow paths try the same candidate owners in the same order
+ * (#943 review). An existing mount is accepted as it stands.
  *
- * @return array<string, string> domain id => mount path
+ * @param  array<string, array{repo: string, path: string, repo_candidates: list<string>}>  $domains
+ * @return list<string> materialized domain ids
  */
-function materialize(array $registry, array $domainIds, string $root): array
+function materialize(array $domains, array $domainIds, string $root): array
 {
-    $mounts = [];
+    $mounted = [];
 
     foreach ($domainIds as $id) {
-        $domain = $registry['domains'][$id] ?? fail("descriptor has no domain [{$id}]");
-        $ref = (string) ($domain['ref'] ?? '');
-        if (preg_match('/^[0-9a-f]{40}$/', $ref) !== 1) {
-            fail("{$id}.ref must be an immutable 40-character commit SHA");
-        }
-        $path = $root.'/'.trim((string) $domain['path'], '/');
-
-        if (! is_dir($path)) {
-            fwrite(STDERR, "composed-smoke: materializing {$domain['repo']}@{$ref} -> {$domain['path']}\n");
-            [$code, , $error] = run(['git', 'clone', '--quiet', '--filter=blob:none', '--no-checkout', "https://github.com/{$domain['repo']}.git", $path]);
-            if ($code !== 0) {
-                fail("clone of {$domain['repo']} failed: {$error}");
-            }
-            [$code, , $error] = run(['git', '-C', $path, 'checkout', '--quiet', '--detach', $ref]);
-            if ($code !== 0) {
-                fail("checkout of {$domain['repo']}@{$ref} failed: {$error}");
-            }
+        $domain = $domains[$id] ?? fail("descriptor does not list domain [{$id}]");
+        $result = materializeDomain($domain, $root);
+        if (! $result['ok']) {
+            fail("clone of {$id} failed:\n  ".implode("\n  ", $result['errors']));
         }
 
-        [$code, $head] = run(['git', '-C', $path, 'rev-parse', 'HEAD']);
-        $head = trim($head);
-        if ($code !== 0 || $head !== $ref) {
-            fail("{$domain['path']} is mounted at {$head}, not the pinned {$ref}; unmount it or advance the pin");
-        }
+        fwrite(STDERR, sprintf(
+            "composed-smoke: %s mounted at %s\n",
+            $id,
+            substr((string) $result['sha'], 0, 8) ?: 'unknown',
+        ));
 
-        $mounts[$id] = $path;
+        $mounted[] = $id;
     }
 
-    return $mounts;
+    return $mounted;
 }
 
 /**
@@ -247,14 +148,14 @@ function duplicateMigrations(string $root): array
 $options = options($argv);
 $root = $options['root'];
 $failures = [];
+$mounted = [];
 
 if (! $options['scan-only']) {
-    $registry = readJson($options['registry']);
-    $surface = readJson($options['surface']);
+    $registry = domainRegistry($options['registry'], $root);
     $domainIds = $options['domains'] === null
         ? array_keys($registry['domains'])
-        : array_values(array_filter(array_map('trim', explode(',', $options['domains']))));
-    $mounts = materialize($registry, $domainIds, $root);
+        : array_values(array_filter(array_map('trim', explode(',', (string) $options['domains']))));
+    $mounted = materialize($registry['domains'], $domainIds, $root);
 }
 
 $duplicates = duplicateMigrations($root);
@@ -274,78 +175,22 @@ if ($options['scan-only']) {
     exit(0);
 }
 
-foreach ($domainIds as $id) {
-    $expectedPin = (string) ($surface['pins'][$id] ?? '');
-    if ($expectedPin !== (string) $registry['domains'][$id]['ref']) {
-        $failures[] = "surface pins {$id} at [{$expectedPin}] but the descriptor pins [{$registry['domains'][$id]['ref']}]; regenerate scripts/ci/composed-surface.json";
-    }
+[$code, $stdout, $stderr] = run(['php', 'artisan', 'route:list', '--json'], $root);
+if ($code !== 0) {
+    $message = trim($stderr) !== '' ? trim($stderr) : trim($stdout);
+    fail("the composed application failed to boot:\n".$message);
 }
-
-if ($options['routes'] !== null) {
-    $routes = readJson($options['routes']);
-} else {
-    [$code, $stdout, $stderr] = run(['php', 'artisan', 'route:list', '--json'], $root);
-    if ($code !== 0) {
-        $message = trim($stderr) !== '' ? trim($stderr) : trim($stdout);
-        fail("the composed application failed to boot:\n".$message);
-    }
-    $routes = json_decode($stdout, true);
-    if (! is_array($routes)) {
-        fail('route:list did not return JSON');
-    }
+$routes = json_decode($stdout, true);
+if (! is_array($routes)) {
+    fail('route:list did not return JSON');
 }
-$names = array_values(array_filter(array_map(fn (array $route): ?string => $route['name'] ?? null, $routes)));
-sort($names);
-$declared = declaredDomainRouteNames($root);
-// Domain surface = live names matching DOMAIN_ROUTE_NAME (#916, #920).
-// Do not intersect with literal ->name() declarations: Route::name()->group and
-// Route::resource assemble names the text scan never sees, and under-counting
-// lets Domain routes land without failing the pin. Excluding admin.integration
-// from DOMAIN_ROUTE_NAME is what keeps Base Integration off this count (#916).
-$domainNames = array_values(array_filter(
-    $names,
-    static fn (string $name): bool => preg_match(DOMAIN_ROUTE_NAME, $name) === 1,
-));
-
-// A Domain Routes declaration outside DOMAIN_ROUTE_NAME is invisible to the
-// surface count: refuse it here so a new prefix is a decision, not silence (#870).
-$unmatchedDeclared = unmatchedDeclaredDomainRouteNames($declared);
-if ($unmatchedDeclared !== []) {
-    $failures[] = 'Domain Routes declare names outside DOMAIN_ROUTE_NAME (add a prefix or rename): '.implode(', ', $unmatchedDeclared);
-}
-
-// Pin/count mismatches are why --print-surface exists (advance-domain-pin
-// regenerates while the surface is stale). Only refuse names the filter would
-// otherwise silence — those cannot be fixed by rewriting the surface file.
-if ($unmatchedDeclared !== [] && $options['print-surface']) {
-    fail('Domain Routes declare names outside DOMAIN_ROUTE_NAME (add a prefix or rename): '.implode(', ', $unmatchedDeclared));
-}
-
-if ($options['print-surface']) {
-    echo json_encode([
-        '_comment' => $surface['_comment'] ?? '',
-        'pins' => array_combine($domainIds, array_map(fn (string $id): string => (string) $registry['domains'][$id]['ref'], $domainIds)),
-        'domain_route_count' => count($domainNames),
-        'route_names' => $domainNames,
-    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)."\n";
-    exit(0);
-}
-
-$expectedCount = (int) ($surface['domain_route_count'] ?? -1);
-if (count($domainNames) !== $expectedCount) {
-    $failures[] = sprintf('domain route count is %d, expected %d', count($domainNames), $expectedCount);
-}
-$missing = array_values(array_diff((array) ($surface['route_names'] ?? []), $names));
-if ($missing !== []) {
-    $failures[] = 'expected route names missing from the composed table: '.implode(', ', $missing);
-}
+$named = array_values(array_filter(array_map(fn (array $route): ?string => $route['name'] ?? null, $routes)));
 
 fwrite(STDERR, sprintf(
-    "composed-smoke: %s; %d routes (%d named, %d domain), %d migration(s), %d duplicate name(s)\n",
-    implode(', ', array_map(fn (string $id): string => "{$id}@".substr((string) $registry['domains'][$id]['ref'], 0, 8), $domainIds)),
+    "composed-smoke: %s; %d routes (%d named), %d migration(s), %d duplicate name(s)\n",
+    implode(', ', $mounted),
     count($routes),
-    count($names),
-    count($domainNames),
+    count($named),
     $migrationCount,
     count($duplicates),
 ));

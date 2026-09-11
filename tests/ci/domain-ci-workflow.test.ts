@@ -8,7 +8,7 @@ const workflow = Bun.YAML.parse(
 ) as any;
 const domainRegistry = JSON.parse(
     readFileSync(join(root, "scripts/ci/domain-repos.json"), "utf8"),
-) as { domains: Record<string, unknown> };
+) as { domains: string[] };
 
 const sqliteSteps = () => workflow.jobs.sqlite.steps;
 const step = (name: string) => {
@@ -118,14 +118,19 @@ test("domain CI scans composed Domain trees for duplicate Pest helpers", () => {
     expect(pgNames).not.toContain("Scan composed Domain trees for duplicate Pest helpers");
 });
 
-test("module smoke checks every pinned Domain after its suite", () => {
+test("module smoke checks every listed Domain after its suite", () => {
     const smoke = step("Module smoke composition");
 
-    expect(Object.keys(domainRegistry.domains).length).toBeGreaterThan(0);
-    expect(smoke.run).toContain(".domains | to_entries[]");
-    expect(smoke.run).toContain("domain_id repo domain_path ref");
-    expect(smoke.run).toContain('git clone --quiet --filter=blob:none --no-checkout');
-    expect(smoke.run).toContain('git -C "$domain_path" checkout --quiet --detach "$ref"');
+    // The descriptor lists ids; the derivation turns each into repo and path.
+    expect(domainRegistry.domains.length).toBeGreaterThan(0);
+    expect(smoke.run).toContain("php scripts/ci/domain-registry.php --tsv");
+    expect(smoke.run).toContain("domain_id repo domain_path");
+    // Materialized through the candidate-aware path, never a bare clone that
+    // would try only the first owner (#943 review).
+    expect(smoke.run).toContain("php scripts/ci/domain-registry.php --materialize");
+    expect(smoke.run).not.toContain("git clone");
+    // No pin: the smoke composes each Domain at its default branch (#940).
+    expect(smoke.run).not.toContain("checkout --quiet --detach");
     expect(smoke.run).toContain('php artisan blb:module-check "$module_id"');
 
     const names = sqliteSteps().map((entry: any) => entry.name);

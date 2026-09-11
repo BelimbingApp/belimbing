@@ -42,7 +42,7 @@ function parseArgs(argv: string[]): {
 
 export function composedBootFailedIssueBody(refusal: string, runUrl?: string): string {
     const lines = [
-        "The scheduled composed-application smoke test refused at the pins in `scripts/ci/domain-repos.json`.",
+        "The scheduled composed-application smoke test refused while composing every Domain in `scripts/ci/domain-repos.json` at its `main`.",
         "",
         "## Refusal",
         "",
@@ -55,7 +55,7 @@ export function composedBootFailedIssueBody(refusal: string, runUrl?: string): s
         lines.push(`Run: ${runUrl}`, "");
     }
     lines.push(
-        "See `docs/ci/composed-app-runbook.md` and `docs/ci/domain-pins.md`.",
+        "See `docs/ci/composed-app-runbook.md` and `docs/ci/domain-ci.md`.",
         "",
         "This issue is opened or updated by the nightly `composed-smoke` workflow (#663). Close it when composition is green again.",
     );

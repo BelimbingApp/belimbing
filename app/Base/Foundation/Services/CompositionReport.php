@@ -10,23 +10,18 @@ use ReflectionClass;
 /**
  * One read that says what this installation is composed of: every mounted
  * module with its declared version, its resolved boot position, and, for a
- * module that lives in a pinned Domain checkout, the ref the descriptor
- * (scripts/ci/domain-repos.json) pins beside the ref actually checked out.
+ * module that lives in a Domain checkout, the commit that checkout is at.
  *
- * Nothing here decides anything. The smoke test (scripts/ci/composed-smoke.php)
- * refuses a composition whose mounts are not at their pins; this report lets an
- * operator see the same facts on a running installation (#623).
+ * Nothing here decides anything, and nothing here reads CI configuration: a
+ * module's Domain is the mount directory it sits under, which is the same
+ * convention the application already discovers Domains by (#623, #940).
  */
 class CompositionReport
 {
-    public function __construct(private readonly ?string $descriptorPath = null) {}
-
     /**
      * @return array{
-     *     descriptor: string|null,
-     *     descriptor_issues: list<string>,
      *     boot_order: list<string>,
-     *     modules: list<array{module: string, name: string, version: string, layer: string, path: string, boot_position: int|null, provider: string|null, domain: string|null, pinned_ref: string|null, mounted_ref: string|null, matches_pin: bool|null}>
+     *     modules: list<array{module: string, name: string, version: string, layer: string, path: string, boot_position: int|null, provider: string|null, domain: string|null, mounted_ref: string|null}>
      * }
      */
     public function build(): array
@@ -51,18 +46,16 @@ class CompositionReport
             }
         }
 
-        [$pins, $issues] = $this->descriptorPins();
         $mountedRefs = [];
         $modules = [];
 
         foreach ($reader->moduleRoots() as $module => $root) {
             $root = $this->normalize($root);
             $manifest = $manifestsByRoot[$root] ?? null;
-            $domain = $this->domainFor($root, $pins);
-            $pinnedRef = $domain !== null ? $pins[$domain]['ref'] : null;
+            $domain = $this->domainFor($root);
             $mountedRef = null;
             if ($domain !== null) {
-                $mountedRefs[$domain] ??= $this->mountedRef(base_path($pins[$domain]['path']));
+                $mountedRefs[$domain] ??= $this->mountedRef($this->domainMount($domain));
                 $mountedRef = $mountedRefs[$domain];
             }
 
@@ -75,20 +68,13 @@ class CompositionReport
                 'boot_position' => $providersByRoot[$root]['position'] ?? null,
                 'provider' => $providersByRoot[$root]['provider'] ?? null,
                 'domain' => $domain,
-                'pinned_ref' => $pinnedRef,
                 'mounted_ref' => $mountedRef,
-                'matches_pin' => $pinnedRef === null || $mountedRef === null ? null : $pinnedRef === $mountedRef,
             ];
         }
 
         usort($modules, fn (array $a, array $b): int => ($a['boot_position'] ?? PHP_INT_MAX) <=> ($b['boot_position'] ?? PHP_INT_MAX) ?: strcmp($a['module'], $b['module']));
 
         return [
-            // The file that was read, whenever one exists: a descriptor whose
-            // entries are unusable is a broken descriptor, not a missing one,
-            // and the operator must be able to tell the two apart.
-            'descriptor' => is_file($this->descriptor()) ? $this->relative($this->descriptor()) : null,
-            'descriptor_issues' => $issues,
             'boot_order' => array_values(array_map(
                 fn (array $module): string => $module['module'],
                 array_filter($modules, fn (array $module): bool => $module['boot_position'] !== null),
@@ -98,67 +84,39 @@ class CompositionReport
     }
 
     /**
-     * Pins keyed on the mount path, which is what ties a module to a domain.
-     * An entry with a path but no usable ref still claims its mount (the pin
-     * is unreadable, not absent) and is reported as an issue; an entry with no
-     * path cannot claim anything and is reported too.
-     *
-     * @return array{0: array<string, array{path: string, ref: string|null}>, 1: list<string>} [domain id => pin, issues]
+     * The Domain a module root belongs to: the directory directly under the
+     * Domains root, lowercased and hyphenated back into its id, or null for a
+     * module that is not in a Domain at all. `PeopleConnector` is
+     * `people-connector`, the same rule scripts/ci/domain-registry.php applies
+     * in the other direction.
      */
-    private function descriptorPins(): array
+    private function domainFor(string $root): ?string
     {
-        $path = $this->descriptor();
-        if (! is_file($path)) {
-            return [[], []];
+        $domainsRoot = $this->normalize(ApplicationTopology::domainsRoot());
+        if (! str_starts_with($root, $domainsRoot.'/')) {
+            return null;
         }
 
-        $data = json_decode((string) file_get_contents($path), true);
-        if (! is_array($data) || ! is_array($data['domains'] ?? null)) {
-            return [[], [$this->relative($path).' is not a descriptor: no domains object']];
+        $name = explode('/', substr($root, strlen($domainsRoot) + 1))[0];
+        if ($name === '') {
+            return null;
         }
 
-        $pins = [];
-        $issues = [];
-        foreach ($data['domains'] as $id => $domain) {
-            $id = (string) $id;
-            $mount = is_array($domain) && is_string($domain['path'] ?? null) ? trim($domain['path'], '/') : '';
-            if ($mount === '') {
-                $issues[] = "domain [{$id}] has no mount path";
-
-                continue;
-            }
-
-            $ref = is_array($domain) && is_string($domain['ref'] ?? null) && preg_match('/^[0-9a-f]{40}$/', $domain['ref']) === 1
-                ? $domain['ref']
-                : null;
-            if ($ref === null) {
-                $issues[] = "domain [{$id}] at {$mount} has no immutable 40-character ref";
-            }
-
-            $pins[$id] = ['path' => $mount, 'ref' => $ref];
-        }
-
-        return [$pins, $issues];
-    }
-
-    private function descriptor(): string
-    {
-        return $this->descriptorPath ?? base_path('scripts/ci/domain-repos.json');
+        return strtolower((string) preg_replace('/(?<!^)[A-Z]/', '-$0', $name));
     }
 
     /**
-     * @param  array<string, array{path: string, ref: string|null}>  $pins
+     * The mount directory of a Domain id, which is that id in StudlyCase under
+     * the Domains root.
      */
-    private function domainFor(string $root, array $pins): ?string
+    private function domainMount(string $domain): string
     {
-        foreach ($pins as $id => $pin) {
-            $mount = $this->normalize(base_path($pin['path']));
-            if ($root === $mount || str_starts_with($root, $mount.'/')) {
-                return $id;
-            }
-        }
+        $studly = implode('', array_map(
+            static fn (string $part): string => ucfirst($part),
+            explode('-', $domain),
+        ));
 
-        return null;
+        return ApplicationTopology::domainsRoot().'/'.$studly;
     }
 
     /**
@@ -181,8 +139,7 @@ class CompositionReport
 
     /**
      * Raw git answer for a mount's HEAD. Overridable so a test can hand the
-     * shape check whatever git might print. Argv form, never a shell: the
-     * mount path comes from the descriptor.
+     * shape check whatever git might print. Argv form, never a shell.
      *
      * @return array{0: int, 1: string} [exit code, trimmed stdout]
      */

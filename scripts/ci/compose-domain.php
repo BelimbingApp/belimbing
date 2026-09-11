@@ -12,12 +12,16 @@ declare(strict_types=1);
  * `extra.blb.requires-modules` lives in another domain repo that must also be
  * placed before the test suite can boot.
  *
- * This script scans the placed domain's manifests, computes those missing
- * cross-domain repos using scripts/ci/domain-repos.json, and prints one
- * `<owner/repo>\t<checkout-path>` line per repo to stdout for the workflow to
- * clone. A human-readable summary goes to stderr. It exits non-zero when a
- * required module has no registry entry — a missing edge is a real failure, not
- * something to paper over.
+ * This script scans the placed domain's manifests, derives the repository and
+ * mount path of each missing cross-domain dependency from its module id
+ * (scripts/ci/domain-registry.php), and prints one
+ * `<domain-id>\t<owner/repo>\t<checkout-path>` line per repo to stdout. The
+ * caller materializes those ids with `domain-registry.php --materialize=<ids>`
+ * rather than cloning the printed repository directly: only the materializer
+ * walks the remaining candidate owners when the first does not host it. A human-readable summary
+ * goes to stderr. It exits non-zero when a required module names a Domain the
+ * descriptor does not list — a missing edge is a real failure, not something to
+ * paper over.
  */
 
 /**
@@ -55,28 +59,16 @@ function parseArguments(array $argv): array
     return ['domain-path' => rtrim($domainPath, '/'), 'registry' => $registry];
 }
 
+require_once __DIR__.'/domain-registry.php';
+
 /**
  * @return array<string, array{repo: string, path: string}>
  */
 function loadRegistry(string $registryPath): array
 {
-    $contents = @file_get_contents($registryPath);
-    if ($contents === false) {
-        fwrite(STDERR, "compose-domain: cannot read registry at {$registryPath}\n");
-        exit(2);
-    }
-
-    $data = json_decode($contents, true);
-    if (! is_array($data)) {
-        fwrite(STDERR, "compose-domain: registry at {$registryPath} is not valid JSON\n");
-        exit(2);
-    }
-
     $map = [];
-    foreach ((array) ($data['domains'] ?? []) as $key => $entry) {
-        if (is_string($key) && is_array($entry) && isset($entry['repo'], $entry['path'])) {
-            $map[$key] = ['repo' => (string) $entry['repo'], 'path' => (string) $entry['path']];
-        }
+    foreach (domainRegistry($registryPath)['domains'] as $id => $domain) {
+        $map[$id] = ['repo' => $domain['repo'], 'path' => $domain['path']];
     }
 
     return $map;
@@ -162,11 +154,11 @@ foreach ($requiredIds as $id) {
         continue;
     }
 
-    $toClone[$entry['path']] = $entry['repo'];
+    $toClone[$entry['path']] = ['id' => $domain, 'repo' => $entry['repo']];
 }
 
 if ($missing !== []) {
-    fwrite(STDERR, 'compose-domain: no registry entry for required module(s): '.implode(', ', $missing)."\n");
+    fwrite(STDERR, 'compose-domain: required module(s) name a Domain that scripts/ci/domain-repos.json does not list: '.implode(', ', $missing).". Add the id there, or rename the module to an existing Domain.\n");
     exit(1);
 }
 
@@ -175,7 +167,7 @@ if ($toClone === []) {
     exit(0);
 }
 
-foreach ($toClone as $path => $repo) {
-    fwrite(STDERR, "compose-domain: will clone {$repo} -> {$path}\n");
-    echo $repo."\t".$path."\n";
+foreach ($toClone as $path => $entry) {
+    fwrite(STDERR, "compose-domain: will clone {$entry['repo']} -> {$path}\n");
+    echo $entry['id']."\t".$entry['repo']."\t".$path."\n";
 }

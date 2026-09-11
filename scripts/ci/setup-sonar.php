@@ -20,7 +20,6 @@ declare(strict_types=1);
  */
 const SONAR_HOST = 'https://sonarcloud.io';
 const DEFAULT_ORG = 'belimbingapp';
-const PROJECT_KEY_PREFIX = 'BelimbingApp_';
 
 final class SonarSetupException extends RuntimeException {}
 
@@ -92,45 +91,33 @@ function resolveSonarToken(): string
     exit(1);
 }
 
+require_once __DIR__.'/domain-registry.php';
+
 /**
+ * The descriptor lists Domain ids; repository, mount path and Sonar key are
+ * derived from each id (#940).
+ *
  * @return array{
  *     sonar_organization: string,
- *     domains: array<string, array{repo: string, path: string, sonar_project_key?: string}>
+ *     domains: array<string, array{repo: string, path: string, sonar_project_key: string}>
  * }
  */
 function loadRegistry(string $path): array
 {
-    if (! is_readable($path)) {
-        fwrite(STDERR, "Registry not found: {$path}\n");
-
-        exit(1);
+    $registry = domainRegistry($path);
+    if (($registry['sonar_organization'] ?? '') === '') {
+        $registry['sonar_organization'] = DEFAULT_ORG;
     }
-
-    $registry = json_decode((string) file_get_contents($path), true);
-    if (! is_array($registry) || ! isset($registry['domains']) || ! is_array($registry['domains'])) {
-        fwrite(STDERR, "Invalid registry: {$path}\n");
-
-        exit(1);
-    }
-
-    $registry['sonar_organization'] ??= DEFAULT_ORG;
 
     return $registry;
 }
 
 /**
- * @param  array{repo: string, path: string, sonar_project_key?: string}  $domain
+ * @param  array{repo: string, path: string, sonar_project_key: string}  $domain
  */
 function sonarProjectKey(array $domain): string
 {
-    if (isset($domain['sonar_project_key']) && $domain['sonar_project_key'] !== '') {
-        return $domain['sonar_project_key'];
-    }
-
-    $repo = $domain['repo'];
-    $shortName = str_contains($repo, '/') ? substr($repo, strrpos($repo, '/') + 1) : $repo;
-
-    return PROJECT_KEY_PREFIX.$shortName;
+    return $domain['sonar_project_key'];
 }
 
 function commandExists(string $command): bool

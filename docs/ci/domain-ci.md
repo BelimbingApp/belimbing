@@ -1,101 +1,97 @@
-# Advance Domain CI pins
+# Domain CI composition
 
-[scripts/ci/domain-repos.json](../../scripts/ci/domain-repos.json) is the
-platform's reviewed map of controlled Domains: repository, mount path, immutable
-dependency commit and Sonar identity. A Domain caller supplies the repository
-under test; its required cross-Domain dependencies come from this descriptor.
-The descriptor's platform `ref: main` is not proof of the platform checkout
-used by a run: inspect the caller's `platform-ref` and materialization record.
+[scripts/ci/domain-repos.json](../../scripts/ci/domain-repos.json) lists the
+Belimbing-controlled Domains that CI composes. It lists **ids only**. Each id's
+repository, mount path and Sonar project key are derived from it by
+[scripts/ci/domain-registry.php](../../scripts/ci/domain-registry.php):
+`people-connector` is `<owner>/blb-people-connector` at
+`app/Domains/PeopleConnector` with Sonar key `<owner>_blb-people-connector`.
+Adding a Domain that follows the convention is one line in the descriptor.
 
-1. **Select an immutable dependency snapshot.** Read the changed Domain's
-   manifests and select the exact commit containing the required contract.
-   Update only the intended descriptor entry, then run
-   `bash tests/ci/test-ci-scripts.sh`. [Issue #567](https://github.com/BelimbingApp/belimbing/issues/567)
-   and [PR #568](https://github.com/BelimbingApp/belimbing/pull/568) established
-   advancing People for workforce contracts; [PR #591](https://github.com/BelimbingApp/belimbing/pull/591)
-   advanced People to `0194f97782a28c42276cf52d0dce095aaa1a9c53` after
-   Training relocation and boundary guards. Do not replace a SHA with a branch name.
+The owner is not written down either. It comes from the checkout's own git
+remotes — `origin` first, then `upstream` — so a clone of the canonical
+repository resolves to the canonical org and a fork resolves to its own owner
+with the forked repository as the fallback. `BLB_DOMAIN_OWNERS` overrides both,
+which is how a checkout with no remotes (a tarball, a test fixture) says who
+owns its Domains.
 
-2. **Choose a pair that can coexist.** A relocation can require both the new
-   owner and removal from the old owner. [PR #574](https://github.com/BelimbingApp/belimbing/pull/574)
-   added the Connector descriptor after the R4 removal;
-   [PR #582](https://github.com/BelimbingApp/belimbing/pull/582) advanced its
-   post-relocation ref. Existing table names and migration filenames can remain
-   historical identities; retaining both source owners is not a compatibility strategy.
+## There are no pins
 
-3. **Test the proposed descriptor, not an old caller pin.** Inspect both the
-   reusable workflow ref and `platform-ref` in the consuming Domain's CI.
-   An unchanged caller pinned to an older platform still tests the older
-   descriptor. For [PR #591](https://github.com/BelimbingApp/belimbing/pull/591),
-   the paired [Connector PR #172](https://github.com/BelimbingApp/blb-people-connector/pull/172)
-   pinned both to platform commit `c8e756edadf4df6edce737ac4c8c190a5fef3bb6`.
-   Test that immutable authored commit before landing; changing the branch name
-   later cannot change what that run proved.
+CI composes every Domain at its `main`. This is a deliberate reversal of the
+pinned-ref scheme that ran until [#940](https://github.com/BelimbingApp/belimbing/issues/940),
+and the reasoning is worth keeping:
 
-4. **Retain exact composition evidence for both drivers.** Download the
-   `domain-materialization` artifact and verify its repository/ref/path rows.
-   The [R8 proof run](https://github.com/BelimbingApp/blb-people-connector/actions/runs/33984235964)
-   records People `0194f977...`, platform `c8e756ed...`, and the
-   Connector PR merge checkout `07556df0...`. Its SQLite and PostgreSQL
-   jobs both passed. A PR checkout can be GitHub's merge commit: record it as
-   such, alongside its authored head, rather than calling it the branch head.
-   Local domain suites complement this evidence; platform-only green checks
-   do not prove optional Domains were mounted.
+- A pin bought repeatability: the same revisions on every run, and with it a
+  combination that had been composed and tested together. That is worth
+  something — the cost of losing it is set out below — but it is not what stops
+  two Domains colliding.
+- The guards that refuse a collision between two Domains live in the
+  application, not in CI: `RouteCollisionException`, `TableRegistry` and
+  `IncubatingSchemaConflictException` refuse at boot, on a developer machine,
+  in each Domain's own CI, in staging and in production. Removing the pins
+  leaves every one of those intact.
+- The pins cost a standing chore. Three **Domain pins stale** issues were
+  opened in the five days before they were removed, each needing a dispatch, a
+  bot PR and a full CI run to change two files.
 
-5. **Land in dependency order, then clean the slots.** [PR #591](https://github.com/BelimbingApp/belimbing/pull/591)
-   landed the platform descriptor first, then
-   [Connector #172](https://github.com/BelimbingApp/blb-people-connector/pull/172)
-   landed the caller referencing its immutable commit. Each PR needs its own
-   green `gate.sh`/`land.sh` result under the installed review rules.
-   Run `cleanup.sh --yes` after each landing. Do not refresh reviewed
-   disjoint branches merely because the other PR landed; follow the
-   [adopter overlap rule](../ai-team-adopter.md).
+What that gives up, stated plainly, and it is more than diagnosis:
 
-## Validate upstream pins
+- **A fixed combination that was known to work.** A pin recorded a set of
+  revisions that had been composed and tested together. Without one, each run
+  composes whatever the Domains' `main` branches hold at that moment, which may
+  be a combination nothing has ever exercised. The boot-time collision guards
+  do not replace that: they catch a Domain pair colliding, not a combination
+  that is merely untried. This is the real cost of the trade, not a footnote.
+- **Attribution.** When the nightly breaks, it does not say whether a platform
+  change or a Domain change caused it.
+- **Replay.** A run cannot be re-run against a fixed past state. If you need to
+  know, compose locally at the two revisions you suspect and compare.
 
-`python3 scripts/ci/validate-domain-pins.py` checks every Domain in the descriptor
-against GitHub. The quality job supplies `GITHUB_TOKEN`. Missing/inaccessible
-commits, invalid descriptors, and API failures refuse the check; API unavailability
-is not evidence that a pin is valid. A pin more than 50 commits behind `main`
-prints a warning without failing. The count is the comparison's commits unique
-to main, not a count inferred from local history. The validator never advances
-pins. Follow the reviewed pin-update flow above to address a warning.
+The judgement made here is that a standing maintenance chore, paid on a
+schedule whether or not anything is wrong, costs more than those three. That
+judgement is reversible: reintroducing a pin is a field in the descriptor and a
+ref in the materializer.
 
-## Check a lane against the pin before ready
+There is also no checked-in route surface. The composed smoke asserts that the
+application boots with every Domain mounted and that no migration basename is
+claimed twice — not that a Domain has a particular set of route names. A
+Domain's own route inventory is that Domain's business and belongs in its own
+suite.
 
-`domain-ci` composes each sibling Domain at the immutable SHA in
-`scripts/ci/domain-repos.json`, while a local mount is that Domain's clone at
-`main`. The pin therefore trails `main` for as long as it takes to advance it,
-and a lane that calls a sibling API added in that window is green locally and
-red on every composed job — a failure that looks like the author's bug and only
-appears after `ready.sh` ([#927](https://github.com/BelimbingApp/belimbing/issues/927)).
+## Caller-supplied identity
 
-Run this from the platform checkout before handing off:
+[domain-ci.yml](../../.github/workflows/domain-ci.yml) is a reusable workflow.
+It does not run in this repository: a Domain repository calls it, and the jobs
+run in that repository's own Actions. The platform publishes the harness
+because a Domain repo cannot build alone — it has no root `composer.json`, no
+`vendor/`, no Laravel bootstrap and no Pest config — not because the platform
+supervises Domains.
 
-```bash
-php scripts/ci/pinned-mount-check.php --base=origin/main
+Each caller declares its own identity:
+
+```yaml
+jobs:
+  ci:
+    uses: BelimbingApp/belimbing/.github/workflows/domain-ci.yml@main
+    with:
+      domain-path: app/Domains/People
+      sonar-project-key: BelimbingApp_blb-people
+      sonar-organization: belimbingapp
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 ```
 
-It reads the changed PHP files, finds the sibling Domain classes they name, and
-refuses the lane when a method those files call exists on that class at your
-mounted revision but not at the pinned one — naming the class, the method, the
-pin and the revision your mount is on, so the next step is a decision rather
-than a bisect. A class the pin does not have at all is refused the same way.
-Pass explicit paths instead of `--base` to check a subset. Exit 1 is a finding,
-exit 2 is a usage error, and a mount that is not a git checkout is skipped with
-a note rather than silently passing.
+The descriptor is consulted only for a Domain's **siblings**: when a manifest
+declares `extra.blb.requires-modules` naming a module in another Domain,
+[compose-domain.php](../../scripts/ci/compose-domain.php) derives that Domain's
+repository and mount path from the module's vendor segment and prints one clone
+line per missing repository. A required module naming a Domain the descriptor
+does not list is refused, naming it.
 
-The fix is either to advance the pin through the reviewed flow above, or to keep
-the lane on API the pin already has. Advancing the pin is the honest option when
-the sibling API is the point of the change.
-
-Two limits worth knowing, because the check does not pretend to cover them:
-
-- **Runtime shape is invisible to it.** A test asserting an absolute count of a
-  sibling's tables (33 at the pin, 40 on `main`) drifts without naming any
-  method. Compose the pin and run the suite for that class of difference.
-- **It compares names, not signatures.** A method that kept its name and changed
-  its parameters passes this check and still fails in CI.
+`platform-ref` chooses what the Domain composes against. A branch tracks the
+platform; a commit SHA freezes it. A caller pinned to an older platform commit
+is testing that older harness — inspect the caller before concluding anything
+about what a run proved.
 
 ## Composition failures and the missing-check exception
 
@@ -103,15 +99,15 @@ Two limits worth knowing, because the check does not pretend to cover them:
 route method/URI registrations and tables declared by different Modules;
 [PR #588](https://github.com/BelimbingApp/belimbing/pull/588) also refuses the
 table conflict at application boot. These diagnostics name the collision and
-source files. Remove the obsolete owner or choose compatible pins; renaming a
-migration file or route name does not remove a table or method/URI collision.
+source files. Remove the obsolete owner; renaming a migration file or route
+name does not remove a table or method/URI collision.
 
 [PR #570's recorded operator exception](https://github.com/BelimbingApp/belimbing/pull/570#issuecomment-5551778324)
 used `GATE_ALLOW_MISSING_CHECKS=copilot-pull-request-reviewer` for a
 historical Copilot check that never reported. This is an explicit, recorded
 exception for that missing baseline name, not a waiver for failed tests,
 independent review, or GitHub-required checks. Do not carry the override into
-ordinary pin updates after the obsolete check leaves the baseline. See the
+ordinary maintenance after the obsolete check leaves the baseline. See the
 [package gate contract](../ai-team/README.md) for current mechanics.
 
 ## Sonar quality gate alignment
@@ -121,8 +117,8 @@ ordinary pin updates after the obsolete check leaves the baseline. See the
 (`BelimbingApp_lara`), People (`BelimbingApp_blb-people`), and PeopleConnector
 (`BelimbingApp_blb-people-connector`) all use gate id **9** / **Sonar way**, including `new_coverage` LT **80**.
 The built-in gate cannot have its conditions edited; tightening requires copying to a custom gate first.
-When advancing Domain pins, keep each Domain's `sonar_project_key` pointed at that shared gate rather than
-assuming a looser Domain-specific threshold.
+Each Domain's derived Sonar project key must stay pointed at that shared gate rather than a looser
+Domain-specific threshold.
 
 ## Workflow concurrency
 
@@ -232,7 +228,7 @@ name and line number, with coverage from any shard counting as covered. It does
 not sum project totals: isolated shards repeat the full source inventory. Reports
 must contain statement lines; aggregate-only metrics cannot prove overlap.
 
-## Composed smoke on pin advances
+## Composed smoke
 
 Bot-maintenance PRs are reconsidered by
 [`land-bot-maintenance`](../../.github/workflows/land-bot-maintenance.yml) when a
@@ -243,32 +239,25 @@ forks, drafts, and holds. Repository merge settings, active rulesets, and classi
 protection determine the merge method; GitHub still enforces approval and other
 merge rules. The final merge is bound to the checked SHA and uses
 `COVERAGE_BASELINE_RAISE_TOKEN`. The same raise token also opens bot-maintenance PRs from `refresh-pest-timing-baseline`, `refresh-feature-shard-timings`, and `refresh-livewire-action-baselines` (#853). If policy cannot be read, the workflow refuses.
-Applying `bot-maintenance` also authorizes a Domain descriptor/surface pin advance
-to land on green required checks without an independent reviewer; it is not limited
-to numeric baseline refreshes. The label is the authorization, not the PR author's identity.
+Applying `bot-maintenance` authorizes a machine-generated maintenance PR to land on
+green required checks without an independent reviewer; it is not limited to numeric
+baseline refreshes. The label is the authorization, not the PR author's identity.
 Rerun the trusted independent-review check to reconsider an already-green bot PR
 whose last CI run predates this workflow; this does not bypass any checks.
 
 [PR #712](https://github.com/BelimbingApp/belimbing/pull/712) (issue [#600](https://github.com/BelimbingApp/belimbing/issues/600)) landed
 [`.github/workflows/composed-smoke.yml`](../../.github/workflows/composed-smoke.yml). It boots the
-platform with every pinned Domain (People, Commerce, Operation, and PeopleConnector) at the refs in
-[`scripts/ci/domain-repos.json`](../../scripts/ci/domain-repos.json) and holds the result to
-[`scripts/ci/composed-surface.json`](../../scripts/ci/composed-surface.json).
+platform with every Domain the descriptor lists (People, Commerce, Operation, and PeopleConnector),
+each at its `main`, and asserts that the application boots and that no migration basename is claimed
+by two modules.
 
-Both smoke and pin-advance workflows enumerate descriptor keys. The smoke script
-defaults to all descriptor entries; `--domains` is only an explicit subset override.
-The surface is live route names matching `DOMAIN_ROUTE_NAME` (not a whole-table
-scan and not a literal `->name()` text scan — Base `admin.integration.*` must
-not count, and `Route::name()->group` / `Route::resource` assembled names must
-still move the count). Domain Routes files still need a known prefix in
-`DOMAIN_ROUTE_NAME` so an unconventional declaration fails loudly; add a new
-Domain's prefixes there when introducing it. The `advance-domain-pin` dispatch accepts all four
-Domains and regenerates the complete surface before opening its maintenance PR
-with `COVERAGE_BASELINE_RAISE_TOKEN` (push stays on `GITHUB_TOKEN`; the raise token
-opens and labels the PR, matching the other maintenance workflows).
+The smoke script enumerates descriptor ids; `--domains` is only an explicit subset override, and a
+subset naming an id the descriptor does not list is refused before anything is cloned. It no longer
+holds the boot to a checked-in route surface: that file and the `DOMAIN_ROUTE_NAME` prefix list were
+removed with the pins ([#940](https://github.com/BelimbingApp/belimbing/issues/940)), because a
+Domain's route inventory is not the platform's to assert.
 
-Every pull request to `main` runs that check, including a pin-advance PR that edits the
-descriptor ([issue #627](https://github.com/BelimbingApp/belimbing/issues/627)). The workflow does
+Every pull request to `main` runs that check ([issue #627](https://github.com/BelimbingApp/belimbing/issues/627)). The workflow does
 **not** use a `paths:` filter on `pull_request`. A path-filtered workflow that is also a
 branch-protection required check leaves unrelated PRs waiting for a status that never reports.
 Keep the job always reporting; require the `composed-smoke` context in Protect Main when the
@@ -276,10 +265,8 @@ owner wants it blocking. Recover refusals with the
 [composed-app runbook](composed-app-runbook.md).
 
 A nightly schedule ([#663](https://github.com/BelimbingApp/belimbing/issues/663)) re-runs the same
-assertion against the pins on `main` and opens or updates one issue titled **Composed boot failed**
-on refusal; `workflow_dispatch` accepts a dry-run input that exercises the issue body path without
-calling the Issues API. The same nightly/dispatch path runs
-[`validate-domain-pins.py`](../../scripts/ci/validate-domain-pins.py) after boot and opens or updates
-one **Domain pins stale** issue when a pin is more than 50 commits behind `main`. That issue lists
-the Domain, repository, immutable ref, and measured count. A successful validation with no warnings
-closes it automatically; validator errors fail the run and do not close an existing alert.
+assertion against `main` and opens or updates one issue titled **Composed boot failed** on refusal;
+`workflow_dispatch` accepts a dry-run input that exercises the issue body path without calling the
+Issues API. Because the nightly composes each Domain at its `main`, a refusal can come from a change
+in any of them: read the run's materialization output for the revisions it actually mounted before
+attributing it.

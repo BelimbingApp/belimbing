@@ -1,9 +1,14 @@
 {
-    "_comment": "Validated descriptor for Belimbing-controlled Domains. Dependency refs are immutable commit SHAs. Extensions are intentionally excluded.",
-    "schema_version": 1,
+    "_comment": "Belimbing-controlled Domains that CI composes. Ids only: repository, mount path and Sonar key are derived from the id by scripts/ci/domain-registry.php. There are no commit pins - CI composes each Domain at its main (#940). Extensions are intentionally excluded.",
+    "schema_version": 2,
     "platform": {
         "repo": "BelimbingApp/belimbing",
         "ref": "main"
+    },
+    "convention": {
+        "repo_prefix": "blb-",
+        "mount_root": "app/Domains",
+        "sonar_separator": "_"
     },
     "sonar_organization": "belimbingapp",
     "sonar_quality_gate": {
@@ -15,30 +20,10 @@
             "error": "80"
         }
     },
-    "domains": {
-        "people": {
-            "repo": "BelimbingApp/blb-people",
-            "path": "app/Domains/People",
-            "sonar_project_key": "BelimbingApp_blb-people",
-            "ref": "b96090d805abb4ab88c578c17905f2dcb64debe6"
-        },
-        "commerce": {
-            "repo": "BelimbingApp/blb-commerce",
-            "path": "app/Domains/Commerce",
-            "sonar_project_key": "BelimbingApp_blb-commerce",
-            "ref": "deac42bc27e912555c4dbfcf773045f3242be8bd"
-        },
-        "operation": {
-            "repo": "BelimbingApp/blb-operation",
-            "path": "app/Domains/Operation",
-            "sonar_project_key": "BelimbingApp_blb-operation",
-            "ref": "8a21b59ffd37ff4c6a93f135e735926782ea228a"
-        },
-        "people-connector": {
-            "repo": "BelimbingApp/blb-people-connector",
-            "path": "app/Domains/PeopleConnector",
-            "sonar_project_key": "BelimbingApp_blb-people-connector",
-            "ref": "08d3811608ef796f5d6b7a2ea18ddd61e695560e"
-        }
-    }
+    "domains": [
+        "people",
+        "commerce",
+        "operation",
+        "people-connector"
+    ]
 }
