@@ -106,7 +106,7 @@ final class IncubatingSchemaTableDropper
         foreach ($triggers as $trigger) {
             $name = is_object($trigger) ? ($trigger->name ?? null) : null;
 
-            if (! is_string($name) || $name === '' || ! preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $name)) {
+            if (! is_string($name) || $name === '' || ! preg_match('/^[A-Za-z_]\w*$/', $name)) {
                 continue;
             }
 

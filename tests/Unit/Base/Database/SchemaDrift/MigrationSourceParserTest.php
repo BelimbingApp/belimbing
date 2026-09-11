@@ -90,6 +90,35 @@ it('loads source-resolvable migration trait helpers', function (): void {
         ->and($columns)->toContain('company_id', 'actor_type', 'actor_id');
 });
 
+it('selects the anonymous migration class when helper classes precede it', function (): void {
+    $migration = <<<'PHP'
+        <?php
+
+        use Illuminate\Database\Migrations\Migration;
+        use Illuminate\Database\Schema\Blueprint;
+        use Illuminate\Support\Facades\Schema;
+
+        if (! class_exists(WidgetMigrationException::class, false)) {
+            final class WidgetMigrationException extends RuntimeException {}
+        }
+
+        return new class extends Migration
+        {
+            public function up(): void
+            {
+                Schema::table('widgets', function (Blueprint $table): void {
+                    $table->string('name');
+                });
+            }
+        };
+        PHP;
+
+    $parsed = app(MigrationSourceParser::class)->parseContents($migration);
+
+    expect($parsed->unreadable)->toBe([])
+        ->and(array_map(fn ($operation) => $operation->name, $parsed->operations))->toContain('name');
+});
+
 it('fails closed for runtime-dependent schema loops but ignores data-only loops', function (): void {
     $parser = app(MigrationSourceParser::class);
     $schemaLoop = <<<'PHP'

@@ -217,7 +217,7 @@ final class SourceRepositoryInstaller
         [$owner, $name] = $segments;
         $name = preg_replace('/\.git$/i', '', $name) ?? $name;
 
-        if (preg_match('/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/', $owner) !== 1
+        if (preg_match('/^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/', $owner) !== 1
             || preg_match('/^[A-Za-z0-9_.-]+$/', $name) !== 1) {
             throw new SourceRepositoryInstallException((string) __('GitHub owner or repository name is invalid.'));
         }

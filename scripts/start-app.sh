@@ -15,6 +15,8 @@ source "$SCRIPT_DIR/shared/validation.sh" 2>/dev/null || true
 source "$SCRIPT_DIR/shared/runtime.sh" 2>/dev/null || true
 # shellcheck source=shared/caddy.sh
 source "$SCRIPT_DIR/shared/caddy.sh" 2>/dev/null || true
+# shellcheck source=shared/diagnostics.sh
+source "$SCRIPT_DIR/shared/diagnostics.sh" 2>/dev/null || true
 
 if ! command -v stop_dev_services >/dev/null 2>&1; then
     echo -e "${RED}✗${NC} stop_dev_services is not available (failed to load shared/runtime.sh)" >&2
@@ -37,6 +39,9 @@ BLB_INGRESS_MODE=""
 USE_NON_PRIVILEGED_PORT=0
 PUBLIC_APP_URL=""
 PUBLIC_BACKEND_URL=""
+INTENDED_APP_URL=""
+INTENDED_BACKEND_URL=""
+PUBLIC_URL_REACHABLE=1
 
 BLB_INGRESS_MODE_SHARED='shared'
 
@@ -351,41 +356,43 @@ check_hosts_entries() {
     fi
 
     # Check Windows hosts file if running in WSL2 and we're likely to use a Windows browser.
-    # If a local Linux browser (chromium, firefox, etc.) is available, we skip this check
-    # because Windows hosts entries are not required for that workflow.
+    # Only a GUI browser on a real Linux display makes the Windows hosts file
+    # irrelevant; xdg-open and sensible-browser ship on stock Ubuntu WSL images
+    # and resolve to the Windows browser (or to nothing), so counting them as a
+    # local browser skipped this check for exactly the users who needed it.
     if is_wsl2; then
-        if command -v chromium-browser >/dev/null 2>&1 || \
-           command -v chromium >/dev/null 2>&1 || \
-           command -v google-chrome >/dev/null 2>&1 || \
-           command -v firefox >/dev/null 2>&1 || \
-           command -v xdg-open >/dev/null 2>&1 || \
-           command -v sensible-browser >/dev/null 2>&1; then
-            log "INFO: Skipping Windows hosts check (local Linux browser available on WSL2)"
+        if linux_gui_browser_available; then
+            log "INFO: Skipping Windows hosts check (GUI browser on a Linux display)"
             return $result
         fi
 
         local win_hosts
         win_hosts=$(get_windows_hosts_path)
-        local wsl_ip
-        wsl_ip=$(get_wsl2_ip)
+        local net_mode
+        net_mode=$(wsl2_networking_mode)
         local win_missing=()
         local win_wrong_ip=()
-        # Only advertise domains the user actually has to resolve.
-        local hosts_domains="$FRONTEND_DOMAIN"
-        if [[ "$BACKEND_DOMAIN_CONFIGURED" = "1" ]]; then
-            hosts_domains="$FRONTEND_DOMAIN $BACKEND_DOMAIN"
-        fi
+        local expected_ip=""
 
-        if [[ -z "$wsl_ip" ]]; then
-            echo -e "${YELLOW}⚠${NC} Could not determine WSL2 IP address for Windows hosts file check"
-            log "WARNING: Could not determine WSL2 IP address"
-            return $result
+        # Mirrored networking shares the Windows network namespace, so
+        # 127.0.0.1 is the correct Windows hosts entry there. Under NAT the
+        # loopback address does not reach a listener inside WSL.
+        if [[ "$net_mode" = "mirrored" ]]; then
+            expected_ip="127.0.0.1"
+        else
+            expected_ip=$(get_wsl2_ip)
+
+            if [[ -z "$expected_ip" ]]; then
+                echo -e "${YELLOW}⚠${NC} Could not determine WSL2 IP address for Windows hosts file check"
+                log "WARNING: Could not determine WSL2 IP address"
+                return $result
+            fi
         fi
 
         # Check if domains exist in Windows hosts file
         if ! domain_in_windows_hosts "$FRONTEND_DOMAIN"; then
             win_missing+=("$FRONTEND_DOMAIN")
-        elif grep -E "^[[:space:]]*127\.0\.0\.1[[:space:]]+.*${FRONTEND_DOMAIN//./\\.}" "$win_hosts" 2>/dev/null | grep -v "^#" > /dev/null; then
+        elif [[ "$net_mode" != "mirrored" ]] && grep -E "^[[:space:]]*127\.0\.0\.1[[:space:]]+.*${FRONTEND_DOMAIN//./\\.}" "$win_hosts" 2>/dev/null | grep -v "^#" > /dev/null; then
             win_wrong_ip+=("$FRONTEND_DOMAIN")
         fi
 
@@ -393,7 +400,7 @@ check_hosts_entries() {
             : # optional API vhost not configured; nothing to verify
         elif ! domain_in_windows_hosts "$BACKEND_DOMAIN"; then
             win_missing+=("$BACKEND_DOMAIN")
-        elif grep -E "^[[:space:]]*127\.0\.0\.1[[:space:]]+.*${BACKEND_DOMAIN//./\\.}" "$win_hosts" 2>/dev/null | grep -v "^#" > /dev/null; then
+        elif [[ "$net_mode" != "mirrored" ]] && grep -E "^[[:space:]]*127\.0\.0\.1[[:space:]]+.*${BACKEND_DOMAIN//./\\.}" "$win_hosts" 2>/dev/null | grep -v "^#" > /dev/null; then
             win_wrong_ip+=("$BACKEND_DOMAIN")
         fi
 
@@ -410,33 +417,33 @@ check_hosts_entries() {
             fi
 
             echo ""
-            echo -e "${CYAN}WSL2 IP address: ${YELLOW}$wsl_ip${NC}"
+            echo -e "${CYAN}Address these domains must resolve to on Windows: ${YELLOW}$expected_ip${NC} (WSL2 networking: ${net_mode})"
             echo ""
             echo -e "${CYAN}Add/update this line in Windows hosts file:${NC}"
-            echo -e "  ${YELLOW}$wsl_ip $hosts_domains${NC}"
+            echo -e "  ${YELLOW}$expected_ip $FRONTEND_DOMAIN $BACKEND_DOMAIN${NC}"
             echo ""
             echo -e "${CYAN}Windows hosts file location:${NC}"
-            echo -e "  ${YELLOW}C:\\Windows\\System32\\drivers\\etc\\hosts${NC}"
+            echo -e "  ${YELLOW}C:\\Windows\\System32\\drivers\\\\etc\\hosts${NC}"
             echo ""
             echo -e "${CYAN}To fix:${NC}"
             echo -e "  1. Open Notepad as Administrator (Win+R → ${YELLOW}notepad${NC} → Ctrl+Shift+Enter)"
-            echo -e "  2. Open: ${YELLOW}C:\\Windows\\System32\\drivers\\etc\\hosts${NC}"
+            echo -e "  2. Open: ${YELLOW}C:\\Windows\\System32\\drivers\\\\etc\\hosts${NC}"
             if [[ ${#win_wrong_ip[@]} -gt 0 ]]; then
                 echo -e "  3. Remove/comment lines with ${YELLOW}127.0.0.1${NC} for these domains"
             fi
-            echo -e "  4. Add: ${YELLOW}$wsl_ip $hosts_domains${NC}"
+            echo -e "  4. Add: ${YELLOW}$expected_ip $FRONTEND_DOMAIN $BACKEND_DOMAIN${NC}"
             echo -e "  5. Save and close"
             echo ""
             echo -e "${CYAN}Or use PowerShell (Run as Administrator):${NC}"
             if [[ ${#win_wrong_ip[@]} -gt 0 ]]; then
-                echo -e "  ${YELLOW}\$content = Get-Content \"C:\\Windows\\System32\\drivers\\etc\\hosts\"; \$content = \$content | Where-Object { \$_ -notmatch \"127\\.0\\.0\\.1.*local\\.blb\\.lara\" -and \$_ -notmatch \"127\\.0\\.0\\.1.*local\\.api\\.blb\\.lara\" }; \$content | Set-Content \"C:\\Windows\\System32\\drivers\\etc\\hosts\"${NC}"
+                echo -e "  ${YELLOW}\$content = Get-Content \"C:\\Windows\\System32\\drivers\\\\etc\\hosts\"; \$content = \$content | Where-Object { \$_ -notmatch \"127\\.0\\.0\\.1.*local\\.blb\\.lara\" -and \$_ -notmatch \"127\\.0\\.0\\.1.*local\\.api\\.blb\\.lara\" }; \$content | Set-Content \"C:\\Windows\\System32\\drivers\\\\etc\\hosts\"${NC}"
             fi
-            echo -e "  ${YELLOW}Add-Content -Path \"C:\\Windows\\System32\\drivers\\etc\\hosts\" -Value \"$wsl_ip $hosts_domains\"${NC}"
+            echo -e "  ${YELLOW}Add-Content -Path \"C:\\Windows\\System32\\drivers\\\\etc\\hosts\" -Value \"$expected_ip $FRONTEND_DOMAIN $BACKEND_DOMAIN\"${NC}"
             echo ""
-            log "WARNING: Windows hosts file may need configuration. WSL2 IP: $wsl_ip"
+            log "WARNING: Windows hosts file may need configuration. Expected IP: $expected_ip (networking: $net_mode)"
             result=1
         else
-            echo -e "${GREEN}✓${NC} Windows hosts file configured correctly (WSL2 IP: $wsl_ip)"
+            echo -e "${GREEN}✓${NC} Windows hosts file configured correctly (resolves to $expected_ip)"
         fi
     fi
 
@@ -655,6 +662,16 @@ export_caddy_env() {
         export TLS_DIRECTIVE=""
         export CADDY_SCHEME="http"
 
+        # Shared ingress always *intends* to be reached over HTTPS through
+        # system Caddy. Keep that URL even when Caddy is currently down: it is
+        # what the user was told to open, and what start-up verification must
+        # probe. PUBLIC_* stays on the local HTTP listener until the HTTPS URL
+        # is confirmed, so a degraded run still prints something that works.
+        if [[ "$BLB_INGRESS_MODE" = "$BLB_INGRESS_MODE_SHARED" ]]; then
+            INTENDED_APP_URL="https://${FRONTEND_DOMAIN}"
+            INTENDED_BACKEND_URL="https://${BACKEND_DOMAIN}"
+        fi
+
         if [[ "$BLB_INGRESS_MODE" = "$BLB_INGRESS_MODE_SHARED" ]] && [[ "$system_caddy_running" = true ]]; then
             PUBLIC_APP_URL="https://${FRONTEND_DOMAIN}"
             PUBLIC_BACKEND_URL="https://${BACKEND_DOMAIN}"
@@ -671,6 +688,9 @@ export_caddy_env() {
         PUBLIC_APP_URL="https://${FRONTEND_DOMAIN}"
         PUBLIC_BACKEND_URL="https://${BACKEND_DOMAIN}"
     fi
+
+    INTENDED_APP_URL="${INTENDED_APP_URL:-$PUBLIC_APP_URL}"
+    INTENDED_BACKEND_URL="${INTENDED_BACKEND_URL:-$PUBLIC_BACKEND_URL}"
 
     APP_BIND_HOST=$(caddy_resolve_app_bind_host "${USE_NON_PRIVILEGED_PORT:-0}" "$(get_env_var "APP_BIND_HOST" "")")
     CADDY_BIND_ADDRESS="$APP_BIND_HOST"
@@ -791,11 +811,170 @@ heal_stale_maintenance() {
     return 0
 }
 
-print_runtime_summary() {
+# The loopback healthcheck only proves FrankenPHP answers on its own port. In
+# shared ingress mode the URL the user was told to open is served by a
+# *different* process, so "ready" can still mean "connection refused" in the
+# browser. Probe that URL — not the local fallback, which answers either way —
+# and name the cause when it does not respond.
+verify_public_reachability() {
+    if url_is_reachable "${INTENDED_APP_URL%/}/up"; then
+        promote_intended_urls
+        echo -e "${GREEN}✓${NC} ${PUBLIC_APP_URL} answers from this host"
+        log "Public URL reachable: $PUBLIC_APP_URL"
+        return 0
+    fi
+
+    if repair_public_ingress && url_is_reachable "${INTENDED_APP_URL%/}/up"; then
+        promote_intended_urls
+        echo -e "${GREEN}✓${NC} ${PUBLIC_APP_URL} answers from this host"
+        log "Public URL reachable after repair: $PUBLIC_APP_URL"
+        return 0
+    fi
+
+    PUBLIC_URL_REACHABLE=0
+    report_public_url_unreachable
+    return 1
+}
+
+# The intended URL answered, so it is safe to advertise it. In direct mode this
+# is a no-op; in shared mode it upgrades the local HTTP fallback to the HTTPS
+# URL that system Caddy is now serving.
+promote_intended_urls() {
+    PUBLIC_APP_URL="$INTENDED_APP_URL"
+    PUBLIC_BACKEND_URL="$INTENDED_BACKEND_URL"
+    return 0
+}
+
+# The one repair that is safe to perform unasked: setup installed system Caddy
+# for shared ingress and the service simply is not running. Switching ingress
+# modes is deliberately NOT automated — direct mode binds 0.0.0.0:443 and would
+# expose the dev app to the LAN without the user asking for it.
+repair_public_ingress() {
+    [[ "$BLB_INGRESS_MODE" = "$BLB_INGRESS_MODE_SHARED" ]] || return 1
+    caddy_system_is_running && return 1
+    command_exists caddy || return 1
+    systemd_is_available || return 1
+
+    echo -e "${CYAN}→${NC} System Caddy is installed but not running — starting it..."
+    log "Attempting to start system Caddy for shared ingress"
+
+    if sudo -n systemctl start caddy 2>/dev/null || { [[ -t 0 ]] && sudo systemctl start caddy; }; then
+        # Caddy returns from `start` before the listener is bound.
+        local attempt
+        for attempt in 1 2 3 4 5; do
+            caddy_system_is_running && break
+            sleep 1
+        done
+        echo -e "${GREEN}✓${NC} System Caddy started"
+        log "System Caddy started"
+        return 0
+    fi
+
+    echo -e "${YELLOW}⚠${NC} Could not start system Caddy automatically"
+    log "WARNING: could not start system Caddy"
+    return 1
+}
+
+report_public_url_unreachable() {
+    local net_mode="unknown"
+    net_mode=$(wsl2_networking_mode)
+    local cause_reported=false
+
     echo ""
-    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${GREEN}✓ Belimbing is ready!${NC}"
-    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${YELLOW}⚠${NC} ${INTENDED_APP_URL} did not answer, even though FrankenPHP is healthy."
+    echo -e "  ${CYAN}The app is running — something between the browser and it is missing.${NC}"
+    echo ""
+
+    if [[ "$BLB_INGRESS_MODE" = "$BLB_INGRESS_MODE_SHARED" ]] && ! caddy_system_is_running; then
+        cause_reported=true
+        echo -e "  ${YELLOW}Cause:${NC} ingress mode is ${CYAN}shared${NC}, so BLB never binds :443 — system"
+        echo -e "         Caddy is meant to own it and proxy to ${CYAN}127.0.0.1:${APP_PORT}${NC}. It is not running."
+        echo ""
+
+        if is_wsl2 && ! systemd_is_available; then
+            echo -e "  ${CYAN}On WSL2 systemd is off by default, so the caddy service never starts.${NC}"
+            echo -e "  ${CYAN}Add these two lines to ${YELLOW}/etc/wsl.conf${CYAN}, then run ${YELLOW}wsl --shutdown${CYAN} from Windows:${NC}"
+            echo -e "    ${YELLOW}[boot]${NC}"
+            echo -e "    ${YELLOW}systemd=true${NC}"
+        elif command_exists caddy; then
+            echo -e "  ${CYAN}Start it with:${NC} ${YELLOW}sudo systemctl start caddy${NC}"
+        else
+            echo -e "  ${CYAN}Caddy is not installed. Run:${NC} ${YELLOW}./scripts/setup-steps/72-caddy-ingress.sh $APP_ENV${NC}"
+        fi
+
+        echo ""
+        echo -e "  ${CYAN}Or let BLB own :443 itself (binds ${YELLOW}0.0.0.0:443${CYAN}, reachable on your LAN):${NC}"
+        echo -e "    ${YELLOW}BLB_INGRESS_MODE=direct${NC} in .env, then restart"
+        echo ""
+    elif [[ "$BLB_INGRESS_MODE" != "$BLB_INGRESS_MODE_SHARED" ]] && ! port_has_listener "$HTTPS_PORT"; then
+        cause_reported=true
+        echo -e "  ${YELLOW}Cause:${NC} nothing is listening on port ${CYAN}${HTTPS_PORT}${NC}."
+        echo ""
+
+        local binary
+        binary=$(command -v frankenphp 2>/dev/null || true)
+        [[ -x "$PROJECT_ROOT/frankenphp" ]] && binary="$PROJECT_ROOT/frankenphp"
+
+        if [[ "$HTTPS_PORT" = "443" ]] && ! frankenphp_can_bind_privileged_ports "$binary"; then
+            echo -e "  ${CYAN}FrankenPHP cannot bind a privileged port without the capability:${NC}"
+            echo -e "    ${YELLOW}sudo setcap cap_net_bind_service=+ep ${binary:-\$(command -v frankenphp)}${NC}"
+        else
+            echo -e "  ${CYAN}Check the dev log:${NC} ${YELLOW}$(get_logs_dir "$PROJECT_ROOT")/dev-services.log${NC}"
+        fi
+        echo ""
+    fi
+
+    if [[ "$cause_reported" != true ]]; then
+        # Something answers on the port but not for this host or scheme —
+        # a proxy that does not know the vhost, or a certificate the probe
+        # rejected.
+        echo -e "  ${CYAN}The port is served, so the request is being refused or misrouted"
+        echo -e "  rather than unserved. Worth checking:${NC}"
+        echo -e "    ${BULLET} ${YELLOW}curl -kv ${INTENDED_APP_URL}/up${NC}"
+        echo -e "    ${BULLET} dev services log: ${YELLOW}$(get_logs_dir "$PROJECT_ROOT")/dev-services.log${NC}"
+        if [[ "$BLB_INGRESS_MODE" = "$BLB_INGRESS_MODE_SHARED" ]]; then
+            echo -e "    ${BULLET} system Caddy is running but may not proxy this host:"
+            echo -e "      ${YELLOW}sudo journalctl -u caddy -n 50${NC}"
+        fi
+        echo ""
+    fi
+
+    # A degraded shared-ingress run still has a working local listener. Say so,
+    # so the user is not left with only a URL that refuses connections.
+    if [[ "$PUBLIC_APP_URL" != "$INTENDED_APP_URL" ]] && url_is_reachable "${PUBLIC_APP_URL%/}/up"; then
+        echo -e "  ${GREEN}✓${NC} In the meantime the app is reachable directly at ${YELLOW}${PUBLIC_APP_URL}${NC}"
+        echo ""
+    fi
+
+    if is_wsl2 && [[ "$net_mode" != "mirrored" ]]; then
+        echo -e "  ${CYAN}Also note (WSL2, ${net_mode} networking):${NC} your Windows browser cannot reach"
+        echo -e "  this listener through ${YELLOW}127.0.0.1${NC}. The Windows hosts file needs the WSL2 IP"
+        echo -e "  (${YELLOW}$(get_wsl2_ip)${NC}), which changes on every reboot — or switch WSL to mirrored"
+        echo -e "  networking by adding to ${YELLOW}%USERPROFILE%\.wslconfig${NC}:"
+        echo -e "    ${YELLOW}[wsl2]${NC}"
+        echo -e "    ${YELLOW}networkingMode=mirrored${NC}"
+        echo ""
+    fi
+
+    log "WARNING: public URL $INTENDED_APP_URL unreachable (mode=$BLB_INGRESS_MODE, net=$net_mode, fallback=$PUBLIC_APP_URL)"
+    return 0
+}
+
+print_runtime_summary() {
+    local rule="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    echo ""
+    if [[ "$PUBLIC_URL_REACHABLE" = "1" ]]; then
+        echo -e "${GREEN}${rule}${NC}"
+        echo -e "${GREEN}✓ Belimbing is ready!${NC}"
+        echo -e "${GREEN}${rule}${NC}"
+    else
+        # Claiming "ready" while the printed URL refuses connections is what
+        # sends people hunting through logs instead of at the cause above.
+        echo -e "${YELLOW}${rule}${NC}"
+        echo -e "${YELLOW}⚠ Belimbing started, but its public URL is not reachable${NC}"
+        echo -e "${YELLOW}${rule}${NC}"
+    fi
     echo ""
     echo -e "${CYAN}Access your application:${NC}"
     echo -e "  ${GREEN}Frontend:${NC} ${YELLOW}${PUBLIC_APP_URL}${NC}"
@@ -907,6 +1086,10 @@ main() {
     # Workers are up and serving the current code, so any maintenance hold left
     # by an earlier update has nothing left to protect.
     heal_stale_maintenance
+
+    # The healthcheck above only proved the loopback listener answers. Confirm
+    # the URL we are about to print actually serves, and diagnose it if not.
+    verify_public_reachability || true
 
     print_runtime_summary
 

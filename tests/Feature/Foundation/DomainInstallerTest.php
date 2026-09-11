@@ -2,6 +2,7 @@
 
 use App\Base\Audit\Models\AuditAction;
 use App\Base\Audit\Services\AuditBuffer;
+use App\Base\Foundation\ApplicationTopology;
 use App\Base\Foundation\Contracts\DomainRuntimeReloader;
 use App\Base\Foundation\Services\DomainInstaller;
 use App\Base\Foundation\Services\DomainState;
@@ -72,7 +73,7 @@ it('installs by cloning the catalog repo and migrating in a subprocess', functio
     expect($result['log'])->toContain(DOMAIN_INSTALLER_RELOAD_SCHEDULED)
         ->and(domainInstallerRuntimeReloader()->calls)->toBe(1);
 
-    Process::assertRan(fn ($process): bool => gitCommandWithoutConfig($process->command) === ['git', 'clone', DOMAIN_INSTALLER_FIXTURE_REPO, app_path(DOMAIN_INSTALLER_FIXTURE_PATH)]);
+    Process::assertRan(fn ($process): bool => gitCommandWithoutConfig($process->command) === ['git', 'clone', DOMAIN_INSTALLER_FIXTURE_REPO, ApplicationTopology::domainPath(DOMAIN_INSTALLER_FIXTURE_DOMAIN)]);
     Process::assertRan(fn ($process): bool => $process->command === PhpCli::current()->artisan(['migrate', '--force']));
 
     // A stale disabled flag from a previous uninstall must not mute the new checkout.
