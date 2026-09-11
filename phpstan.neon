@@ -3,6 +3,19 @@ includes:
     - phpstan-baseline.neon
 
 parameters:
+    # BLB configuration is module-owned: every Module ships its own Config/
+    # directory and the platform loads them, so those directories are config
+    # directories in exactly the sense this analyzer means. Declaring them
+    # keeps configuration-time env() reads legal where they belong, rather
+    # than baselining each file or rewriting them as config() calls that
+    # return null while the config is being built. Globs that match nothing
+    # (an unmounted Domain, an absent Extension) are skipped.
+    configDirectories:
+        - config
+        - app/Base/*/Config
+        - app/Core/*/Config
+        - app/Domains/*/*/Config
+        - app/Extensions/*/*/Config
     paths:
         - app/Base
         - tests/Unit/Base/Workflow/Fixtures

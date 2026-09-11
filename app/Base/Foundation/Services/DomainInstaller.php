@@ -151,9 +151,12 @@ class DomainInstaller
      */
     public function install(string $domain): array
     {
+        // DomainCatalog types every entry's repo as a string, so the only
+        // refusals left are the ones it cannot rule out: a Domain the catalog
+        // does not list, and an entry whose repository is blank.
         $entry = $this->catalog->entries()[$domain] ?? null;
 
-        if (! is_array($entry) || ! is_string($entry['repo'] ?? null) || $entry['repo'] === '') {
+        if ($entry === null || $entry['repo'] === '') {
             throw new InvalidArgumentException("Domain [$domain] is not in the catalog.");
         }
 
