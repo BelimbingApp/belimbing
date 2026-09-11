@@ -43,6 +43,28 @@ test("every controlled Domain's repo, mount path and Sonar key derive from its i
     });
 });
 
+test("a remote whose host merely resembles github.com yields no owner", () => {
+    const fixture = mkdtempSync(join(tmpdir(), "domain-registry-host-"));
+    try {
+        const git = (...args: string[]) => {
+            const result = Bun.spawnSync(["git", "-C", fixture, ...args]);
+            expect(result.exitCode).toBe(0);
+        };
+        git("init", "-q");
+        // Taking UnrelatedOwner here and then cloning github.com/UnrelatedOwner
+        // would compose a repository this checkout never vouched for (#944 review).
+        git("remote", "add", "origin", "https://github.internal.example/UnrelatedOwner/platform.git");
+        git("remote", "add", "upstream", "git@gitlab.com:Other/platform.git");
+
+        const result = run([`--root=${fixture}`, "--json"], { BLB_DOMAIN_OWNERS: "" });
+
+        expect(result.exitCode).toBe(2);
+        expect(result.stderr.toString()).toContain("BLB_DOMAIN_OWNERS");
+    } finally {
+        rmSync(fixture, { recursive: true, force: true });
+    }
+});
+
 test("the owner comes from this checkout's own remotes, origin before upstream", () => {
     const fixture = mkdtempSync(join(tmpdir(), "domain-registry-"));
     try {
