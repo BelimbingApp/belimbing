@@ -35,7 +35,7 @@ gh api repos/BelimbingApp/blb-<id>/topics --jq '.names|join(",")'
 
 A repository without the topic is simply invisible to the install screen. Nothing else breaks: an already-mounted checkout keeps working, its Modules are still discovered from disk, and its own CI is unaffected. Discovery is about what an operator can *install*, not about what runs.
 
-Because the topic is repository metadata it is not versioned, does not appear in code review, and can be removed by anyone with `admin` — which would quietly empty the install screen. That is an accepted trade for first-party Domains inside an organisation you control, where "published in this organisation" is what does the authorising. It is explicitly **not** a trust model for third-party Extensions, which need signing or an allowlist instead. On a public repository the topic is public: it appears on the repository page and in GitHub topic search.
+Because the topic is repository metadata it is not versioned, does not appear in code review, and can be removed by anyone with `admin` — which would quietly empty the install screen. That is an accepted trade for first-party Domains inside an organisation you control, where "published in this organisation" is what does the authorising. It is explicitly **not** a trust model for third-party Extensions: those are private, live under unrelated owners, and are installed by an operator naming the repository and supplying a credential — see `app/Extensions/AGENTS.md`, which records why there is no `blb-extension` topic. On a public repository the topic is public: it appears on the repository page and in GitHub topic search.
 
 ## Contribution Surfaces
 
