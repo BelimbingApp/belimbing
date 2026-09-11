@@ -3,6 +3,7 @@
 use App\Base\Foundation\ApplicationTopology;
 use App\Base\Foundation\Contracts\DomainRuntimeReloader;
 use App\Base\Foundation\Livewire\Domains;
+use App\Base\Foundation\Services\DomainCatalog;
 use App\Base\Foundation\Services\DomainState;
 use App\Base\Foundation\Services\NestedCheckoutGitState;
 use App\Base\Software\Inventory\InstalledSource;
@@ -35,11 +36,23 @@ afterEach(function (): void {
     File::deleteDirectory(app_path(DOMAINS_PATH));
 });
 
+/**
+ * Publish the fixture Domain the way a real one is published: a repository
+ * named blb-<id> carrying the blb-domain topic, in an owner organisation this
+ * checkout would search. There is no catalog config any more (#941).
+ */
 function domainsCatalog(): void
 {
-    config(['domains.catalog' => [
-        DOMAINS_DOMAIN => ['repo' => DOMAINS_REPO, 'description' => DOMAINS_DESCRIPTION],
-    ]]);
+    config(['domains.owners' => ['FixtureOrg']]);
+
+    Http::fake(['https://api.github.com/orgs/FixtureOrg/repos*' => Http::response([[
+        'name' => 'blb-zz-managed',
+        'topics' => [DomainCatalog::TOPIC],
+        'clone_url' => DOMAINS_REPO,
+        'description' => DOMAINS_DESCRIPTION,
+    ]], 200)]);
+
+    app(DomainCatalog::class)->forget();
 }
 
 function fakeBelimbingAppCatalogForDomains(): void

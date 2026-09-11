@@ -582,6 +582,12 @@
             </section>
         @endif
 
+        @unless ($catalogReachable)
+            <x-ui.alert variant="warning">
+                {{ __('The Domain catalog could not be reached, so installable Domains are not listed. This is a lookup failure, not an empty catalog.') }}
+            </x-ui.alert>
+        @endunless
+
         @if (count($available) > 0)
             <section class="space-y-2">
                 <h2 class="text-lg font-semibold text-ink">{{ __('Available Domains') }}</h2>

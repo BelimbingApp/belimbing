@@ -332,6 +332,7 @@ class Domains extends Component
             'sourcesByLifecycle' => $sourcesByLifecycle,
             'driftedAddInSources' => $driftedAddInSources,
             'available' => $installer->available(),
+            'catalogReachable' => $installer->catalogReachable(),
             'availableExtensions' => $extensions->available(),
             'dependencyIssues' => $dependencyIssues,
             'catalogEntries' => $catalog->available(),
