@@ -38,6 +38,8 @@ BLB_INGRESS_MODE=""
 USE_NON_PRIVILEGED_PORT=0
 PUBLIC_APP_URL=""
 PUBLIC_BACKEND_URL=""
+INTENDED_APP_URL=""
+INTENDED_BACKEND_URL=""
 PUBLIC_URL_REACHABLE=1
 
 BLB_INGRESS_MODE_SHARED='shared'
@@ -647,6 +649,16 @@ export_caddy_env() {
         export TLS_DIRECTIVE=""
         export CADDY_SCHEME="http"
 
+        # Shared ingress always *intends* to be reached over HTTPS through
+        # system Caddy. Keep that URL even when Caddy is currently down: it is
+        # what the user was told to open, and what start-up verification must
+        # probe. PUBLIC_* stays on the local HTTP listener until the HTTPS URL
+        # is confirmed, so a degraded run still prints something that works.
+        if [[ "$BLB_INGRESS_MODE" = "$BLB_INGRESS_MODE_SHARED" ]]; then
+            INTENDED_APP_URL="https://${FRONTEND_DOMAIN}"
+            INTENDED_BACKEND_URL="https://${BACKEND_DOMAIN}"
+        fi
+
         if [[ "$BLB_INGRESS_MODE" = "$BLB_INGRESS_MODE_SHARED" ]] && [[ "$system_caddy_running" = true ]]; then
             PUBLIC_APP_URL="https://${FRONTEND_DOMAIN}"
             PUBLIC_BACKEND_URL="https://${BACKEND_DOMAIN}"
@@ -663,6 +675,9 @@ export_caddy_env() {
         PUBLIC_APP_URL="https://${FRONTEND_DOMAIN}"
         PUBLIC_BACKEND_URL="https://${BACKEND_DOMAIN}"
     fi
+
+    INTENDED_APP_URL="${INTENDED_APP_URL:-$PUBLIC_APP_URL}"
+    INTENDED_BACKEND_URL="${INTENDED_BACKEND_URL:-$PUBLIC_BACKEND_URL}"
 
     APP_BIND_HOST=$(caddy_resolve_app_bind_host "${USE_NON_PRIVILEGED_PORT:-0}" "$(get_env_var "APP_BIND_HOST" "")")
     CADDY_BIND_ADDRESS="$APP_BIND_HOST"
@@ -784,19 +799,20 @@ heal_stale_maintenance() {
 }
 
 # The loopback healthcheck only proves FrankenPHP answers on its own port. In
-# shared ingress mode the URL we hand the user is served by a *different*
-# process, so "ready" can still mean "connection refused" in the browser. Probe
-# the URL we are about to print, and name the cause when it does not answer.
+# shared ingress mode the URL the user was told to open is served by a
+# *different* process, so "ready" can still mean "connection refused" in the
+# browser. Probe that URL — not the local fallback, which answers either way —
+# and name the cause when it does not respond.
 verify_public_reachability() {
-    local probe="${PUBLIC_APP_URL%/}/up"
-
-    if url_is_reachable "$probe"; then
+    if url_is_reachable "${INTENDED_APP_URL%/}/up"; then
+        promote_intended_urls
         echo -e "${GREEN}✓${NC} ${PUBLIC_APP_URL} answers from this host"
         log "Public URL reachable: $PUBLIC_APP_URL"
         return 0
     fi
 
-    if repair_public_ingress && url_is_reachable "$probe"; then
+    if repair_public_ingress && url_is_reachable "${INTENDED_APP_URL%/}/up"; then
+        promote_intended_urls
         echo -e "${GREEN}✓${NC} ${PUBLIC_APP_URL} answers from this host"
         log "Public URL reachable after repair: $PUBLIC_APP_URL"
         return 0
@@ -805,6 +821,15 @@ verify_public_reachability() {
     PUBLIC_URL_REACHABLE=0
     report_public_url_unreachable
     return 1
+}
+
+# The intended URL answered, so it is safe to advertise it. In direct mode this
+# is a no-op; in shared mode it upgrades the local HTTP fallback to the HTTPS
+# URL that system Caddy is now serving.
+promote_intended_urls() {
+    PUBLIC_APP_URL="$INTENDED_APP_URL"
+    PUBLIC_BACKEND_URL="$INTENDED_BACKEND_URL"
+    return 0
 }
 
 # The one repair that is safe to perform unasked: setup installed system Caddy
@@ -843,7 +868,7 @@ report_public_url_unreachable() {
     local cause_reported=false
 
     echo ""
-    echo -e "${YELLOW}⚠${NC} ${PUBLIC_APP_URL} did not answer, even though FrankenPHP is healthy."
+    echo -e "${YELLOW}⚠${NC} ${INTENDED_APP_URL} did not answer, even though FrankenPHP is healthy."
     echo -e "  ${CYAN}The app is running — something between the browser and it is missing.${NC}"
     echo ""
 
@@ -868,7 +893,7 @@ report_public_url_unreachable() {
         echo -e "  ${CYAN}Or let BLB own :443 itself (binds ${YELLOW}0.0.0.0:443${CYAN}, reachable on your LAN):${NC}"
         echo -e "    ${YELLOW}BLB_INGRESS_MODE=direct${NC} in .env, then restart"
         echo ""
-    elif ! port_has_listener "$HTTPS_PORT"; then
+    elif [[ "$BLB_INGRESS_MODE" != "$BLB_INGRESS_MODE_SHARED" ]] && ! port_has_listener "$HTTPS_PORT"; then
         cause_reported=true
         echo -e "  ${YELLOW}Cause:${NC} nothing is listening on port ${CYAN}${HTTPS_PORT}${NC}."
         echo ""
@@ -887,16 +912,24 @@ report_public_url_unreachable() {
     fi
 
     if [[ "$cause_reported" != true ]]; then
-        # Something is listening but not answering for this host/scheme —
-        # a proxy in front of BLB, or a certificate the probe rejected.
-        echo -e "  ${CYAN}A listener is up on port ${YELLOW}${HTTPS_PORT}${CYAN}, so the request is being refused"
-        echo -e "  or misrouted rather than unserved. Worth checking:${NC}"
-        echo -e "    ${BULLET} ${YELLOW}curl -kv ${PUBLIC_APP_URL}/up${NC}"
+        # Something answers on the port but not for this host or scheme —
+        # a proxy that does not know the vhost, or a certificate the probe
+        # rejected.
+        echo -e "  ${CYAN}The port is served, so the request is being refused or misrouted"
+        echo -e "  rather than unserved. Worth checking:${NC}"
+        echo -e "    ${BULLET} ${YELLOW}curl -kv ${INTENDED_APP_URL}/up${NC}"
         echo -e "    ${BULLET} dev services log: ${YELLOW}$(get_logs_dir "$PROJECT_ROOT")/dev-services.log${NC}"
         if [[ "$BLB_INGRESS_MODE" = "$BLB_INGRESS_MODE_SHARED" ]]; then
             echo -e "    ${BULLET} system Caddy is running but may not proxy this host:"
             echo -e "      ${YELLOW}sudo journalctl -u caddy -n 50${NC}"
         fi
+        echo ""
+    fi
+
+    # A degraded shared-ingress run still has a working local listener. Say so,
+    # so the user is not left with only a URL that refuses connections.
+    if [[ "$PUBLIC_APP_URL" != "$INTENDED_APP_URL" ]] && url_is_reachable "${PUBLIC_APP_URL%/}/up"; then
+        echo -e "  ${GREEN}✓${NC} In the meantime the app is reachable directly at ${YELLOW}${PUBLIC_APP_URL}${NC}"
         echo ""
     fi
 
@@ -910,7 +943,7 @@ report_public_url_unreachable() {
         echo ""
     fi
 
-    log "WARNING: public URL $PUBLIC_APP_URL unreachable (mode=$BLB_INGRESS_MODE, net=$net_mode)"
+    log "WARNING: public URL $INTENDED_APP_URL unreachable (mode=$BLB_INGRESS_MODE, net=$net_mode, fallback=$PUBLIC_APP_URL)"
     return 0
 }
 
