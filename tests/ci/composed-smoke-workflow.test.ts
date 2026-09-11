@@ -14,16 +14,18 @@ test("composed-smoke runs on every PR to main without a paths filter", () => {
     expect(workflow.on.workflow_dispatch).toBeDefined();
 });
 
-test("composed-smoke materializes every Domain from the descriptor", () => {
+test("composed-smoke materializes every Domain the descriptor lists, at its default branch", () => {
     const compose = workflow.jobs["composed-smoke"].steps.find(
-        (step: any) => step.name === "Compose the pinned Domains",
+        (step: any) => step.name === "Compose the Domains",
     );
     expect(compose).toBeDefined();
-    expect(compose.run).toContain("scripts/ci/domain-repos.json");
-    expect(compose.run).toContain("jq -r '.domains | keys[]' scripts/ci/domain-repos.json");
+    // Enumerated through the derivation, never a hand-written subset (#940).
+    expect(compose.run).toContain("scripts/ci/domain-registry.php --tsv");
     expect(compose.run).not.toContain("for id in people people-connector");
+    // No pin: checking out a fixed SHA is what this workflow stopped doing.
+    expect(compose.run).not.toContain("checkout --detach");
     const hold = workflow.jobs["composed-smoke"].steps.find(
-        (step: any) => step.name === "Boot the composed application and hold it to the surface",
+        (step: any) => step.name === "Boot the composed application",
     );
     expect(hold.run).toContain("php scripts/ci/composed-smoke.php");
     expect(hold.run).toContain("GITHUB_OUTPUT");
@@ -41,7 +43,7 @@ test("composed-smoke audits Domain command tenant scope after a successful boot 
     expect(audit["continue-on-error"]).toBeUndefined();
 
     const bootIndex = steps.findIndex(
-        (step: any) => step.name === "Boot the composed application and hold it to the surface",
+        (step: any) => step.name === "Boot the composed application",
     );
     const refuseIndex = steps.findIndex(
         (step: any) => step.name === "Fail when the composed boot refused",
@@ -53,7 +55,7 @@ test("composed-smoke audits Domain command tenant scope after a successful boot 
     expect(auditIndex).toBeGreaterThan(refuseIndex);
 
     const yaml = readFileSync(join(root, ".github/workflows/composed-smoke.yml"), "utf8");
-    expect(yaml).toContain("unconverted command fails here on");
+    expect(yaml).toContain("unconverted Domain\n      # command fails here on");
     expect(yaml).toContain("isAllowlisted()");
     expect(yaml).toContain("this step is not");
     expect(yaml).toContain("proof that the allowlisted set is correct or empty");
@@ -70,7 +72,7 @@ test("composed-smoke audits Domain route middleware after a successful boot (#91
     expect(audit["continue-on-error"]).toBeUndefined();
 
     const bootIndex = steps.findIndex(
-        (step: any) => step.name === "Boot the composed application and hold it to the surface",
+        (step: any) => step.name === "Boot the composed application",
     );
     const refuseIndex = steps.findIndex(
         (step: any) => step.name === "Fail when the composed boot refused",
@@ -86,7 +88,7 @@ test("composed-smoke audits Domain route middleware after a successful boot (#91
     expect(auditIndex).toBeGreaterThan(commandsIndex);
 
     const yaml = readFileSync(join(root, ".github/workflows/composed-smoke.yml"), "utf8");
-    expect(yaml).toContain("bare Domain route fails here on");
+    expect(yaml).toContain("A bare Domain route\n      # fails here on");
     expect(yaml).toContain("middleware_audit.allowlist");
     expect(yaml).toContain("this step is not proof that the allowlisted");
 });
@@ -112,32 +114,4 @@ test("composed-smoke checks Domain ownership after a successful boot (#917)", ()
     const yaml = readFileSync(join(root, ".github/workflows/composed-smoke.yml"), "utf8");
     expect(yaml).toContain("Domain pair cannot collide");
     expect(yaml).toContain("blb:module-check is intentionally not composed here");
-});
-
-test("validates pins after boot and reports stale pins only on nightly or dispatch runs", () => {
-    const validation = workflow.jobs["composed-smoke"].steps.find(
-        (step: any) => step.name === "Validate pinned Domain freshness",
-    );
-    expect(validation).toBeDefined();
-    expect(validation.run).toContain("scripts/ci/validate-domain-pins.py");
-    const bootIndex = workflow.jobs["composed-smoke"].steps.findIndex(
-        (step: any) => step.name === "Boot the composed application and hold it to the surface",
-    );
-    const validationIndex = workflow.jobs["composed-smoke"].steps.findIndex(
-        (step: any) => step.name === "Validate pinned Domain freshness",
-    );
-    expect(validationIndex).toBeGreaterThan(bootIndex);
-    const composedReportIndex = workflow.jobs["composed-smoke"].steps.findIndex(
-        (step: any) => step.name === "Report composed boot refusal",
-    );
-    expect(composedReportIndex).toBeLessThan(validationIndex);
-
-    const report = workflow.jobs["composed-smoke"].steps.find(
-        (step: any) => step.name === "Report stale Domain pins",
-    );
-    expect(report).toBeDefined();
-    expect(report.if).toContain("github.event_name == 'schedule'");
-    expect(report.if).toContain("github.event_name == 'workflow_dispatch'");
-    expect(report.run).toContain("domain-pin-stale-report.ts");
-    expect(report.run).toContain("--warnings-file");
 });

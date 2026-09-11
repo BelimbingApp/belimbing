@@ -65,7 +65,7 @@ describe("composed boot failure reporter", () => {
     });
 
     test("findOpenIssue / upsertIssue / closeOpenIssue pin exact-title and reuse guards", () => {
-        const title = "Domain pins stale";
+        const title = "Composed boot failed";
         const home = installGhStub(`#!/usr/bin/env bash
 set -euo pipefail
 log="$0.log"
@@ -73,7 +73,7 @@ printf '%s\\n' "$*" >> "$log"
 case "$1 $2" in
   "issue list")
     cat <<'JSON'
-[{"number":41,"title":"Domain pins stale — tracking manually, do not close"},{"number":42,"title":"Domain pins stale"}]
+[{"number":41,"title":"Composed boot failed — tracking manually, do not close"},{"number":42,"title":"Composed boot failed"}]
 JSON
     ;;
   "issue edit")
@@ -110,7 +110,7 @@ esac
     });
 
     test("findOpenIssue stops at --limit 20: a 21st exact match is invisible", () => {
-        const title = "Domain pins stale";
+        const title = "Composed boot failed";
         const nearMisses = Array.from({ length: 20 }, (_, i) => ({
             number: i + 1,
             title: `${title} — near miss ${i + 1}`,
@@ -155,14 +155,14 @@ esac
     });
 
     test("upsertIssue creates when no exact title is open; closeOpenIssue is a no-op", () => {
-        const title = "Domain pins stale";
+        const title = "Composed boot failed";
         const home = installGhStub(`#!/usr/bin/env bash
 set -euo pipefail
 log="$0.log"
 printf '%s\\n' "$*" >> "$log"
 case "$1 $2" in
   "issue list")
-    echo '[{"number":41,"title":"Domain pins stale — tracking manually, do not close"}]'
+    echo '[{"number":41,"title":"Composed boot failed — tracking manually, do not close"}]'
     ;;
   "issue create")
     echo "https://github.com/BelimbingApp/belimbing/issues/99"
@@ -197,7 +197,7 @@ describe("composed-smoke nightly schedule", () => {
         expect(workflow.jobs["composed-smoke"].permissions.issues).toBe("write");
     });
 
-    test("reports refusal on schedule and keeps the pin-advance PR path", () => {
+    test("reports refusal on schedule", () => {
         expect(workflow.on.pull_request.branches).toEqual(["main"]);
         expect(workflow.on.pull_request.paths).toBeUndefined();
         const report = workflow.jobs["composed-smoke"].steps.find(
@@ -207,7 +207,7 @@ describe("composed-smoke nightly schedule", () => {
         expect(report.run).toContain("composed-boot-failure-report.ts");
         expect(report.run).toContain("--dry-run");
         const boot = workflow.jobs["composed-smoke"].steps.find(
-            (step: any) => step.name === "Boot the composed application and hold it to the surface",
+            (step: any) => step.name === "Boot the composed application",
         );
         expect(boot.run).toContain("php scripts/ci/composed-smoke.php");
         expect(boot.run).toContain("GITHUB_OUTPUT");

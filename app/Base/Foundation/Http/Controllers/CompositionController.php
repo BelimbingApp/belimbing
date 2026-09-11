@@ -7,9 +7,9 @@ use Illuminate\Http\JsonResponse;
 
 /**
  * Operator read of the composed application: mounted modules, boot order,
- * and pinned versus mounted refs (#623). Read-only; the route carries the
- * platform-operator guard because the checkout refs and module paths it
- * names describe the installation, not any tenant's data.
+ * and the commit each Domain checkout is at (#623). Read-only; the route
+ * carries the platform-operator guard because the checkout refs and module
+ * paths it names describe the installation, not any tenant's data.
  */
 class CompositionController
 {

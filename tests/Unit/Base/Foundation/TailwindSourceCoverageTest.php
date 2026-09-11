@@ -1,12 +1,13 @@
 <?php
 
+use App\Base\Foundation\ApplicationTopology;
 /**
  * Tenant isolation: not applicable — no tenant-owned data is read. This file
  * only compares filesystem view roots to Tailwind `@source` globs and Vite
  * blade refresh paths.
  */
 
-use App\Base\Foundation\ApplicationTopology;
+use Illuminate\Support\Facades\Process;
 use Tests\TestCase;
 
 uses(TestCase::class);
@@ -118,17 +119,21 @@ it('covers every on-disk Core, Domain, and Extension Views root with an @source 
     }
 });
 
-it('covers every domain-repos.json path with an @source glob for its module Views', function (): void {
-    $registry = json_decode((string) file_get_contents(base_path('scripts/ci/domain-repos.json')), true);
-    expect($registry)->toBeArray();
+it('covers every controlled Domain mount path with an @source glob for its module Views', function (): void {
+    // The mount paths are derived from the Domain ids, not listed (#940), so
+    // ask the one script that applies the rule rather than restating it here.
+    $result = Process::path(base_path())->run(['php', base_path('scripts/ci/domain-registry.php'), '--paths']);
+    expect($result->successful())->toBeTrue($result->errorOutput());
+
+    $paths = array_values(array_filter(array_map('trim', explode("\n", $result->output()))));
+    expect($paths)->not->toBeEmpty();
 
     $globs = tailwindSourceGlobs();
 
-    foreach ((array) ($registry['domains'] ?? []) as $entry) {
-        expect($entry)->toBeArray()->and($entry['path'] ?? null)->toBeString();
-        $example = rtrim((string) $entry['path'], '/').'/Example/Views';
+    foreach ($paths as $path) {
+        $example = rtrim($path, '/').'/Example/Views';
         expect(pathMatchesAnyGlob($example, $globs))
-            ->toBeTrue("registry path {$entry['path']} does not match @source for {$example}");
+            ->toBeTrue("Domain mount path {$path} does not match @source for {$example}");
     }
 });
 

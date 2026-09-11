@@ -23,13 +23,8 @@ name: domain-ci
 on:
   workflow_call:
     inputs:
-      domain-id:
-        description: 'Stable ID from scripts/ci/domain-repos.json.'
-        required: false
-        type: string
-        default: ''
       domain-path:
-        description: 'Legacy caller mount path. Omit when domain-id is supplied.'
+        description: 'Mount path this Domain occupies inside the platform checkout, e.g. app/Domains/People.'
         required: false
         type: string
         default: ''
@@ -39,17 +34,17 @@ on:
         type: string
         default: BelimbingApp/belimbing
       platform-ref:
-        description: 'Platform ref. New descriptor-based callers must use an exact commit SHA.'
+        description: 'Platform ref to compose against. A branch tracks the platform; a commit SHA freezes it.'
         required: false
         type: string
         default: main
       sonar-project-key:
-        description: 'Legacy caller Sonar project key. Omit when domain-id is supplied.'
+        description: 'SonarCloud project key for this Domain.'
         required: false
         type: string
         default: ''
       sonar-organization:
-        description: 'Legacy caller Sonar organization. Omit when domain-id is supplied.'
+        description: 'SonarCloud organization for this Domain.'
         required: false
         type: string
         default: ''
@@ -81,10 +76,9 @@ jobs:
     env:
       PLATFORM_OPERATOR_COMPANY_NAME: Belimbing CI
       PLATFORM_OPERATOR_COMPANY_CODE: belimbing_ci
-      DOMAIN_ID: ${{ inputs.domain-id }}
-      LEGACY_DOMAIN_PATH: ${{ inputs.domain-path }}
-      LEGACY_SONAR_PROJECT_KEY: ${{ inputs.sonar-project-key }}
-      LEGACY_SONAR_ORGANIZATION: ${{ inputs.sonar-organization }}
+      INPUT_DOMAIN_PATH: ${{ inputs.domain-path }}
+      INPUT_SONAR_PROJECT_KEY: ${{ inputs.sonar-project-key }}
+      INPUT_SONAR_ORGANIZATION: ${{ inputs.sonar-organization }}
 
     steps:
       - name: Checkout platform
@@ -99,47 +93,30 @@ jobs:
           path: source-under-test
           fetch-depth: 0
 
-      - name: Resolve Domain descriptor
+      # The caller declares its own identity (#940). The platform supplies the
+      # harness, not a roster of who may call it.
+      - name: Place the Domain under test
         run: |
-          php scripts/ci/domain-ci.php validate
-          if [ -n "$DOMAIN_ID" ]; then
-            php scripts/ci/domain-ci.php resolve \
-              --domain-id="$DOMAIN_ID" \
-              --caller-repository="$GITHUB_REPOSITORY" \
-              --workflow-ref="${{ inputs.platform-ref }}" >> "$GITHUB_ENV"
-            DOMAIN_PATH=$(php scripts/ci/domain-ci.php resolve \
-              --domain-id="$DOMAIN_ID" \
-              --caller-repository="$GITHUB_REPOSITORY" \
-              --workflow-ref="${{ inputs.platform-ref }}" | sed -n 's/^DOMAIN_PATH=//p')
-            SONAR_PROJECT_KEY=$(jq -r --arg id "$DOMAIN_ID" '.domains[$id].sonar_project_key // empty' scripts/ci/domain-repos.json)
-            SONAR_ORGANIZATION=$(jq -r '.sonar_organization // empty' scripts/ci/domain-repos.json)
-          else
-            DOMAIN_PATH="$LEGACY_DOMAIN_PATH"
-            SONAR_PROJECT_KEY="$LEGACY_SONAR_PROJECT_KEY"
-            SONAR_ORGANIZATION="$LEGACY_SONAR_ORGANIZATION"
-          fi
-          test -n "$DOMAIN_PATH"
-          test -n "$SONAR_PROJECT_KEY"
-          test -n "$SONAR_ORGANIZATION"
-          echo "DOMAIN_PATH=$DOMAIN_PATH" >> "$GITHUB_ENV"
-          echo "SONAR_PROJECT_KEY=$SONAR_PROJECT_KEY" >> "$GITHUB_ENV"
-          echo "SONAR_ORGANIZATION=$SONAR_ORGANIZATION" >> "$GITHUB_ENV"
-          mkdir -p "$(dirname "$DOMAIN_PATH")"
-          mv source-under-test "$DOMAIN_PATH"
+          test -n "$INPUT_DOMAIN_PATH"
+          test -n "$INPUT_SONAR_PROJECT_KEY"
+          test -n "$INPUT_SONAR_ORGANIZATION"
+          echo "DOMAIN_PATH=$INPUT_DOMAIN_PATH" >> "$GITHUB_ENV"
+          echo "SONAR_PROJECT_KEY=$INPUT_SONAR_PROJECT_KEY" >> "$GITHUB_ENV"
+          echo "SONAR_ORGANIZATION=$INPUT_SONAR_ORGANIZATION" >> "$GITHUB_ENV"
+          mkdir -p "$(dirname "$INPUT_DOMAIN_PATH")"
+          mv source-under-test "$INPUT_DOMAIN_PATH"
 
       - name: Compose exact cross-domain dependencies
         run: |
           php scripts/ci/compose-domain.php --domain-path="$DOMAIN_PATH" > extra-repos.tsv
           while IFS=$'\t' read -r repo path; do
             [ -z "$repo" ] && continue
-            ref=$(jq -r --arg repo "$repo" '.domains[] | select(.repo == $repo) | .ref' scripts/ci/domain-repos.json)
-            [[ "$ref" =~ ^[0-9a-f]{40}$ ]]
-            echo "Materializing $repo@$ref -> $path"
-            git clone --filter=blob:none --no-checkout "https://github.com/${repo}.git" "$path"
-            git -C "$path" checkout --detach "$ref"
+            echo "Materializing $repo@default -> $path"
+            git clone --quiet --depth 1 "https://github.com/${repo}.git" "$path"
+            ref=$(git -C "$path" rev-parse HEAD)
             printf '%s\t%s\t%s\n' "$repo" "$ref" "$path" >> materialization.tsv
           done < extra-repos.tsv
-          printf '%s\t%s\t%s\n' "BelimbingApp/belimbing" "${{ inputs.platform-ref }}" "." >> materialization.tsv
+          printf '%s\t%s\t%s\n' "${{ inputs.platform-repo }}" "${{ inputs.platform-ref }}" "." >> materialization.tsv
           printf '%s\t%s\t%s\n' "${{ github.repository }}" "${{ github.sha }}" "$DOMAIN_PATH" >> materialization.tsv
 
       - name: Upload materialization plan
@@ -261,11 +238,10 @@ jobs:
       # their exact checkout; missing siblings are materialized at their pins.
       - name: Module smoke composition
         run: |
-          while IFS=$'\t' read -r domain_id repo domain_path ref; do
+          while IFS=$'\t' read -r domain_id repo domain_path; do
             if [ ! -d "$domain_path" ]; then
               mkdir -p "$(dirname "$domain_path")"
-              git clone --quiet --filter=blob:none --no-checkout "https://github.com/${repo}.git" "$domain_path"
-              git -C "$domain_path" checkout --quiet --detach "$ref"
+              git clone --quiet --depth 1 "https://github.com/${repo}.git" "$domain_path"
             fi
 
             while IFS= read -r module_path; do
@@ -289,26 +265,19 @@ jobs:
                 -o -exec test -d '{}/Database/Migrations' \; \) \
                 -print | sort
             )
-          done < <(
-            jq -r '.domains | to_entries[] | [.key, .value.repo, .value.path, .value.ref] | @tsv' \
-              scripts/ci/domain-repos.json
-          )
+          done < <(php scripts/ci/domain-registry.php --tsv)
 
       # The smoke loop checks each Module's declared dependency closure. With
-      # every immutable pin now materialized, check unrelated Domain Modules
-      # against each other for table and route ownership collisions as well.
+      # every Domain now materialized, check unrelated Domain Modules against
+      # each other for table and route ownership collisions as well.
       - name: Check composed Domain ownership
         run: php artisan blb:module-ownership
 
       - name: Ratchet Livewire action debt
         run: |
           domain_name="${DOMAIN_PATH##*/}"
-          domain_id="$DOMAIN_ID"
-          if [ -z "$domain_id" ]; then
-            domain_id=$(jq -r --arg path "$DOMAIN_PATH" '
-              .domains | to_entries[] | select(.value.path == $path) | .key
-            ' scripts/ci/domain-repos.json)
-          fi
+          domain_id=$(php scripts/ci/domain-registry.php --tsv \
+            | awk -F'\t' -v path="$DOMAIN_PATH" '$3 == path { print $1 }')
           if [ -z "$domain_id" ] || [ "$domain_id" = "null" ]; then
             echo "::error::Cannot resolve domain-id for Livewire action baseline (DOMAIN_PATH=$DOMAIN_PATH)"
             exit 1
@@ -362,8 +331,7 @@ jobs:
     environment: Testing
     env:
       APP_ENV: testing
-      DOMAIN_ID: ${{ inputs.domain-id }}
-      LEGACY_DOMAIN_PATH: ${{ inputs.domain-path }}
+      INPUT_DOMAIN_PATH: ${{ inputs.domain-path }}
       DB_CONNECTION: pgsql
       DB_HOST: 127.0.0.1
       DB_PORT: '5432'
@@ -411,31 +379,19 @@ jobs:
           path: source-under-test
           fetch-depth: 0
 
-      - name: Resolve Domain descriptor
+      - name: Place the Domain under test
         run: |
-          php scripts/ci/domain-ci.php validate
-          if [ -n "$DOMAIN_ID" ]; then
-            DOMAIN_PATH=$(php scripts/ci/domain-ci.php resolve \
-              --domain-id="$DOMAIN_ID" \
-              --caller-repository="$GITHUB_REPOSITORY" \
-              --workflow-ref="${{ inputs.platform-ref }}" | sed -n 's/^DOMAIN_PATH=//p')
-          else
-            DOMAIN_PATH="$LEGACY_DOMAIN_PATH"
-          fi
-          test -n "$DOMAIN_PATH"
-          echo "DOMAIN_PATH=$DOMAIN_PATH" >> "$GITHUB_ENV"
-          mkdir -p "$(dirname "$DOMAIN_PATH")"
-          mv source-under-test "$DOMAIN_PATH"
+          test -n "$INPUT_DOMAIN_PATH"
+          echo "DOMAIN_PATH=$INPUT_DOMAIN_PATH" >> "$GITHUB_ENV"
+          mkdir -p "$(dirname "$INPUT_DOMAIN_PATH")"
+          mv source-under-test "$INPUT_DOMAIN_PATH"
 
       - name: Compose exact cross-domain dependencies
         run: |
           php scripts/ci/compose-domain.php --domain-path="$DOMAIN_PATH" > extra-repos.tsv
           while IFS=$'\t' read -r repo path; do
             [ -z "$repo" ] && continue
-            ref=$(jq -r --arg repo "$repo" '.domains[] | select(.repo == $repo) | .ref' scripts/ci/domain-repos.json)
-            [[ "$ref" =~ ^[0-9a-f]{40}$ ]]
-            git clone --filter=blob:none --no-checkout "https://github.com/${repo}.git" "$path"
-            git -C "$path" checkout --detach "$ref"
+            git clone --quiet --depth 1 "https://github.com/${repo}.git" "$path"
           done < extra-repos.tsv
 
       - name: Setup PHP

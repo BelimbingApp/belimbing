@@ -3,7 +3,6 @@ set -euo pipefail
 
 root=$(git rev-parse --show-toplevel)
 cd "$root"
-python3 tests/ci/test-domain-pins.py
 bash -n scripts/ci/changed-authorable-php.sh scripts/ci/extension-conformance.sh scripts/ci/mount-guard.sh scripts/ci/phpstan-baseline-gate.sh scripts/ci/record-pest-timing.sh scripts/ci/token-audit.sh
 python3 -m py_compile scripts/ci/aggregate-pest-timing.py scripts/ci/pest-timing-ratchet.py scripts/ci/refresh-livewire-action-baselines.py
 
@@ -496,45 +495,7 @@ rm -rf "$mount_guard_fixture"
 trap - EXIT
 
 if command -v php >/dev/null; then
-    php scripts/ci/domain-ci.php validate
-
-    resolved=$(php scripts/ci/domain-ci.php resolve \
-        --domain-id=people \
-        --caller-repository=belimbingapp/BLB-PEOPLE \
-        --workflow-ref=0123456789abcdef0123456789abcdef01234567)
-    grep -q '^DOMAIN_PATH=app/Domains/People$' <<< "$resolved"
-    if php scripts/ci/domain-ci.php resolve \
-        --domain-id=people \
-        --caller-repository=BelimbingApp/blb-commerce \
-        --workflow-ref=0123456789abcdef0123456789abcdef01234567 2>/dev/null; then
-        echo 'domain-ci accepted a mismatched caller repository' >&2
-        exit 1
-    fi
-
-    caller=$(php scripts/ci/domain-ci.php render \
-        --domain-id=people \
-        --workflow-ref=0123456789abcdef0123456789abcdef01234567)
-    grep -q 'SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}' <<< "$caller"
-    if grep -q 'secrets: inherit' <<< "$caller"; then
-        echo 'domain-ci rendered broad secret inheritance' >&2
-        exit 1
-    fi
-
-    invalid_descriptor=$(mktemp)
-    trap 'rm -f "$invalid_descriptor"' EXIT
-    python3 -c 'import json,sys; data=json.load(open(sys.argv[1])); data["domains"]["people"]["ref"]="main"; json.dump(data,open(sys.argv[2],"w"))' \
-        scripts/ci/domain-repos.json "$invalid_descriptor"
-    if php scripts/ci/domain-ci.php validate --descriptor="$invalid_descriptor" 2>/dev/null; then
-        echo 'domain-ci accepted a mutable Domain ref' >&2
-        exit 1
-    fi
-    python3 -c 'import json,sys; data=json.load(open(sys.argv[1])); data["domains"]["people"]["repo"]="invalid"; json.dump(data,open(sys.argv[2],"w"))' \
-        scripts/ci/domain-repos.json "$invalid_descriptor"
-    if php scripts/ci/domain-ci.php validate --descriptor="$invalid_descriptor" 2>/dev/null; then
-        echo 'domain-ci accepted an invalid repository slug' >&2
-        exit 1
-    fi
-    php scripts/ci/validate-php-syntax.php scripts/ci/domain-ci.php scripts/ci/compose-domain.php scripts/ci/filter-domain-coverage-clover.php scripts/ci/validate-extension-manifest.php scripts/ci/composed-smoke.php scripts/ci/pinned-mount-check.php
+    php scripts/ci/validate-php-syntax.php scripts/ci/domain-registry.php scripts/ci/compose-domain.php scripts/ci/filter-domain-coverage-clover.php scripts/ci/validate-extension-manifest.php scripts/ci/composed-smoke.php
 
     # validate-php-syntax.php (#856): the Extension syntax gate
     # (extension-conformance.sh) fails an Extension whose PHP does not parse.
@@ -599,14 +560,14 @@ if command -v php >/dev/null; then
         rm -rf "$sonar_fixture"
         exit 1
     fi
-    if ! grep -qF "Registry not found: $sonar_fixture/missing.json" "$sonar_fixture/missing.err"; then
-        echo 'setup-sonar.php did not report Registry not found:' >&2
+    if ! grep -qF "cannot read $sonar_fixture/missing.json" "$sonar_fixture/missing.err"; then
+        echo 'setup-sonar.php did not report an unreadable registry' >&2
         cat "$sonar_fixture/missing.err" >&2
         rm -rf "$sonar_fixture"
         exit 1
     fi
-    if grep -qF 'Invalid registry:' "$sonar_fixture/missing.err"; then
-        echo 'setup-sonar.php fell past the unreadable-registry exit into the invalid-registry guard' >&2
+    if grep -qF 'schema_version' "$sonar_fixture/missing.err"; then
+        echo 'setup-sonar.php fell past the unreadable-registry exit into the schema guard' >&2
         cat "$sonar_fixture/missing.err" >&2
         rm -rf "$sonar_fixture"
         exit 1
@@ -617,219 +578,59 @@ if command -v php >/dev/null; then
         rm -rf "$sonar_fixture"
         exit 1
     fi
-    if ! grep -qF "Invalid registry: $sonar_fixture/invalid.json" "$sonar_fixture/invalid.err"; then
-        echo 'setup-sonar.php did not report Invalid registry:' >&2
+    if ! grep -qF "$sonar_fixture/invalid.json must declare schema_version 2" "$sonar_fixture/invalid.err"; then
+        echo 'setup-sonar.php did not refuse a registry that is not the current schema' >&2
         cat "$sonar_fixture/invalid.err" >&2
         rm -rf "$sonar_fixture"
         exit 1
     fi
-    printf '{"domains":1}\n' > "$sonar_fixture/scalar.json"
+    printf '{"schema_version":2,"convention":{"repo_prefix":"blb-","mount_root":"app/Domains","sonar_separator":"_"},"domains":1}\n' > "$sonar_fixture/scalar.json"
     if SONAR_TOKEN=placeholder php scripts/ci/setup-sonar.php --registry="$sonar_fixture/scalar.json" 2>"$sonar_fixture/scalar.err"; then
         echo 'setup-sonar.php accepted a registry with a scalar domains value' >&2
         rm -rf "$sonar_fixture"
         exit 1
     fi
-    if ! grep -qF "Invalid registry: $sonar_fixture/scalar.json" "$sonar_fixture/scalar.err"; then
-        echo 'setup-sonar.php did not report Invalid registry: for a scalar domains' >&2
+    if ! grep -qF "must list at least one domain id" "$sonar_fixture/scalar.err"; then
+        echo 'setup-sonar.php did not refuse a scalar domains value' >&2
         cat "$sonar_fixture/scalar.err" >&2
         rm -rf "$sonar_fixture"
         exit 1
     fi
     rm -rf "$sonar_fixture"
 
-    # The composed-application smoke test (#600) judges a boot against a
-    # checked-in surface; without a network only its migration scan and the
-    # surface/descriptor pin agreement can be proven here. The workflow
+    # The composed-application smoke test (#600, reshaped by #940) boots the
+    # platform with every Domain mounted at its main. There is no pinned ref
+    # and no checked-in surface, so what can be proven without a network is
+    # the migration duplicate rule and the descriptor refusals; the workflow
     # composed-smoke.yml runs the full boot on every PR.
     php scripts/ci/composed-smoke.php --scan-only --root=tests/Fixtures/ci/composed/clean 2>/dev/null
     if php scripts/ci/composed-smoke.php --scan-only --root=tests/Fixtures/ci/composed/duplicate >/dev/null 2>&1; then
         echo 'composed-smoke accepted a migration name shipped by two modules' >&2; exit 1
     fi
-    python3 - <<'PY'
-import json
-surface = json.load(open('scripts/ci/composed-surface.json'))
-descriptor = json.load(open('scripts/ci/domain-repos.json'))
-for domain, pin in surface['pins'].items():
-    assert descriptor['domains'][domain]['ref'] == pin, f'composed-surface.json pins {domain} at {pin}, descriptor at {descriptor["domains"][domain]["ref"]}'
-assert surface['domain_route_count'] == len(surface['route_names']) > 0 and surface['route_names'] == sorted(set(surface['route_names'])), 'composed-surface.json route names must be unique and sorted'
-PY
 
-    # Every surface guard, driven against a throwaway platform root whose two
-    # Domain mounts are one-commit git repositories, with --routes-json standing in
-    # for the boot (documented injectable harness for #600 review). Each mutation must turn the smoke red on its own.
     smoke_root=$(mktemp -d)
     trap 'rm -rf "$smoke_root"' EXIT
-    mkdir -p "$smoke_root/app/Domains" "$smoke_root/scripts/ci"
-    declare -A smoke_sha
-    for mount in People PeopleConnector; do
-        git -C "$smoke_root" init -q "app/Domains/$mount"
-        git -C "$smoke_root/app/Domains/$mount" -c user.name=smoke -c user.email=smoke@example.test commit -q --allow-empty -m "$mount"
-        smoke_sha[$mount]=$(git -C "$smoke_root/app/Domains/$mount" rev-parse HEAD)
-    done
-    smoke_descriptor() {
-        local people_sha="$1" connector_sha="$2"
-        python3 - "$smoke_root/scripts/ci/domain-repos.json" "$people_sha" "$connector_sha" <<'PY'
-import json, sys
-json.dump({"domains": {
-    "people": {"repo": "BelimbingApp/blb-people", "path": "app/Domains/People", "ref": sys.argv[2]},
-    "people-connector": {"repo": "BelimbingApp/blb-people-connector", "path": "app/Domains/PeopleConnector", "ref": sys.argv[3]},
-}}, open(sys.argv[1], "w"))
-PY
-    }
-    smoke_surface() {
-        local people_sha="$1" connector_sha="$2" route_count="$3" route_names="$4"
-        python3 - "$smoke_root/scripts/ci/composed-surface.json" "$people_sha" "$connector_sha" "$route_count" "$route_names" <<'PY'
-import json, sys
-json.dump({"pins": {"people": sys.argv[2], "people-connector": sys.argv[3]}, "domain_route_count": int(sys.argv[4]), "route_names": sys.argv[5].split(",")}, open(sys.argv[1], "w"))
-PY
-    }
-    # Domain surface is live names matching DOMAIN_ROUTE_NAME (#916/#920). Base
-    # admin.integration.* may appear in the table without counting as Domain.
-    mkdir -p "$smoke_root/app/Domains/People/Workforce/Routes" \
-        "$smoke_root/app/Domains/PeopleConnector/Connector/Routes"
-    printf "%s\n" "<?php" "Route::get('people', fn () => null)->name('people.index');" \
-        > "$smoke_root/app/Domains/People/Workforce/Routes/web.php"
-    printf "%s\n" "<?php" "Route::get('admin/people-connector', fn () => null)->name('admin.people-connector.index');" \
-        > "$smoke_root/app/Domains/PeopleConnector/Connector/Routes/web.php"
-    printf '[{"name":"people.index","uri":"people"},{"name":"admin.people-connector.index","uri":"admin/people-connector"},{"name":"admin.integration.outbound-exchanges.index","uri":"admin/integration/outbound-exchanges"},{"name":"admin.system.info.index","uri":"admin/system/info"},{"name":null,"uri":"livewire/update"}]' > "$smoke_root/routes.json"
-    smoke() {
-        php scripts/ci/composed-smoke.php --root="$smoke_root" --routes-json="$smoke_root/routes.json" \
-            --registry="$smoke_root/scripts/ci/domain-repos.json" --surface="$smoke_root/scripts/ci/composed-surface.json" "$@"
-    }
-    smoke_descriptor "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}"
-    smoke_surface "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}" 2 'admin.people-connector.index,people.index'
-    smoke 2>/dev/null
-    smoke_surface "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}" 2 'admin.people-connector.index,people.index,people.missing'
-    if smoke >/dev/null 2>&1; then
-        echo 'composed-smoke accepted a table missing an expected route name' >&2; exit 1
-    fi
-    smoke_surface "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}" 3 'admin.people-connector.index,people.index'
-    if smoke >/dev/null 2>&1; then
-        echo 'composed-smoke accepted a domain route count that does not match the surface' >&2; exit 1
-    fi
-    smoke_surface "${smoke_sha[People]}" 0123456789abcdef0123456789abcdef01234567 2 'admin.people-connector.index,people.index'
-    if smoke >/dev/null 2>&1; then
-        echo 'composed-smoke accepted a surface whose pins disagree with the descriptor' >&2; exit 1
-    fi
-    smoke_descriptor 0123456789abcdef0123456789abcdef01234567 "${smoke_sha[PeopleConnector]}"
-    smoke_surface 0123456789abcdef0123456789abcdef01234567 "${smoke_sha[PeopleConnector]}" 2 'admin.people-connector.index,people.index'
-    if smoke >/dev/null 2>&1; then
-        echo 'composed-smoke accepted a mount whose HEAD is not the pinned ref' >&2; exit 1
+    mkdir -p "$smoke_root/scripts/ci"
+    cat > "$smoke_root/scripts/ci/domain-repos.json" <<'JSON'
+{
+    "schema_version": 2,
+    "convention": {"repo_prefix": "blb-", "mount_root": "app/Domains", "sonar_separator": "_"},
+    "domains": ["people"]
+}
+JSON
+    # A subset naming a Domain the descriptor does not list is refused before
+    # anything is cloned or booted: a typo must not silently compose less.
+    unlisted_err=$(BLB_DOMAIN_OWNERS=BelimbingApp php scripts/ci/composed-smoke.php \
+        --root="$smoke_root" --registry="$smoke_root/scripts/ci/domain-repos.json" \
+        --domains=nope 2>&1 >/dev/null || true)
+    if ! grep -q 'does not list domain \[nope\]' <<< "$unlisted_err"; then
+        echo "composed-smoke did not refuse an unlisted domain id: $unlisted_err" >&2; exit 1
     fi
 
-    # #916: adding a Base-owned admin.integration.* name must stay green and
-    # leave domain_route_count unchanged.
-    smoke_descriptor "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}"
-    smoke_surface "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}" 2 'admin.people-connector.index,people.index'
-    printf '[{"name":"people.index","uri":"people"},{"name":"admin.people-connector.index","uri":"admin/people-connector"},{"name":"admin.integration.outbound-exchanges.index","uri":"admin/integration/outbound-exchanges"},{"name":"admin.integration.outbound-exchanges.show","uri":"admin/integration/outbound-exchanges/1"}]' \
-        > "$smoke_root/routes.json"
-    smoke 2>/dev/null || {
-        echo 'composed-smoke turned red when only a Base admin.integration.* route was added' >&2
-        smoke 2>&1 || true
-        exit 1
-    }
-
-    # A genuinely Domain-declared name appearing in the table without a surface
-    # bump still turns red — the count guard remains load-bearing.
-    printf "%s\n" "<?php" "Route::get('people', fn () => null)->name('people.index');" \
-        "Route::get('people/extra', fn () => null)->name('people.extra');" \
-        > "$smoke_root/app/Domains/People/Workforce/Routes/web.php"
-    printf '[{"name":"people.index","uri":"people"},{"name":"people.extra","uri":"people/extra"},{"name":"admin.people-connector.index","uri":"admin/people-connector"},{"name":"admin.integration.outbound-exchanges.index","uri":"admin/integration/outbound-exchanges"}]' \
-        > "$smoke_root/routes.json"
-    if smoke >/dev/null 2>&1; then
-        echo 'composed-smoke accepted an extra Domain-declared route without a surface bump' >&2; exit 1
+    # An unknown argument is a usage error, never a silently ignored flag.
+    if php scripts/ci/composed-smoke.php --root="$smoke_root" --surface=gone.json >/dev/null 2>&1; then
+        echo 'composed-smoke accepted a removed --surface argument' >&2; exit 1
     fi
-    domain_err=$(smoke 2>&1 || true)
-    grep -q 'domain route count is 3, expected 2' <<< "$domain_err"
-    # Restore the two-route declaration for later cases.
-    printf "%s\n" "<?php" "Route::get('people', fn () => null)->name('people.index');" \
-        > "$smoke_root/app/Domains/People/Workforce/Routes/web.php"
-
-    # #920: Route::name()->group + Route::resource assembled names never appear as
-    # one literal ->name() string. They must still move the Domain surface count.
-    printf "%s\n" "<?php" "Route::get('people', fn () => null)->name('people.index');" \
-        "Route::name('people.')->group(function () {" \
-        "    Route::resource('things', ThingController::class)->only(['index', 'store']);" \
-        "});" \
-        > "$smoke_root/app/Domains/People/Workforce/Routes/web.php"
-    printf '[{"name":"people.index","uri":"people"},{"name":"people.things.index","uri":"people/things"},{"name":"people.things.store","uri":"people/things"},{"name":"admin.people-connector.index","uri":"admin/people-connector"},{"name":"admin.integration.outbound-exchanges.index","uri":"admin/integration/outbound-exchanges"}]' \
-        > "$smoke_root/routes.json"
-    if smoke >/dev/null 2>&1; then
-        echo 'composed-smoke accepted Route::resource group names without a surface bump' >&2; exit 1
-    fi
-    resource_err=$(smoke 2>&1 || true)
-    grep -q 'domain route count is 4, expected 2' <<< "$resource_err"
-    printf "%s\n" "<?php" "Route::get('people', fn () => null)->name('people.index');" \
-        > "$smoke_root/app/Domains/People/Workforce/Routes/web.php"
-
-    # #870: DOMAIN_ROUTE_NAME must own people-connector.* (signed webhook) and
-    # refuse a Domain Routes declaration outside the prefix list.
-    smoke_descriptor "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}"
-    printf "%s\n" "<?php" "Route::post('webhooks/people-connector/{id}', fn () => null)->name('people-connector.webhook');" \
-        > "$smoke_root/app/Domains/PeopleConnector/Connector/Routes/web.php"
-    printf '[{"name":"people.index","uri":"people"},{"name":"people-connector.webhook","uri":"webhooks/people-connector/1"},{"name":"admin.integration.outbound-exchanges.index","uri":"admin/integration/outbound-exchanges"}]' \
-        > "$smoke_root/routes.json"
-    smoke_surface "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}" 2 'people-connector.webhook,people.index'
-    smoke 2>/dev/null
-
-    # Narrowing the filter by dropping people-connector. must turn red: the
-    # Routes declaration is then unmatched (#870).
-    narrowed="$smoke_root/composed-smoke-narrowed.php"
-    cp scripts/ci/composed-smoke.php "$narrowed"
-    python3 - "$narrowed" <<'PY'
-from pathlib import Path
-import sys
-path = Path(sys.argv[1])
-text = path.read_text()
-old = "const DOMAIN_ROUTE_NAME = '/^(people\\.|people-connector\\.|admin\\.people-connector\\.|commerce\\.|it\\.|quality\\.)/';"
-new = "const DOMAIN_ROUTE_NAME = '/^(people\\.|admin\\.people-connector\\.|commerce\\.|it\\.|quality\\.)/';"
-assert old in text, 'DOMAIN_ROUTE_NAME const missing for the #870 mutant'
-path.write_text(text.replace(old, new, 1))
-PY
-    narrowed_err=$(php "$narrowed" --root="$smoke_root" --routes-json="$smoke_root/routes.json" \
-        --registry="$smoke_root/scripts/ci/domain-repos.json" --surface="$smoke_root/scripts/ci/composed-surface.json" \
-        2>&1 || true)
-    if ! grep -q 'people-connector.webhook' <<< "$narrowed_err"; then
-        echo 'composed-smoke accepted people-connector.webhook after DOMAIN_ROUTE_NAME dropped people-connector.' >&2
-        echo "$narrowed_err" >&2
-        exit 1
-    fi
-
-    # An undeclared prefix in Domain Routes is refused even when the route table is empty of it.
-    printf "%s\n" "<?php" "Route::get('odd', fn () => null)->name('odd.domain.route');" \
-        > "$smoke_root/app/Domains/PeopleConnector/Connector/Routes/web.php"
-    printf '[{"name":"people.index","uri":"people"},{"name":"admin.integration.outbound-exchanges.index","uri":"admin/integration/outbound-exchanges"}]' \
-        > "$smoke_root/routes.json"
-    smoke_surface "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}" 1 'people.index'
-    if smoke >/dev/null 2>&1; then
-        echo 'composed-smoke accepted a Domain Routes name outside DOMAIN_ROUTE_NAME' >&2
-        exit 1
-    fi
-    smoke_err=$(smoke 2>&1 || true)
-    grep -q 'odd.domain.route' <<< "$smoke_err"
-
-    # --print-surface must still regenerate when pins disagree (advance-domain-pin
-    # intermediate state) but still refuse unmatched Domain Routes names (#871).
-    printf "%s\n" "<?php" "Route::post('webhooks/people-connector/{id}', fn () => null)->name('people-connector.webhook');" \
-        > "$smoke_root/app/Domains/PeopleConnector/Connector/Routes/web.php"
-    printf '[{"name":"people.index","uri":"people"},{"name":"people-connector.webhook","uri":"webhooks/people-connector/1"},{"name":"admin.integration.outbound-exchanges.index","uri":"admin/integration/outbound-exchanges"}]' \
-        > "$smoke_root/routes.json"
-    smoke_descriptor "${smoke_sha[People]}" "${smoke_sha[PeopleConnector]}"
-    smoke_surface "${smoke_sha[People]}" 1111111111111111111111111111111111111111 2 'people-connector.webhook,people.index'
-    printed=$(smoke --print-surface 2>/dev/null) || {
-        echo 'composed-smoke --print-surface failed while only the surface pin was stale' >&2
-        exit 1
-    }
-    python3 -c 'import json,sys; d=json.load(sys.stdin); assert "pins" in d and "route_names" in d' <<< "$printed"
-
-    printf "%s\n" "<?php" "Route::get('odd', fn () => null)->name('odd.domain.route');" \
-        > "$smoke_root/app/Domains/PeopleConnector/Connector/Routes/web.php"
-    if smoke --print-surface >/dev/null 2>&1; then
-        echo 'composed-smoke --print-surface accepted a Domain Routes name outside DOMAIN_ROUTE_NAME' >&2
-        exit 1
-    fi
-    print_err=$(smoke --print-surface 2>&1 || true)
-    grep -q 'odd.domain.route' <<< "$print_err"
 
     rm -rf "$smoke_root"
     trap - EXIT
@@ -908,13 +709,6 @@ PHP
 
     rm -rf "$ext_root"
     trap - EXIT
-    rendered=$(php scripts/ci/domain-ci.php render --domain-id=people --workflow-ref=0123456789abcdef0123456789abcdef01234567)
-    grep -q 'domain-id: people' <<< "$rendered"
-    grep -q 'platform-ref: 0123456789abcdef0123456789abcdef01234567' <<< "$rendered"
-    if php scripts/ci/domain-ci.php render --domain-id=people --workflow-ref=main >/dev/null 2>&1; then
-        echo 'mutable workflow ref was accepted' >&2; exit 1
-    fi
-
     # filter-domain-coverage-clover.php (#842): Domain CI attributes Sonar
     # coverage only to the mount under test. Sibling domains, platform files,
     # and a path that merely contains the domain name as a substring must be
@@ -1676,42 +1470,43 @@ PY
 compose_fixture=$(mktemp -d)
 trap 'rm -rf "$compose_fixture"' EXIT
 compose_src="$root/tests/ci/fixtures/compose-domain"
+# The fixture owns its Domain owner: derivation reads the checkout's remotes
+# otherwise, which would spell these repositories BelimbingApp/* (#940).
+export BLB_DOMAIN_OWNERS=Example
 cp -a "$compose_src/registry-root/." "$compose_fixture/tree/"
-mkdir -p "$compose_fixture/present/app/Domains"
-# Pre-existing beta mount so the already-present path is omitted from stdout.
-cp -a "$compose_fixture/tree/app/Domains/Beta" "$compose_fixture/present/app/Domains/Beta"
+# Two trees so the same derived Beta path is absent in one and present in the
+# other: repository and mount path are derived from the id now (#940), so a
+# per-entry path override is no longer available to the fixture.
+mkdir -p "$compose_fixture/absent/app/Domains"
+cp -a "$compose_fixture/tree/app/Domains/Solo" "$compose_fixture/absent/app/Domains/Solo"
+cp -a "$compose_fixture/tree/app/Domains/NeedsBeta" "$compose_fixture/absent/app/Domains/NeedsBeta"
+cp -a "$compose_fixture/tree/app/Domains/NeedsGamma" "$compose_fixture/absent/app/Domains/NeedsGamma"
 python3 - "$compose_fixture" <<'COMPOSE_REG'
 import json, pathlib, sys
 root = pathlib.Path(sys.argv[1])
-tree = root / "tree"
-absent_beta = root / "absent" / "app" / "Domains" / "Beta"
-reg = {
-    "domains": {
-        "solo": {"repo": "Example/solo", "path": str(tree / "app/Domains/Solo")},
-        "needs-beta": {"repo": "Example/needs-beta", "path": str(tree / "app/Domains/NeedsBeta")},
-        "needs-gamma": {"repo": "Example/needs-gamma", "path": str(tree / "app/Domains/NeedsGamma")},
-        # Absent on disk so NeedsBeta must emit a clone line.
-        "beta": {"repo": "Example/beta", "path": str(absent_beta)},
+ids = ["solo", "needs-beta", "needs-gamma", "beta"]
+
+
+def descriptor(mount_root):
+    return {
+        "schema_version": 2,
+        # An empty repo prefix keeps the fixture's Example/beta spelling.
+        "convention": {"repo_prefix": "", "mount_root": mount_root, "sonar_separator": "_"},
+        "domains": ids,
     }
-}
-(root / "registry.json").write_text(json.dumps(reg))
-# Registry whose beta path already exists on disk (present mount).
-reg_present = dict(reg)
-reg_present["domains"] = dict(reg["domains"])
-reg_present["domains"]["beta"] = {
-    "repo": "Example/beta",
-    "path": str(root / "present/app/Domains/Beta"),
-}
-(root / "registry-present.json").write_text(json.dumps(reg_present))
+
+
+# Beta is missing from the absent tree, so NeedsBeta must emit a clone line.
+(root / "registry.json").write_text(json.dumps(descriptor(str(root / "absent/app/Domains"))))
+# The full tree has Beta on disk, so the same run must omit it.
+(root / "registry-present.json").write_text(json.dumps(descriptor(str(root / "tree/app/Domains"))))
 COMPOSE_REG
 
 compose_run() {
-    local domain="$1" registry="$2"
-    shift 2 || true
+    local domain="$1" registry="$2" tree="${3:-absent}"
     php "$root/scripts/ci/compose-domain.php" \
-        --domain-path="$compose_fixture/tree/app/Domains/$domain" \
-        --registry="$registry" \
-        "$@"
+        --domain-path="$compose_fixture/$tree/app/Domains/$domain" \
+        --registry="$registry"
 }
 
 # Sibling + core only: nothing to clone.
@@ -1747,7 +1542,7 @@ fi
 
 # Already-present registry path is omitted.
 set +e
-present_out=$(compose_run NeedsBeta "$compose_fixture/registry-present.json" 2>"$compose_fixture/present.err")
+present_out=$(compose_run NeedsBeta "$compose_fixture/registry-present.json" tree 2>"$compose_fixture/present.err")
 present_ec=$?
 set -e
 if [[ "$present_ec" -ne 0 || -n "$present_out" ]]; then
@@ -1773,12 +1568,12 @@ fi
 # Unreadable registry exits 2.
 set +e
 php "$root/scripts/ci/compose-domain.php" \
-    --domain-path="$compose_fixture/tree/app/Domains/Solo" \
+    --domain-path="$compose_fixture/absent/app/Domains/Solo" \
     --registry="$compose_fixture/no-such-registry.json" \
     >/dev/null 2>"$compose_fixture/noread.err"
 noread_ec=$?
 set -e
-if [[ "$noread_ec" -ne 2 ]] || ! grep -qF 'cannot read registry' "$compose_fixture/noread.err"; then
+if [[ "$noread_ec" -ne 2 ]] || ! grep -qF 'cannot read' "$compose_fixture/noread.err"; then
     echo 'compose-domain unreadable registry refusal failed' >&2
     cat "$compose_fixture/noread.err" >&2
     exit 1
@@ -1788,12 +1583,12 @@ fi
 printf 'not-json\n' > "$compose_fixture/bad.json"
 set +e
 php "$root/scripts/ci/compose-domain.php" \
-    --domain-path="$compose_fixture/tree/app/Domains/Solo" \
+    --domain-path="$compose_fixture/absent/app/Domains/Solo" \
     --registry="$compose_fixture/bad.json" \
     >/dev/null 2>"$compose_fixture/bad.err"
 bad_ec=$?
 set -e
-if [[ "$bad_ec" -ne 2 ]] || ! grep -qF 'not valid JSON' "$compose_fixture/bad.err"; then
+if [[ "$bad_ec" -ne 2 ]] || ! grep -qF 'is not valid JSON' "$compose_fixture/bad.err"; then
     echo 'compose-domain invalid JSON refusal failed' >&2
     cat "$compose_fixture/bad.err" >&2
     exit 1
@@ -1802,7 +1597,7 @@ fi
 # Unknown argument exits 2 naming it.
 set +e
 php "$root/scripts/ci/compose-domain.php" \
-    --domain-path="$compose_fixture/tree/app/Domains/Solo" \
+    --domain-path="$compose_fixture/absent/app/Domains/Solo" \
     --registry="$compose_fixture/registry.json" \
     --bogus \
     >/dev/null 2>"$compose_fixture/bogus.err"
@@ -1817,7 +1612,7 @@ fi
 # Workflow argument list (domain-path only) exits 0 against the fixture.
 set +e
 php "$root/scripts/ci/compose-domain.php" \
-    --domain-path="$compose_fixture/tree/app/Domains/Solo" \
+    --domain-path="$compose_fixture/absent/app/Domains/Solo" \
     --registry="$compose_fixture/registry.json" \
     >/dev/null 2>"$compose_fixture/wf.err"
 wf_ec=$?
@@ -1828,183 +1623,8 @@ if [[ "$wf_ec" -ne 0 ]]; then
     exit 1
 fi
 
+unset BLB_DOMAIN_OWNERS
 rm -rf "$compose_fixture"
-trap - EXIT
-
-# pinned-mount-check.php (#927): a lane that calls sibling Domain API absent at
-# the pinned revision must be refused locally, naming both revisions. The proof
-# is the same case run against two pins — red at the old one, green at the new
-# one — not an assertion that the script exists.
-pin_fixture=$(mktemp -d)
-trap 'rm -rf "$pin_fixture"' EXIT
-mkdir -p "$pin_fixture/app/Domains/People/Training/Services" \
-    "$pin_fixture/app/Domains/PeopleConnector/Connector"
-
-pin_store() {
-    cat > "$pin_fixture/app/Domains/People/Training/Services/TrainingParticipationStore.php"
-}
-pin_git() { git -C "$pin_fixture/app/Domains/People" "$@"; }
-
-pin_git init -q .
-pin_git config user.email ci@example.com
-pin_git config user.name ci
-pin_store <<'STORE'
-<?php
-namespace App\Domains\People\Training\Services;
-final class TrainingParticipationStore
-{
-    public function enrol(int $id): void {}
-}
-STORE
-pin_git add -A
-pin_git commit -qm 'pinned revision'
-pinned_sha=$(pin_git rev-parse HEAD)
-pin_store <<'STORE'
-<?php
-namespace App\Domains\People\Training\Services;
-final class TrainingParticipationStore
-{
-    public function enrol(int $id): void {}
-
-    public function enrolFromRequest(int $id): void {}
-}
-STORE
-pin_git add -A
-pin_git commit -qm 'method added after the pin'
-mounted_sha=$(pin_git rev-parse HEAD)
-
-# The connector lane that #927 describes: green locally, red on all three jobs.
-cat > "$pin_fixture/app/Domains/PeopleConnector/Connector/EnrolmentTest.php" <<'LANE'
-<?php
-use App\Domains\People\Training\Services\TrainingParticipationStore;
-
-it('enrols through the People API', function (): void {
-    app(TrainingParticipationStore::class)->enrolFromRequest(1);
-});
-LANE
-
-# A second lane file that calls only what the pin already has, plus an unrelated
-# method name: neither may fire, or the check is noise an author learns to skip.
-cat > "$pin_fixture/app/Domains/PeopleConnector/Connector/SettledTest.php" <<'LANE'
-<?php
-use App\Domains\People\Training\Services\TrainingParticipationStore;
-
-it('enrols through API the pin already has', function (): void {
-    app(TrainingParticipationStore::class)->enrol(1);
-    $unrelated->enrolFromRequestSomewhereElse(2);
-});
-LANE
-
-pin_registry() {
-    local people_sha="$1"
-    python3 - "$pin_fixture/registry.json" "$people_sha" <<'PIN_REG'
-import json, sys
-json.dump({
-    "schema_version": 1,
-    "domains": {
-        "people": {
-            "repo": "BelimbingApp/blb-people",
-            "path": "app/Domains/People",
-            "sonar_project_key": "BelimbingApp_blb-people",
-            "ref": sys.argv[2],
-        },
-        "people-connector": {
-            "repo": "BelimbingApp/blb-people-connector",
-            "path": "app/Domains/PeopleConnector",
-            "sonar_project_key": "BelimbingApp_blb-people-connector",
-            "ref": "d91e2ccbcc0e40dcbb750c28aeebbe9c05729a33",
-        },
-    },
-}, open(sys.argv[1], "w"))
-PIN_REG
-}
-
-pin_check() {
-    php "$root/scripts/ci/pinned-mount-check.php" \
-        --root="$pin_fixture" --registry="$pin_fixture/registry.json" "$@"
-}
-
-pin_registry "$pinned_sha"
-set +e
-pin_err=$(pin_check app/Domains/PeopleConnector/Connector/EnrolmentTest.php 2>&1)
-pin_ec=$?
-set -e
-if [[ "$pin_ec" -ne 1 ]]; then
-    echo "pinned-mount-check accepted a lane calling People API absent at the pin (exit $pin_ec)" >&2
-    echo "$pin_err" >&2
-    exit 1
-fi
-grep -q 'enrolFromRequest() does not exist' <<< "$pin_err"
-# The message has to name both revisions or the author cannot act on it.
-grep -q "${pinned_sha:0:12}" <<< "$pin_err"
-grep -q "${mounted_sha:0:12}" <<< "$pin_err"
-
-# Same file, pin advanced to the mounted revision: the refusal must lift.
-pin_registry "$mounted_sha"
-if ! pin_check app/Domains/PeopleConnector/Connector/EnrolmentTest.php >/dev/null 2>&1; then
-    echo 'pinned-mount-check refused a lane whose pin matches the mount' >&2
-    pin_check app/Domains/PeopleConnector/Connector/EnrolmentTest.php || true
-    exit 1
-fi
-
-# Back to the old pin: a lane using only pinned API stays green, so the check
-# refuses drift rather than every lane that names a sibling class.
-pin_registry "$pinned_sha"
-if ! pin_check app/Domains/PeopleConnector/Connector/SettledTest.php >/dev/null 2>&1; then
-    echo 'pinned-mount-check refused a lane that only uses API the pin has' >&2
-    pin_check app/Domains/PeopleConnector/Connector/SettledTest.php || true
-    exit 1
-fi
-
-# A sibling class that does not exist at the pin at all is the same hazard.
-mkdir -p "$pin_fixture/app/Domains/PeopleConnector/Connector"
-cat > "$pin_fixture/app/Domains/PeopleConnector/Connector/NewClassTest.php" <<'LANE'
-<?php
-use App\Domains\People\Training\Services\TrainingLedger;
-
-it('reads a class the pin never had', function (): void {
-    app(TrainingLedger::class)->read(1);
-});
-LANE
-set +e
-pin_new_err=$(pin_check app/Domains/PeopleConnector/Connector/NewClassTest.php 2>&1)
-pin_new_ec=$?
-set -e
-if [[ "$pin_new_ec" -ne 1 ]]; then
-    echo 'pinned-mount-check accepted a lane naming a class absent at the pin' >&2
-    echo "$pin_new_err" >&2
-    exit 1
-fi
-grep -q 'TrainingLedger does not exist' <<< "$pin_new_err"
-
-# The domain under review is composed at its PR head, not at its pin, so a
-# lane's references to its OWN classes are not drift. Without this the real
-# connector tree reports every class it added since its own pin.
-cat > "$pin_fixture/app/Domains/People/Training/OwnClassTest.php" <<'LANE'
-<?php
-use App\Domains\People\Training\Services\TrainingParticipationStore;
-
-it('calls its own new API', function (): void {
-    app(TrainingParticipationStore::class)->enrolFromRequest(1);
-});
-LANE
-if ! pin_check app/Domains/People/Training/OwnClassTest.php >/dev/null 2>&1; then
-    echo 'pinned-mount-check refused a People lane for using People API added since the People pin' >&2
-    pin_check app/Domains/People/Training/OwnClassTest.php || true
-    exit 1
-fi
-
-# Missing arguments are a usage error (exit 2), distinct from a finding (exit 1).
-set +e
-pin_check >/dev/null 2>&1
-pin_usage_ec=$?
-set -e
-if [[ "$pin_usage_ec" -ne 2 ]]; then
-    echo "pinned-mount-check did not report a usage error for missing arguments (exit $pin_usage_ec)" >&2
-    exit 1
-fi
-
-rm -rf "$pin_fixture"
 trap - EXIT
 
 echo 'CI script checks passed'

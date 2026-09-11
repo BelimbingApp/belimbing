@@ -37,10 +37,6 @@ timing_profile=(
   scripts/ci/platform-unit-shard-timings.json
   scripts/ci/platform-unit-shards.json
 )
-pin_profile=(
-  scripts/ci/domain-repos.json
-  scripts/ci/composed-surface.json
-)
 pest_timing_profile=(
   tests/ci/pest-timing-baseline.json
 )
@@ -70,12 +66,12 @@ is_subset_of() {
   return 0
 }
 
-if is_subset_of coverage_profile || is_subset_of timing_profile || is_subset_of pin_profile || is_subset_of pest_timing_profile || is_subset_of livewire_actions_profile; then
+if is_subset_of coverage_profile || is_subset_of timing_profile || is_subset_of pest_timing_profile || is_subset_of livewire_actions_profile; then
   printf 'bot-pr-policy: accepted (%s)\n' "$(IFS=','; echo "${changed[*]}")"
   exit 0
 fi
 
-union=("${coverage_profile[@]}" "${timing_profile[@]}" "${pin_profile[@]}" "${pest_timing_profile[@]}" "${livewire_actions_profile[@]}")
+union=("${coverage_profile[@]}" "${timing_profile[@]}" "${pest_timing_profile[@]}" "${livewire_actions_profile[@]}")
 extras=()
 for path in "${changed[@]}"; do
   in_union=0

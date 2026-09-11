@@ -1,21 +1,23 @@
 name: composed-smoke
 
-# Boot the platform with every pinned Domain mounted and hold the result to
-# scripts/ci/composed-surface.json (#600). The platform test suites run with no
-# Domain mounted and each Domain's CI mounts only itself plus its exact
-# dependencies, so nothing else proves that the pins in
-# scripts/ci/domain-repos.json compose into one application: no route
-# collision (#570), no duplicate migration name (#117), the expected route
-# table, Domain commands extend TenantScopedCommand (#912), Domain routes
-# carry tenant/authz middleware (#917), and cross-Domain ownership holds
-# (#917). A pin advance that breaks composition, pulls an unconverted
-# Domain command, or introduces a bare Domain route / ownership collision
-# fails here, on the PR that advances it (#627 / #912 / #917). Do not add
-# pull_request paths: filters: a required check that only runs on descriptor
-# edits leaves every other PR missing that status. The nightly schedule
-# (#663) re-runs the same assertion against the pins on main and opens or
-# updates one "Composed boot failed" issue on refusal so drift between pin
-# advances is visible without waiting for a PR.
+# Boot the platform with every controlled Domain mounted at its main (#600,
+# reshaped by #940). The platform test suites run with no Domain mounted and
+# each Domain's CI mounts only itself plus its exact dependencies, so nothing
+# else proves that the Domains compose into one application: no route
+# collision (#570), no duplicate migration name (#117), Domain commands extend
+# TenantScopedCommand (#912), Domain routes carry tenant/authz middleware
+# (#917), and cross-Domain ownership holds (#917). Each of those is invisible
+# to a single Domain's own CI, because one Domain alone never collides with
+# anything.
+#
+# There are no pins and no checked-in route surface (#940). Composing at main
+# means a red run here does not say whether the platform or a Domain caused
+# it, and cannot be replayed against a fixed past state; in exchange nothing
+# goes stale and no one services a pin. Do not add pull_request paths:
+# filters: a required check that only runs on some PRs leaves every other PR
+# missing that status. The nightly schedule (#663) re-runs the same assertion
+# against main and opens or updates one "Composed boot failed" issue on
+# refusal, so a break between PRs is visible without waiting for one.
 
 on:
   push:
@@ -79,25 +81,23 @@ jobs:
           sed -i 's/^DB_DATABASE=.*/DB_DATABASE=:memory:/' .env
           php artisan key:generate --force
 
-      # Materializes every Domain at the descriptor's exact refs,
-      # then re-runs the autoloader so the mounted modules are discoverable.
-      - name: Compose the pinned Domains
+      # Materializes every Domain the descriptor lists, each at its default
+      # branch, then re-runs the autoloader so the mounted modules are
+      # discoverable.
+      - name: Compose the Domains
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
         run: |
           php scripts/ci/composed-smoke.php --scan-only
           php -r 'require "vendor/autoload.php";' >/dev/null
-          for id in $(jq -r '.domains | keys[]' scripts/ci/domain-repos.json); do
-            repo=$(jq -r --arg id "$id" '.domains[$id].repo' scripts/ci/domain-repos.json)
-            ref=$(jq -r --arg id "$id" '.domains[$id].ref' scripts/ci/domain-repos.json)
-            path=$(jq -r --arg id "$id" '.domains[$id].path' scripts/ci/domain-repos.json)
-            [[ "$ref" =~ ^[0-9a-f]{40}$ ]]
-            echo "Materializing $repo@$ref -> $path"
-            git clone --filter=blob:none --no-checkout "https://github.com/${repo}.git" "$path"
-            git -C "$path" checkout --detach "$ref"
-          done
+          while IFS=$'\t' read -r id repo path; do
+            [ -z "$repo" ] && continue
+            echo "Materializing $repo@default -> $path"
+            git clone --quiet --depth 1 "https://github.com/${repo}.git" "$path"
+            echo "  $id at $(git -C "$path" rev-parse --short HEAD)"
+          done < <(php scripts/ci/domain-registry.php --tsv)
           composer dump-autoload --optimize
 
-      - name: Boot the composed application and hold it to the surface
+      - name: Boot the composed application
         id: boot
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
         run: |
@@ -151,29 +151,6 @@ jobs:
           fi
           bun scripts/ci/composed-boot-failure-report.ts
 
-      - name: Validate pinned Domain freshness
-        id: validate-pins
-        if: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
-        run: |
-          set +e
-          python3 scripts/ci/validate-domain-pins.py >"${RUNNER_TEMP}/domain-pin-validation.txt" 2>&1
-          status=$?
-          cat "${RUNNER_TEMP}/domain-pin-validation.txt"
-          exit "${status}"
-
-      - name: Report stale Domain pins
-        if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
-            bun scripts/ci/domain-pin-stale-report.ts --dry-run
-            exit 0
-          fi
-          bun scripts/ci/domain-pin-stale-report.ts --warnings-file "${RUNNER_TEMP}/domain-pin-validation.txt"
-
       - name: Fail when the composed boot refused
         if: ${{ steps.boot.outcome == 'success' && steps.boot.outputs.exit_code != '0' }}
         run: |
@@ -183,9 +160,9 @@ jobs:
       # Platform-owned TenantScopedCommand rule over the Domains we ship
       # (#912). Domain CI still runs the same audit against one Domain plus
       # its exact dependencies; this step answers what that cannot: do the
-      # pins in domain-repos.json, composed together, satisfy the rule?
-      # A pin advance that introduces an unconverted command fails here on
-      # the advancing PR — that is intentional, not a flake. DomainCommand
+      # Domains, composed together, satisfy the rule? An unconverted Domain
+      # command fails here on the PR that introduces it — intentional, not a
+      # flake. DomainCommand
       # TenantAudit::isAllowlisted() short-circuits before the tenant_scoped
       # check, so an allowlisted command passes regardless; this step is not
       # proof that the allowlisted set is correct or empty.
@@ -193,13 +170,12 @@ jobs:
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) && steps.boot.outcome == 'success' && steps.boot.outputs.exit_code == '0' }}
         run: php artisan blb:domain-commands --audit
 
-      # Domain route middleware audit over the composed pin set (#917). Domain
+      # Domain route middleware audit over the composed set (#917). Domain
       # CI still runs blb:domain-routes --audit against one Domain plus its
-      # exact dependencies; this step answers what that cannot: do the pins
-      # in domain-repos.json, composed together, leave every required Domain
-      # route with tenant assertion and authorization middleware? A pin
-      # advance that introduces a bare Domain route fails here on the
-      # advancing PR — intentional, not a flake. middleware_audit.allowlist
+      # exact dependencies; this step answers what that cannot: do the
+      # Domains, composed together, leave every required Domain route with
+      # tenant assertion and authorization middleware? A bare Domain route
+      # fails here on the PR that introduces it. middleware_audit.allowlist
       # short-circuits before the missing-middleware check, so an allowlisted
       # route passes regardless; this step is not proof that the allowlisted
       # set is correct or empty.
@@ -207,11 +183,10 @@ jobs:
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) && steps.boot.outcome == 'success' && steps.boot.outputs.exit_code == '0' }}
         run: php artisan blb:domain-routes --audit
 
-      # Cross-Domain table and route ownership over the composed pin set
-      # (#917). Domain CI's module-ownership run sees one Domain plus its
-      # dependency closure; this step sees every pin together so an unrelated
-      # Domain pair cannot collide on a pin advance without redding the
-      # advancing PR.
+      # Cross-Domain table and route ownership over the composed set (#917).
+      # Domain CI's module-ownership run sees one Domain plus its dependency
+      # closure; this step sees every Domain together, so an unrelated
+      # Domain pair cannot collide without a run going red.
       - name: Check composed Domain ownership
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) && steps.boot.outcome == 'success' && steps.boot.outputs.exit_code == '0' }}
         run: php artisan blb:module-ownership
@@ -220,5 +195,5 @@ jobs:
       # loop-driven per module id in domain-ci.yml and validates one Module's
       # declared capabilities against the catalog — a solo-Domain concern,
       # not a multi-Domain composition one. Domain repositories already run
-      # it via workflow_call on their own PRs before a pin advances; routes
-      # and ownership are the composed gaps this job closes.
+      # it via workflow_call on their own PRs; routes and ownership are the
+      # composed gaps this job closes.
