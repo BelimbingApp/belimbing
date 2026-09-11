@@ -413,8 +413,8 @@ get_frontend_domain() {
 
     # Use defaults if not set
     if [[ -z "$frontend_domain" ]]; then
-        if command -v get_default_domains >/dev/null 2>&1; then
-            frontend_domain=$(get_default_domains "$APP_ENV" | cut -d'|' -f1)
+        if command -v get_default_domain >/dev/null 2>&1; then
+            frontend_domain=$(get_default_domain "$APP_ENV")
         else
             frontend_domain="${APP_ENV}.blb.lara"
         fi

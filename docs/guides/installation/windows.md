@@ -82,7 +82,7 @@ Belimbing uses friendly local domains. Native Windows must resolve these names
 to Windows localhost:
 
 ```text
-127.0.0.1 local.blb.lara local.api.blb.lara
+127.0.0.1 local.blb.lara
 ```
 
 Add the line to:
@@ -94,7 +94,7 @@ C:\Windows\System32\drivers\etc\hosts
 You need an Administrator editor or Administrator PowerShell:
 
 ```powershell
-Add-Content -Path "$env:SystemRoot\System32\drivers\etc\hosts" -Value "127.0.0.1 local.blb.lara local.api.blb.lara"
+Add-Content -Path "$env:SystemRoot\System32\drivers\etc\hosts" -Value "127.0.0.1 local.blb.lara"
 ```
 
 This is different from WSL2. WSL2 browser access often needs the WSL2 IP address
@@ -550,7 +550,7 @@ more web workers.
 The hosts file is missing the native Windows entry:
 
 ```text
-127.0.0.1 local.blb.lara local.api.blb.lara
+127.0.0.1 local.blb.lara
 ```
 
 Add it to `C:\Windows\System32\drivers\etc\hosts` as Administrator.

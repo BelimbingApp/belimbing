@@ -31,15 +31,12 @@ APP_ENV=""
 APP_PORT=""
 VITE_PORT=""
 FRONTEND_DOMAIN=""
-BACKEND_DOMAIN=""
 HTTPS_PORT=""
 APP_BIND_HOST=""
 BLB_INGRESS_MODE=""
 USE_NON_PRIVILEGED_PORT=0
 PUBLIC_APP_URL=""
-PUBLIC_BACKEND_URL=""
 INTENDED_APP_URL=""
-INTENDED_BACKEND_URL=""
 PUBLIC_URL_REACHABLE=1
 
 BLB_INGRESS_MODE_SHARED='shared'
@@ -279,37 +276,28 @@ read_app_env() {
         fi
     fi
 
-    # Read domains from .env or use defaults
+    # Read the domain from .env or use the default
     FRONTEND_DOMAIN=$(get_env_var "FRONTEND_DOMAIN" "")
-    BACKEND_DOMAIN=$(get_env_var "BACKEND_DOMAIN" "")
     BLB_INGRESS_MODE=$(caddy_normalize_ingress_mode "$(get_env_var "BLB_INGRESS_MODE" "direct")")
 
-    # Use defaults if not set
+    # Use the default if not set
     if [[ -z "$FRONTEND_DOMAIN" ]]; then
-        if command -v get_default_domains >/dev/null 2>&1; then
-            FRONTEND_DOMAIN=$(get_default_domains "$APP_ENV" | cut -d'|' -f1)
+        if command -v get_default_domain >/dev/null 2>&1; then
+            FRONTEND_DOMAIN=$(get_default_domain "$APP_ENV")
         else
             FRONTEND_DOMAIN="${APP_ENV}.blb.lara"
         fi
     fi
-    if [[ -z "$BACKEND_DOMAIN" ]]; then
-        if command -v get_default_domains >/dev/null 2>&1; then
-            BACKEND_DOMAIN=$(get_default_domains "$APP_ENV" | cut -d'|' -f2)
-        else
-            BACKEND_DOMAIN="${APP_ENV}.api.blb.lara"
-        fi
-    fi
 
     # Log environment info (important for troubleshooting)
-    log "Environment: $APP_ENV, Frontend: $FRONTEND_DOMAIN, Backend: $BACKEND_DOMAIN, Ingress: $BLB_INGRESS_MODE"
+    log "Environment: $APP_ENV, Domain: $FRONTEND_DOMAIN, Ingress: $BLB_INGRESS_MODE"
 
     echo -e "${GREEN}Using environment: ${APP_ENV}${NC}"
     return 0
 }
 
-# Check if domains are in /etc/hosts
+# Check if the app domain is in /etc/hosts
 check_hosts_entries() {
-    local missing_hosts=()
     local result=0
     local hosts_note=""
     if is_wsl2; then
@@ -318,30 +306,19 @@ check_hosts_entries() {
 
     # Check Linux /etc/hosts (uses shared domain_in_hosts: any IP, POSIX pattern)
     if ! domain_in_hosts "$FRONTEND_DOMAIN"; then
-        missing_hosts+=("$FRONTEND_DOMAIN")
-    fi
-
-    if ! domain_in_hosts "$BACKEND_DOMAIN"; then
-        missing_hosts+=("$BACKEND_DOMAIN")
-    fi
-
-    if [[ ${#missing_hosts[@]} -gt 0 ]]; then
         echo ""
-        echo -e "${YELLOW}⚠${NC} The following domains are not in /etc/hosts${hosts_note}:"
-        for domain in "${missing_hosts[@]}"; do
-            echo -e "  ${BULLET} $domain"
-        done
+        echo -e "${YELLOW}⚠${NC} ${FRONTEND_DOMAIN} is not in /etc/hosts${hosts_note}"
         echo ""
-        echo -e "${CYAN}To add them, run:${NC}"
-        echo -e "  ${YELLOW}sudo sh -c 'echo \"127.0.0.1 ${missing_hosts[*]}\" >> /etc/hosts'${NC}"
+        echo -e "${CYAN}To add it, run:${NC}"
+        echo -e "  ${YELLOW}sudo sh -c 'echo \"127.0.0.1 ${FRONTEND_DOMAIN}\" >> /etc/hosts'${NC}"
         echo ""
-        echo -e "${CYAN}Or re-run native setup to add them automatically:${NC}"
+        echo -e "${CYAN}Or re-run native setup to add it automatically:${NC}"
         echo -e "  ${YELLOW}./scripts/setup.sh $APP_ENV${NC}"
         echo ""
-        log "WARNING: Missing hosts entries: ${missing_hosts[*]}"
+        log "WARNING: Missing hosts entry: $FRONTEND_DOMAIN"
         result=1
     else
-        echo -e "${GREEN}✓${NC} Domains configured in /etc/hosts"
+        echo -e "${GREEN}✓${NC} Domain configured in /etc/hosts"
     fi
 
     # Check Windows hosts file if running in WSL2 and we're likely to use a Windows browser.
@@ -359,8 +336,8 @@ check_hosts_entries() {
         win_hosts=$(get_windows_hosts_path)
         local net_mode
         net_mode=$(wsl2_networking_mode)
-        local win_missing=()
-        local win_wrong_ip=()
+        local win_missing=false
+        local win_wrong_ip=false
         local expected_ip=""
 
         # Mirrored networking shares the Windows network namespace, so
@@ -378,36 +355,30 @@ check_hosts_entries() {
             fi
         fi
 
-        # Check if domains exist in Windows hosts file
+        # Check if the domain exists in the Windows hosts file
         if ! domain_in_windows_hosts "$FRONTEND_DOMAIN"; then
-            win_missing+=("$FRONTEND_DOMAIN")
+            win_missing=true
         elif [[ "$net_mode" != "mirrored" ]] && grep -E "^[[:space:]]*127\.0\.0\.1[[:space:]]+.*${FRONTEND_DOMAIN//./\\.}" "$win_hosts" 2>/dev/null | grep -v "^#" > /dev/null; then
-            win_wrong_ip+=("$FRONTEND_DOMAIN")
+            win_wrong_ip=true
         fi
 
-        if ! domain_in_windows_hosts "$BACKEND_DOMAIN"; then
-            win_missing+=("$BACKEND_DOMAIN")
-        elif [[ "$net_mode" != "mirrored" ]] && grep -E "^[[:space:]]*127\.0\.0\.1[[:space:]]+.*${BACKEND_DOMAIN//./\\.}" "$win_hosts" 2>/dev/null | grep -v "^#" > /dev/null; then
-            win_wrong_ip+=("$BACKEND_DOMAIN")
-        fi
-
-        if [[ ${#win_missing[@]} -gt 0 ]] || [[ ${#win_wrong_ip[@]} -gt 0 ]]; then
+        if [[ "$win_missing" = true ]] || [[ "$win_wrong_ip" = true ]]; then
             echo ""
             echo -e "${YELLOW}⚠${NC} Windows hosts file may need configuration (WSL2 detected):"
 
-            if [[ ${#win_missing[@]} -gt 0 ]]; then
-                echo -e "  ${YELLOW}Missing domains:${NC} ${win_missing[*]}"
+            if [[ "$win_missing" = true ]]; then
+                echo -e "  ${YELLOW}Missing domain:${NC} $FRONTEND_DOMAIN"
             fi
 
-            if [[ ${#win_wrong_ip[@]} -gt 0 ]]; then
-                echo -e "  ${YELLOW}Wrong IP address (using 127.0.0.1 instead of WSL2 IP):${NC} ${win_wrong_ip[*]}"
+            if [[ "$win_wrong_ip" = true ]]; then
+                echo -e "  ${YELLOW}Wrong IP address (using 127.0.0.1 instead of WSL2 IP):${NC} $FRONTEND_DOMAIN"
             fi
 
             echo ""
-            echo -e "${CYAN}Address these domains must resolve to on Windows: ${YELLOW}$expected_ip${NC} (WSL2 networking: ${net_mode})"
+            echo -e "${CYAN}Address this domain must resolve to on Windows: ${YELLOW}$expected_ip${NC} (WSL2 networking: ${net_mode})"
             echo ""
             echo -e "${CYAN}Add/update this line in Windows hosts file:${NC}"
-            echo -e "  ${YELLOW}$expected_ip $FRONTEND_DOMAIN $BACKEND_DOMAIN${NC}"
+            echo -e "  ${YELLOW}$expected_ip $FRONTEND_DOMAIN${NC}"
             echo ""
             echo -e "${CYAN}Windows hosts file location:${NC}"
             echo -e "  ${YELLOW}C:\\Windows\\System32\\drivers\\\\etc\\hosts${NC}"
@@ -415,17 +386,17 @@ check_hosts_entries() {
             echo -e "${CYAN}To fix:${NC}"
             echo -e "  1. Open Notepad as Administrator (Win+R → ${YELLOW}notepad${NC} → Ctrl+Shift+Enter)"
             echo -e "  2. Open: ${YELLOW}C:\\Windows\\System32\\drivers\\\\etc\\hosts${NC}"
-            if [[ ${#win_wrong_ip[@]} -gt 0 ]]; then
-                echo -e "  3. Remove/comment lines with ${YELLOW}127.0.0.1${NC} for these domains"
+            if [[ "$win_wrong_ip" = true ]]; then
+                echo -e "  3. Remove/comment the line with ${YELLOW}127.0.0.1${NC} for this domain"
             fi
-            echo -e "  4. Add: ${YELLOW}$expected_ip $FRONTEND_DOMAIN $BACKEND_DOMAIN${NC}"
+            echo -e "  4. Add: ${YELLOW}$expected_ip $FRONTEND_DOMAIN${NC}"
             echo -e "  5. Save and close"
             echo ""
             echo -e "${CYAN}Or use PowerShell (Run as Administrator):${NC}"
-            if [[ ${#win_wrong_ip[@]} -gt 0 ]]; then
-                echo -e "  ${YELLOW}\$content = Get-Content \"C:\\Windows\\System32\\drivers\\\\etc\\hosts\"; \$content = \$content | Where-Object { \$_ -notmatch \"127\\.0\\.0\\.1.*local\\.blb\\.lara\" -and \$_ -notmatch \"127\\.0\\.0\\.1.*local\\.api\\.blb\\.lara\" }; \$content | Set-Content \"C:\\Windows\\System32\\drivers\\\\etc\\hosts\"${NC}"
+            if [[ "$win_wrong_ip" = true ]]; then
+                echo -e "  ${YELLOW}\$content = Get-Content \"C:\\Windows\\System32\\drivers\\\\etc\\hosts\"; \$content = \$content | Where-Object { \$_ -notmatch \"127\\.0\\.0\\.1.*local\\.blb\\.lara\" }; \$content | Set-Content \"C:\\Windows\\System32\\drivers\\\\etc\\hosts\"${NC}"
             fi
-            echo -e "  ${YELLOW}Add-Content -Path \"C:\\Windows\\System32\\drivers\\\\etc\\hosts\" -Value \"$expected_ip $FRONTEND_DOMAIN $BACKEND_DOMAIN\"${NC}"
+            echo -e "  ${YELLOW}Add-Content -Path \"C:\\Windows\\System32\\drivers\\\\etc\\hosts\" -Value \"$expected_ip $FRONTEND_DOMAIN\"${NC}"
             echo ""
             log "WARNING: Windows hosts file may need configuration. Expected IP: $expected_ip (networking: $net_mode)"
             result=1
@@ -603,7 +574,6 @@ export_caddy_env() {
     fi
 
     export APP_DOMAIN="$FRONTEND_DOMAIN"
-    export BACKEND_DOMAIN="$BACKEND_DOMAIN"
     export APP_PORT="$APP_PORT"
     export VITE_PORT="$VITE_PORT"
     export VITE_HOST="127.0.0.1"
@@ -656,15 +626,12 @@ export_caddy_env() {
         # is confirmed, so a degraded run still prints something that works.
         if [[ "$BLB_INGRESS_MODE" = "$BLB_INGRESS_MODE_SHARED" ]]; then
             INTENDED_APP_URL="https://${FRONTEND_DOMAIN}"
-            INTENDED_BACKEND_URL="https://${BACKEND_DOMAIN}"
         fi
 
         if [[ "$BLB_INGRESS_MODE" = "$BLB_INGRESS_MODE_SHARED" ]] && [[ "$system_caddy_running" = true ]]; then
             PUBLIC_APP_URL="https://${FRONTEND_DOMAIN}"
-            PUBLIC_BACKEND_URL="https://${BACKEND_DOMAIN}"
         else
             PUBLIC_APP_URL="http://${FRONTEND_DOMAIN}:${APP_PORT}"
-            PUBLIC_BACKEND_URL="http://${BACKEND_DOMAIN}:${APP_PORT}"
         fi
     else
         export HTTPS_PORT="443"
@@ -673,17 +640,15 @@ export_caddy_env() {
         export CADDY_SCHEME="https"
 
         PUBLIC_APP_URL="https://${FRONTEND_DOMAIN}"
-        PUBLIC_BACKEND_URL="https://${BACKEND_DOMAIN}"
     fi
 
     INTENDED_APP_URL="${INTENDED_APP_URL:-$PUBLIC_APP_URL}"
-    INTENDED_BACKEND_URL="${INTENDED_BACKEND_URL:-$PUBLIC_BACKEND_URL}"
 
     APP_BIND_HOST=$(caddy_resolve_app_bind_host "${USE_NON_PRIVILEGED_PORT:-0}" "$(get_env_var "APP_BIND_HOST" "")")
     CADDY_BIND_ADDRESS="$APP_BIND_HOST"
     CADDY_VITE_SNIPPET="${CADDY_VITE_SNIPPET:-scripts/caddy-snippets/vite-enabled.caddy}"
 
-    export APP_BIND_HOST CADDY_BIND_ADDRESS CADDY_VITE_SNIPPET HTTPS_PORT PUBLIC_APP_URL PUBLIC_BACKEND_URL
+    export APP_BIND_HOST CADDY_BIND_ADDRESS CADDY_VITE_SNIPPET HTTPS_PORT PUBLIC_APP_URL
     log "Caddy env exported (TLS_DIRECTIVE=$TLS_DIRECTIVE, ADMIN_PORT=$CADDY_SERVER_ADMIN_PORT, HTTPS_PORT=$HTTPS_PORT, APP_BIND_HOST=$APP_BIND_HOST, CADDY_BIND_ADDRESS=$CADDY_BIND_ADDRESS)"
     return 0
 }
@@ -726,7 +691,7 @@ print_runtime_guidance() {
             echo -e "  ${CYAN}The app will still start on a local HTTP listener for verification:${NC} ${YELLOW}${PUBLIC_APP_URL}${NC}"
             echo -e "  ${CYAN}Run setup again to provision Caddy, or install this site block manually:${NC}"
             echo ""
-            caddy_render_system_site_snippet "$PROJECT_ROOT" "$FRONTEND_DOMAIN" "$BACKEND_DOMAIN" "$APP_PORT" "$APP_ENV" | while IFS= read -r line; do
+            caddy_render_system_site_snippet "$PROJECT_ROOT" "$FRONTEND_DOMAIN" "$APP_PORT" "$APP_ENV" | while IFS= read -r line; do
                 echo -e "    ${YELLOW}${line}${NC}"
             done
             echo ""
@@ -743,7 +708,7 @@ print_runtime_guidance() {
         echo ""
         echo -e "  ${CYAN}Suggested system Caddy site block:${NC}"
         echo ""
-        caddy_render_system_site_snippet "$PROJECT_ROOT" "$FRONTEND_DOMAIN" "$BACKEND_DOMAIN" "$APP_PORT" "$APP_ENV" | while IFS= read -r line; do
+        caddy_render_system_site_snippet "$PROJECT_ROOT" "$FRONTEND_DOMAIN" "$APP_PORT" "$APP_ENV" | while IFS= read -r line; do
             echo -e "    ${YELLOW}${line}${NC}"
         done
         echo ""
@@ -828,7 +793,6 @@ verify_public_reachability() {
 # URL that system Caddy is now serving.
 promote_intended_urls() {
     PUBLIC_APP_URL="$INTENDED_APP_URL"
-    PUBLIC_BACKEND_URL="$INTENDED_BACKEND_URL"
     return 0
 }
 
@@ -964,8 +928,7 @@ print_runtime_summary() {
     fi
     echo ""
     echo -e "${CYAN}Access your application:${NC}"
-    echo -e "  ${GREEN}Frontend:${NC} ${YELLOW}${PUBLIC_APP_URL}${NC}"
-    echo -e "  ${GREEN}Backend:${NC}  ${YELLOW}${PUBLIC_BACKEND_URL}${NC}"
+    echo -e "  ${GREEN}URL:${NC} ${YELLOW}${PUBLIC_APP_URL}${NC}"
     echo ""
     echo -e "${CYAN}Services:${NC}"
 

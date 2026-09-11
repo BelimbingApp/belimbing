@@ -204,9 +204,6 @@ function Ensure-TrustedLocalHttps {
         [string] $FrontendDomain,
 
         [Parameter(Mandatory = $true)]
-        [string] $BackendDomain,
-
-        [Parameter(Mandatory = $true)]
         [string] $ProjectRootPath
     )
 
@@ -233,7 +230,7 @@ function Ensure-TrustedLocalHttps {
         }
 
         try {
-            & $mkcert -cert-file $certFile -key-file $keyFile $FrontendDomain $BackendDomain | Out-Null
+            & $mkcert -cert-file $certFile -key-file $keyFile $FrontendDomain | Out-Null
         } catch {
             Write-Warning "mkcert could not generate local certificates; falling back to the Windows trusted Caddy CA path."
         }
@@ -374,7 +371,6 @@ if (-not (Test-Path $PhpIniPath)) {
 }
 
 $frontendDomain = Get-EnvValue $envPath 'FRONTEND_DOMAIN' 'local.blb.lara'
-$backendDomain = Get-EnvValue $envPath 'BACKEND_DOMAIN' 'local.api.blb.lara'
 $appPortValue = Get-EnvValue $envPath 'APP_PORT' "$AppPort"
 $vitePortValue = Get-EnvValue $envPath 'VITE_PORT' "$VitePort"
 # HTTPS listener port. Pin HTTPS_PORT in .env when an external ingress
@@ -418,7 +414,6 @@ $env:PHPRC = $PhpConfigDir
 $env:PHP_BINARY = $phpExe
 $env:APP_ENV = $appEnv
 $env:APP_DOMAIN = $frontendDomain
-$env:BACKEND_DOMAIN = $backendDomain
 $env:APP_PORT = "$AppPort"
 $env:VITE_PORT = "$VitePort"
 $env:VITE_HOST = '127.0.0.1'
@@ -446,7 +441,7 @@ if (Test-Path (Join-Path $perfIniDir 'perf.ini')) {
     $env:PHP_INI_SCAN_DIR = $perfIniDir
 }
 
-$localHttps = Ensure-TrustedLocalHttps -FrontendDomain $frontendDomain -BackendDomain $backendDomain -ProjectRootPath $ProjectRootPath
+$localHttps = Ensure-TrustedLocalHttps -FrontendDomain $frontendDomain -ProjectRootPath $ProjectRootPath
 if ($localHttps.Mode -eq 'mkcert') {
     $env:TLS_DIRECTIVE = "tls $($localHttps.CertificatePath) $($localHttps.KeyPath)"
 } else {

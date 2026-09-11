@@ -45,7 +45,7 @@ If you already ran setup but the browser shows "Not Secure", regenerate the mkce
 # 1. Generate trusted certificates for your domains
 mkcert -cert-file certs/local.blb.lara.pem \
        -key-file certs/local.blb.lara-key.pem \
-       local.blb.lara local.api.blb.lara
+       local.blb.lara
 
 # 2. Re-run the ingress setup to install them into system Caddy
 ./scripts/setup-steps/72-caddy-ingress.sh local
@@ -59,7 +59,7 @@ mkcert -cert-file certs/local.blb.lara.pem \
 
 During a full setup (`./scripts/setup.sh`), the following steps handle HTTPS automatically:
 
-1. **Step 70 — Domains & TLS** (`70-domains.sh`): Configures domains (`local.blb.lara`, `local.api.blb.lara`), adds `/etc/hosts` entries, and generates mkcert certificates into `certs/`.
+1. **Step 70 — Domains & TLS** (`70-domains.sh`): Configures the domain (`local.blb.lara`), adds the `/etc/hosts` entry, and generates mkcert certificates into `certs/`.
 
 2. **Step 72 — Ingress Mode** (`72-caddy-ingress.sh`): Configures how traffic reaches BLB:
    - **Shared** (recommended): System Caddy owns `:443` and proxies to BLB on an internal port. The setup copies mkcert certs into a system-readable location (`/etc/caddy/blb/certs/`) so the `caddy` service user can read them.

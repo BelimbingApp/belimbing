@@ -386,7 +386,7 @@ If you see certificate errors:
 2. **Regenerate certificates:**
    ```bash
    mkcert -install
-   mkcert local.blb.lara local.api.blb.lara
+   mkcert local.blb.lara
    ```
 
 ### Port Conflicts

@@ -263,7 +263,6 @@ return [
     'caddy' => [
         'env' => array_filter([
             'APP_DOMAIN' => env('APP_DOMAIN'),
-            'BACKEND_DOMAIN' => env('BACKEND_DOMAIN'),
             'TLS_DIRECTIVE' => env('TLS_DIRECTIVE'),
             'CADDY_LOG_DIR' => env('CADDY_LOG_DIR'),
             'CADDY_SCHEME' => env('CADDY_SCHEME'),

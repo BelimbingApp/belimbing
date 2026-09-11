@@ -48,8 +48,6 @@ print_ingress_mode_guidance() {
     local default_mode=$1
     local frontend_domain
     frontend_domain=$(get_env_var 'FRONTEND_DOMAIN' '')
-    local backend_domain
-    backend_domain=$(get_env_var 'BACKEND_DOMAIN' '')
     local current_app_port
     current_app_port=$(get_env_var 'APP_PORT' '')
     local caddy_status='not installed'
@@ -77,8 +75,8 @@ print_ingress_mode_guidance() {
         echo -e "  Current APP_PORT: ${GREEN}${current_app_port}${NC}" >&2
     fi
 
-    if [[ -n "$frontend_domain" ]] || [[ -n "$backend_domain" ]]; then
-        echo -e "  Domains: ${GREEN}${frontend_domain:-<unset>}${NC} / ${GREEN}${backend_domain:-<unset>}${NC}" >&2
+    if [[ -n "$frontend_domain" ]]; then
+        echo -e "  Domain: ${GREEN}${frontend_domain}${NC}" >&2
     fi
 
     echo "" >&2
@@ -354,9 +352,8 @@ render_tls_directive() {
 
 generate_site_fragment() {
     local frontend_domain=$1
-    local backend_domain=$2
-    local app_port=$3
-    local cert_dir="${4:-$PROJECT_ROOT/certs}"
+    local app_port=$2
+    local cert_dir="${3:-$PROJECT_ROOT/certs}"
     local fragment_path
     fragment_path=$(get_generated_site_fragment_path "$frontend_domain")
     local tls_directive
@@ -369,11 +366,6 @@ generate_site_fragment() {
 # BLB system Caddy integration for ${APP_ENV}.
 
 ${frontend_domain} {
-$( [[ -n "$tls_directive" ]] && printf '    %s\n' "$tls_directive" )
-    reverse_proxy 127.0.0.1:${app_port}
-}
-
-${backend_domain} {
 $( [[ -n "$tls_directive" ]] && printf '    %s\n' "$tls_directive" )
     reverse_proxy 127.0.0.1:${app_port}
 }
@@ -596,11 +588,9 @@ configure_shared_ingress() {
 
     local frontend_domain
     frontend_domain=$(get_env_var 'FRONTEND_DOMAIN' '')
-    local backend_domain
-    backend_domain=$(get_env_var 'BACKEND_DOMAIN' '')
 
-    if [[ -z "$frontend_domain" ]] || [[ -z "$backend_domain" ]]; then
-        echo -e "${RED}✗${NC} FRONTEND_DOMAIN and BACKEND_DOMAIN must be configured before shared ingress setup" >&2
+    if [[ -z "$frontend_domain" ]]; then
+        echo -e "${RED}✗${NC} FRONTEND_DOMAIN must be configured before shared ingress setup" >&2
         return 1
     fi
 
@@ -620,7 +610,7 @@ configure_shared_ingress() {
     fi
 
     local fragment_path
-    fragment_path=$(generate_site_fragment "$frontend_domain" "$backend_domain" "$app_port" "$system_cert_dir")
+    fragment_path=$(generate_site_fragment "$frontend_domain" "$app_port" "$system_cert_dir")
 
     local install_block=true
     if [[ -t 0 ]] && ! ask_yes_no "Install or update the BLB include import and site file?" "y"; then
