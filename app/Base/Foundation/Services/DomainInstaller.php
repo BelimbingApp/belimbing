@@ -61,13 +61,23 @@ class DomainInstaller
     }
 
     /**
-     * False when the catalog could not be looked up at all. An empty list of
-     * installable domains and an unreachable catalog are different facts and
-     * the operator has to be able to tell them apart.
+     * False when any owner the catalog searches could not be asked. An empty
+     * list of installable domains and a lookup that did not complete are
+     * different facts and the operator has to be able to tell them apart.
      */
-    public function catalogReachable(): bool
+    public function catalogComplete(): bool
     {
-        return $this->catalog->reachable();
+        return $this->catalog->complete();
+    }
+
+    /**
+     * Why the catalog is incomplete, one line per owner. Empty when it is not.
+     *
+     * @return list<string>
+     */
+    public function catalogProblems(): array
+    {
+        return $this->catalog->problems();
     }
 
     /**

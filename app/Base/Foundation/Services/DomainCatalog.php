@@ -28,8 +28,8 @@ use Throwable;
  *
  * Anonymous GitHub API access; the result is cached, because an unreachable or
  * rate-limited GitHub must not make the install screen hang on every render.
- * An empty catalog and an unreachable one are different facts and are reported
- * as different facts: {@see reachable()}.
+ * An empty catalog and one that could not be looked up are different facts and
+ * are reported as different facts: {@see complete()} and {@see problems()}.
  */
 class DomainCatalog
 {
@@ -38,6 +38,11 @@ class DomainCatalog
     private const CACHE_KEY = 'base.foundation.domain-catalog';
 
     private const REPO_PREFIX = 'blb-';
+
+    private const PER_PAGE = 100;
+
+    /** A guard against a pagination loop, not an expected ceiling. */
+    private const MAX_PAGES = 20;
 
     public function __construct(private readonly HttpFactory $http) {}
 
@@ -52,12 +57,26 @@ class DomainCatalog
     }
 
     /**
-     * False when the last lookup could not reach GitHub. The caller must be
-     * able to tell "nothing is published" from "we could not ask".
+     * False when any selected owner could not be asked. One owner answering
+     * must not vouch for another that failed: "nothing is published there" and
+     * "we could not ask" are different facts, and a fallback owner's Domains
+     * must not quietly stand in for the ones an earlier owner would have
+     * supplied (#944 review).
      */
-    public function reachable(): bool
+    public function complete(): bool
     {
-        return $this->cached()['reachable'];
+        return $this->cached()['complete'];
+    }
+
+    /**
+     * One line per owner that could not be asked, or that GitHub says does not
+     * exist. Empty when every owner answered.
+     *
+     * @return list<string>
+     */
+    public function problems(): array
+    {
+        return $this->cached()['problems'];
     }
 
     /**
@@ -95,9 +114,15 @@ class DomainCatalog
     }
 
     /**
-     * The GitHub owner of a remote URL in either SSH or HTTPS spelling; null
-     * when it is not a recognisable GitHub remote, so a self-hosted or
-     * non-GitHub remote is skipped rather than guessed at.
+     * The GitHub.com owner of a remote URL in either SSH or HTTPS spelling.
+     *
+     * The host must be github.com exactly. `github.internal.example` is a
+     * different service: treating its path segment as an owner and then asking
+     * api.github.com about it would offer public repositories belonging to
+     * someone the checkout has no relationship with, as installable executable
+     * code (#944 review). An enterprise or self-hosted remote is skipped, never
+     * translated; `domains.owners` is how such an installation says who owns
+     * its Domains.
      */
     public static function ownerFromRemoteUrl(string $url): ?string
     {
@@ -105,14 +130,22 @@ class DomainCatalog
         if ($url === '') {
             return null;
         }
-        if (preg_match('#^[^@]+@([^:]+):([^/]+)/#', $url, $ssh) === 1) {
-            return str_contains($ssh[1], 'github.') ? $ssh[2] : null;
+        if (preg_match('#^[^@/]+@([^:/]+):([^/]+)/#', $url, $ssh) === 1) {
+            return self::isGitHubHost($ssh[1]) ? $ssh[2] : null;
         }
         if (preg_match('#^[a-z+]+://(?:[^@/]+@)?([^/]+)/([^/]+)/#', $url.'/', $https) === 1) {
-            return str_contains($https[1], 'github.') ? $https[2] : null;
+            return self::isGitHubHost($https[1]) ? $https[2] : null;
         }
 
         return null;
+    }
+
+    /** github.com itself, with an optional port; never a host that resembles it. */
+    private static function isGitHubHost(string $host): bool
+    {
+        $host = strtolower((string) preg_replace('/:\d+$/', '', $host));
+
+        return $host === 'github.com' || $host === 'www.github.com';
     }
 
     /**
@@ -150,37 +183,38 @@ class DomainCatalog
     }
 
     /**
-     * @return array{entries: array<string, array{repo: string, description: string, owner: string}>, reachable: bool}
+     * @return array{entries: array<string, array{repo: string, description: string, owner: string}>, complete: bool, problems: list<string>}
      */
     private function cached(): array
     {
-        /** @var array{entries: array<string, array{repo: string, description: string, owner: string}>, reachable: bool} */
+        /** @var array{entries: array<string, array{repo: string, description: string, owner: string}>, complete: bool, problems: list<string>} */
         return Cache::remember(self::CACHE_KEY, $this->ttlSeconds(), fn (): array => $this->fetch());
     }
 
     /**
-     * @return array{entries: array<string, array{repo: string, description: string, owner: string}>, reachable: bool}
+     * @return array{entries: array<string, array{repo: string, description: string, owner: string}>, complete: bool, problems: list<string>}
      */
     private function fetch(): array
     {
         $owners = $this->owners();
         if ($owners === []) {
-            // No remote and no configured owner: nothing to ask, and saying
-            // "unreachable" would blame the network for a local condition.
-            return ['entries' => [], 'reachable' => true];
+            // No remote and no configured owner: nothing to ask. Calling that
+            // a failed lookup would blame the network for a local condition.
+            return ['entries' => [], 'complete' => true, 'problems' => []];
         }
 
         $entries = [];
-        $reachable = false;
+        $problems = [];
 
         foreach ($owners as $owner) {
-            $repos = $this->fetchRepos($owner);
-            if ($repos === null) {
+            $result = $this->fetchRepos($owner);
+            if ($result['status'] !== 'ok') {
+                $problems[] = $result['problem'];
+
                 continue;
             }
 
-            $reachable = true;
-            foreach ($repos as $repo) {
+            foreach ($result['repos'] as $repo) {
                 $entry = $this->toEntry($owner, $repo);
                 if ($entry === null) {
                     continue;
@@ -193,32 +227,95 @@ class DomainCatalog
 
         ksort($entries);
 
-        return ['entries' => $entries, 'reachable' => $reachable];
+        return ['entries' => $entries, 'complete' => $problems === [], 'problems' => $problems];
     }
 
     /**
-     * @return list<array<string, mixed>>|null null when GitHub could not be reached
+     * Every repository an owner publishes, following pagination to the end.
+     *
+     * `per_page=100` is a page size, not an inventory: a Domain published on a
+     * later page would be omitted, and the omission cached for a day (#944
+     * review). The owner may be an organisation or a personal account, and the
+     * two list from different endpoints - a user-owned fork asking /orgs gets
+     * 404 and would otherwise show its upstream's Domains instead of its own.
+     *
+     * @return array{status: string, repos: list<array<string, mixed>>, problem: string}
      */
-    private function fetchRepos(string $owner): ?array
+    private function fetchRepos(string $owner): array
     {
-        try {
-            $response = $this->http
-                ->withHeaders(['Accept' => 'application/vnd.github+json'])
-                ->get('https://api.github.com/orgs/'.$owner.'/repos', [
-                    'per_page' => 100,
-                    'type' => 'public',
-                ]);
-        } catch (Throwable) {
+        $url = 'https://api.github.com/orgs/'.rawurlencode($owner).'/repos';
+        $triedUsers = false;
+        $repos = [];
+        $page = 0;
+
+        while ($page < self::MAX_PAGES) {
+            try {
+                $response = $this->http
+                    ->withHeaders(['Accept' => 'application/vnd.github+json'])
+                    // Pass no query array on later pages: an empty one replaces
+                    // the page marker the Link header put in the URL.
+                    ->get($url, $page === 0 ? ['per_page' => self::PER_PAGE, 'type' => 'public'] : null);
+            } catch (Throwable $exception) {
+                return ['status' => 'failed', 'repos' => [], 'problem' => $owner.': '.$exception->getMessage()];
+            }
+
+            if ($response->status() === 404 && ! $triedUsers) {
+                // Not an organisation; a personal account lists elsewhere.
+                $triedUsers = true;
+                $url = 'https://api.github.com/users/'.rawurlencode($owner).'/repos';
+                $page = 0;
+
+                continue;
+            }
+
+            if ($response->status() === 404) {
+                return ['status' => 'missing', 'repos' => [], 'problem' => $owner.': no such GitHub organisation or user'];
+            }
+
+            if (! $response->successful()) {
+                return ['status' => 'failed', 'repos' => [], 'problem' => $owner.': GitHub answered HTTP '.$response->status()];
+            }
+
+            $body = $response->json();
+            if (! is_array($body)) {
+                return ['status' => 'failed', 'repos' => [], 'problem' => $owner.': GitHub did not return a repository list'];
+            }
+
+            foreach ($body as $repo) {
+                if (is_array($repo)) {
+                    $repos[] = $repo;
+                }
+            }
+
+            $next = self::nextPageUrl((string) $response->header('Link'));
+            if ($next === null) {
+                return ['status' => 'ok', 'repos' => $repos, 'problem' => ''];
+            }
+
+            $url = $next;
+            $page++;
+        }
+
+        // Refuse a truncated inventory rather than cache it as the whole thing.
+        return ['status' => 'failed', 'repos' => [], 'problem' => $owner.': more than '.self::MAX_PAGES.' pages of repositories; refusing a partial list'];
+    }
+
+    /**
+     * The `rel="next"` URL of a GitHub Link header, or null on the last page.
+     */
+    private static function nextPageUrl(string $link): ?string
+    {
+        if (trim($link) === '') {
             return null;
         }
 
-        if (! $response->successful()) {
-            return null;
+        foreach (explode(',', $link) as $part) {
+            if (preg_match('/<([^>]+)>\s*;\s*rel="next"/i', $part, $match) === 1) {
+                return $match[1];
+            }
         }
 
-        $repos = $response->json();
-
-        return is_array($repos) ? array_values(array_filter($repos, 'is_array')) : null;
+        return null;
     }
 
     /**

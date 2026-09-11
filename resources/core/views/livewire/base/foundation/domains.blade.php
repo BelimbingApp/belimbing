@@ -582,9 +582,16 @@
             </section>
         @endif
 
-        @unless ($catalogReachable)
+        @unless ($catalogComplete)
             <x-ui.alert variant="warning">
-                {{ __('The Domain catalog could not be reached, so installable Domains are not listed. This is a lookup failure, not an empty catalog.') }}
+                <div>{{ __('The Domain catalog is incomplete: some owners could not be asked, so Domains they publish are not listed below. This is a lookup failure, not an empty catalog.') }}</div>
+                @if (count($catalogProblems) > 0)
+                    <ul class="mt-1 list-disc pl-5 text-sm">
+                        @foreach ($catalogProblems as $problem)
+                            <li>{{ $problem }}</li>
+                        @endforeach
+                    </ul>
+                @endif
             </x-ui.alert>
         @endunless
 
