@@ -65,11 +65,7 @@ jobs:
         run: |
           set -euo pipefail
           php scripts/ci/composed-smoke.php --scan-only
-          while IFS=$'\t' read -r id repo path; do
-            [ -z "$repo" ] && continue
-            echo "Materializing $repo@default -> $path"
-            git clone --quiet --depth 1 "https://github.com/${repo}.git" "$path"
-          done < <(php scripts/ci/domain-registry.php --tsv)
+          php scripts/ci/domain-registry.php --materialize
           composer dump-autoload --optimize
 
       - name: Refresh Domain baselines

@@ -1522,7 +1522,9 @@ if [[ "$need_ec" -ne 0 ]]; then
     cat "$compose_fixture/need.err" >&2
     exit 1
 fi
-expected_tsv=$'Example/beta\t'"$compose_fixture/absent/app/Domains/Beta"
+# The Domain id leads the row so the caller can materialize it with the
+# candidate-aware path instead of cloning the printed repository (#943 review).
+expected_tsv=$'beta\tExample/beta\t'"$compose_fixture/absent/app/Domains/Beta"
 if [[ "$need_out" != "$expected_tsv" ]]; then
     echo "compose-domain NeedsBeta TSV mismatch: $(printf %q "$need_out") expected $(printf %q "$expected_tsv")" >&2
     exit 1

@@ -21,21 +21,36 @@ CI composes every Domain at its `main`. This is a deliberate reversal of the
 pinned-ref scheme that ran until [#940](https://github.com/BelimbingApp/belimbing/issues/940),
 and the reasoning is worth keeping:
 
-- A pin bought exactly one thing — a build that gives the same answer twice.
-  That is a convenience, not a safety property.
+- A pin bought repeatability: the same revisions on every run, and with it a
+  combination that had been composed and tested together. That is worth
+  something — the cost of losing it is set out below — but it is not what stops
+  two Domains colliding.
 - The guards that refuse a collision between two Domains live in the
   application, not in CI: `RouteCollisionException`, `TableRegistry` and
   `IncubatingSchemaConflictException` refuse at boot, on a developer machine,
   in each Domain's own CI, in staging and in production. Removing the pins
-  removed no protection.
+  leaves every one of those intact.
 - The pins cost a standing chore. Three **Domain pins stale** issues were
   opened in the five days before they were removed, each needing a dispatch, a
   bot PR and a full CI run to change two files.
 
-What that gives up, stated plainly: when the nightly composed boot breaks, it
-does not say whether a platform change or a Domain change caused it, and it
-cannot be replayed against a fixed past state. If you need to know, compose
-locally at the two revisions you suspect and compare.
+What that gives up, stated plainly, and it is more than diagnosis:
+
+- **A fixed combination that was known to work.** A pin recorded a set of
+  revisions that had been composed and tested together. Without one, each run
+  composes whatever the Domains' `main` branches hold at that moment, which may
+  be a combination nothing has ever exercised. The boot-time collision guards
+  do not replace that: they catch a Domain pair colliding, not a combination
+  that is merely untried. This is the real cost of the trade, not a footnote.
+- **Attribution.** When the nightly breaks, it does not say whether a platform
+  change or a Domain change caused it.
+- **Replay.** A run cannot be re-run against a fixed past state. If you need to
+  know, compose locally at the two revisions you suspect and compare.
+
+The judgement made here is that a standing maintenance chore, paid on a
+schedule whether or not anything is wrong, costs more than those three. That
+judgement is reversible: reintroducing a pin is a field in the descriptor and a
+ref in the materializer.
 
 There is also no checked-in route surface. The composed smoke asserts that the
 application boots with every Domain mounted and that no migration basename is

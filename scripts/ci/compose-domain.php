@@ -14,8 +14,11 @@ declare(strict_types=1);
  *
  * This script scans the placed domain's manifests, derives the repository and
  * mount path of each missing cross-domain dependency from its module id
- * (scripts/ci/domain-registry.php), and prints one `<owner/repo>\t<checkout-path>`
- * line per repo to stdout for the workflow to clone. A human-readable summary
+ * (scripts/ci/domain-registry.php), and prints one
+ * `<domain-id>\t<owner/repo>\t<checkout-path>` line per repo to stdout. The
+ * caller materializes those ids with `domain-registry.php --materialize=<ids>`
+ * rather than cloning the printed repository directly: only the materializer
+ * walks the remaining candidate owners when the first does not host it. A human-readable summary
  * goes to stderr. It exits non-zero when a required module names a Domain the
  * descriptor does not list — a missing edge is a real failure, not something to
  * paper over.
@@ -151,7 +154,7 @@ foreach ($requiredIds as $id) {
         continue;
     }
 
-    $toClone[$entry['path']] = $entry['repo'];
+    $toClone[$entry['path']] = ['id' => $domain, 'repo' => $entry['repo']];
 }
 
 if ($missing !== []) {
@@ -164,7 +167,7 @@ if ($toClone === []) {
     exit(0);
 }
 
-foreach ($toClone as $path => $repo) {
-    fwrite(STDERR, "compose-domain: will clone {$repo} -> {$path}\n");
-    echo $repo."\t".$path."\n";
+foreach ($toClone as $path => $entry) {
+    fwrite(STDERR, "compose-domain: will clone {$entry['repo']} -> {$path}\n");
+    echo $entry['id']."\t".$entry['repo']."\t".$path."\n";
 }

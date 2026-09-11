@@ -23,15 +23,26 @@ declare(strict_types=1);
  * who owns its Domains.
  *
  * There are deliberately no commit pins. CI composes Domains at their `main`.
- * A pin buys a repeatable build and nothing else: the guards that refuse a
- * collision between Domains (RouteCollisionException, TableRegistry,
- * IncubatingSchemaConflictException) live in the application and fire at boot
- * wherever it starts. Pins bought repeatability at the cost of a standing
- * maintenance chore; #940 records that trade and this file is the result.
+ * A pin bought repeatability: the same revisions every run, and with them a
+ * combination that had been tested together. What it did not buy is collision
+ * safety — RouteCollisionException, TableRegistry and
+ * IncubatingSchemaConflictException live in the application and fire at boot
+ * wherever it starts, pinned or not. #940 records the trade: a standing
+ * maintenance chore, paid whether or not anything is wrong, against a known
+ * combination and the ability to replay one. docs/ci/domain-ci.md sets out
+ * both sides.
  *
  *   php scripts/ci/domain-registry.php --json          resolved registry as JSON
  *   php scripts/ci/domain-registry.php --paths         one mount path per line
  *   php scripts/ci/domain-registry.php --tsv           id<TAB>repo<TAB>path per line
+ *   php scripts/ci/domain-registry.php --materialize   clone every Domain, or
+ *       --materialize=<id,id>                          the named ones, into place
+ *
+ * --materialize is the only supported way to put a Domain on disk, because it
+ * is the only one that walks `repo_candidates`. A caller that reads --tsv and
+ * runs its own `git clone` gets the first candidate and no fallback, which
+ * silently turns a partial fork into a hard failure. It prints one
+ * id<TAB>repo<TAB>path<TAB>sha record per materialized Domain to stdout.
  *
  * A Domain that cannot follow the convention is a decision, not a special
  * case to absorb here: the failure names the id and what the rule derived.
@@ -197,6 +208,63 @@ function domainRegistry(?string $path = null, ?string $root = null): array
     ];
 }
 
+/**
+ * Run a command, returning [exit code, stdout, stderr].
+ *
+ * @return array{0: int, 1: string, 2: string}
+ */
+function registryRun(array $command): array
+{
+    $process = proc_open($command, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+    if (! is_resource($process)) {
+        return [1, '', 'cannot start '.implode(' ', $command)];
+    }
+    $stdout = (string) stream_get_contents($pipes[1]);
+    $stderr = (string) stream_get_contents($pipes[2]);
+    fclose($pipes[1]);
+    fclose($pipes[2]);
+
+    return [proc_close($process), $stdout, $stderr];
+}
+
+/**
+ * Put one Domain on disk, trying every candidate owner in remote order. An
+ * existing mount is accepted as it stands: composition never rewrites a
+ * checkout someone else placed.
+ *
+ * @param  array{repo: string, path: string, repo_candidates: list<string>}  $domain
+ * @return array{ok: bool, repo: string|null, sha: string|null, errors: list<string>}
+ */
+function materializeDomain(array $domain, string $root): array
+{
+    $path = $root.'/'.trim($domain['path'], '/');
+    $head = static function (string $path): ?string {
+        [$code, $out] = registryRun(['git', '-C', $path, 'rev-parse', 'HEAD']);
+
+        return $code === 0 && trim($out) !== '' ? trim($out) : null;
+    };
+
+    if (is_dir($path)) {
+        return ['ok' => true, 'repo' => null, 'sha' => $head($path), 'errors' => []];
+    }
+
+    $errors = [];
+    foreach ($domain['repo_candidates'] as $repo) {
+        [$code, , $error] = registryRun(['git', 'clone', '--quiet', '--depth', '1', "https://github.com/{$repo}.git", $path]);
+        if ($code === 0) {
+            return ['ok' => true, 'repo' => $repo, 'sha' => $head($path), 'errors' => $errors];
+        }
+        // A candidate that does not host this Domain is expected on a fork;
+        // keep the message so a total failure can name every attempt.
+        $errors[] = $repo.': '.(trim($error) !== '' ? trim($error) : "git clone exited {$code}");
+        if (is_dir($path)) {
+            registryRun(['rm', '-rf', $path]);
+        }
+    }
+
+    return ['ok' => false, 'repo' => null, 'sha' => null, 'errors' => $errors];
+}
+
 // Included by the other CI scripts; only the direct invocation prints.
 if (realpath($argv[0] ?? '') !== realpath(__FILE__)) {
     return;
@@ -204,10 +272,17 @@ if (realpath($argv[0] ?? '') !== realpath(__FILE__)) {
 
 $descriptor = null;
 $root = null;
+$only = null;
 $format = '--json';
 foreach (array_slice($argv, 1) as $argument) {
-    if (in_array($argument, ['--json', '--paths', '--tsv'], true)) {
+    if (in_array($argument, ['--json', '--paths', '--tsv', '--materialize'], true)) {
         $format = $argument;
+
+        continue;
+    }
+    if (str_starts_with($argument, '--materialize=')) {
+        $format = '--materialize';
+        $only = array_values(array_filter(array_map('trim', explode(',', substr($argument, strlen('--materialize='))))));
 
         continue;
     }
@@ -225,6 +300,45 @@ foreach (array_slice($argv, 1) as $argument) {
 }
 
 $registry = domainRegistry($descriptor, $root);
+
+if ($format === '--materialize') {
+    $target = rtrim((string) ($root ?? dirname(__DIR__, 2)), '/');
+    $ids = $only ?? array_keys($registry['domains']);
+    $failed = [];
+
+    foreach ($ids as $id) {
+        $domain = $registry['domains'][$id] ?? null;
+        if ($domain === null) {
+            registryFail("descriptor does not list domain [{$id}]");
+        }
+
+        $result = materializeDomain($domain, $target);
+        if (! $result['ok']) {
+            $failed[] = "{$id}:\n  ".implode("\n  ", $result['errors']);
+
+            continue;
+        }
+
+        $repo = $result['repo'] ?? $domain['repo'];
+        fwrite(STDERR, sprintf(
+            "domain-registry: %s %s -> %s at %s\n",
+            $result['repo'] === null ? 'already mounted' : 'cloned',
+            $repo,
+            $domain['path'],
+            substr((string) $result['sha'], 0, 8) ?: 'unknown',
+        ));
+        echo $id."\t".$repo."\t".$domain['path']."\t".((string) $result['sha'])."\n";
+    }
+
+    if ($failed !== []) {
+        // Exit 1, not the usage code: every candidate was tried and none
+        // answered, which is a real failure rather than a caller mistake.
+        fwrite(STDERR, "domain-registry: could not materialize:\n".implode("\n", $failed)."\n");
+        exit(1);
+    }
+
+    exit(0);
+}
 
 if ($format === '--paths') {
     foreach ($registry['domains'] as $domain) {

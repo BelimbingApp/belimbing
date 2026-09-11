@@ -20,10 +20,13 @@ test("composed-smoke materializes every Domain the descriptor lists, at its defa
     );
     expect(compose).toBeDefined();
     // Enumerated through the derivation, never a hand-written subset (#940).
-    expect(compose.run).toContain("scripts/ci/domain-registry.php --tsv");
+    expect(compose.run).toContain("scripts/ci/domain-registry.php --materialize");
     expect(compose.run).not.toContain("for id in people people-connector");
     // No pin: checking out a fixed SHA is what this workflow stopped doing.
     expect(compose.run).not.toContain("checkout --detach");
+    // A bare clone takes the first candidate only and loses the fork
+    // fallback the registry advertises (#943 review).
+    expect(compose.run).not.toContain("git clone");
     const hold = workflow.jobs["composed-smoke"].steps.find(
         (step: any) => step.name === "Boot the composed application",
     );
