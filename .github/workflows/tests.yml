@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - main
-    # Bot raises of the coverage baseline must not re-enter this workflow (#629 review).
-    paths-ignore:
-      - 'tests/ci/platform-coverage-baseline.json'
   pull_request:
     branches:
       - main
@@ -217,12 +214,9 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     environment: Testing
-    # contents + pull-requests: open an auto-merge PR to raise the baseline (#629)
-    # and upsert the timing/coverage summary comment on PRs (#670).
-    # Protect Main refuses direct pushes; a PR is the only legal raise path.
-    # Workflow-level contents:read still covers every other job.
+    # Upsert the timing/coverage summary comment on PRs (#670).
     permissions:
-      contents: write
+      contents: read
       pull-requests: write
     steps:
       - name: Require successful suites
@@ -275,9 +269,8 @@ jobs:
           done
 
       # Platform line-coverage ratchet (#629): PRs may not drop below the
-      # checked-in baseline by more than tolerance_pp. Main raises the
-      # baseline when coverage improves (never lowers it) by opening a PR —
-      # Protect Main's pull_request rule refuses a direct push from Actions.
+      # checked-in baseline by more than tolerance_pp. Raise the baseline
+      # deliberately in the PR that delivers a meaningful coverage improvement.
       - name: Check platform coverage baseline
         if: github.event_name == 'pull_request'
         run: |
@@ -295,65 +288,6 @@ jobs:
             --timing-dir timing \
             --baseline tests/ci/platform-coverage-baseline.json \
             coverage-unit-a.xml coverage-unit-b.xml coverage-feature-a.xml coverage-feature-b.xml coverage-modules.xml
-
-      # Org policy refuses GITHUB_TOKEN createPullRequest (#686). Push stays on
-      # github.token; PR open/label/auto-merge use COVERAGE_BASELINE_RAISE_TOKEN.
-      # paths-ignore on push keeps the merge from re-entering this workflow so
-      # composed required check names stay green on main.
-      - name: Raise platform coverage baseline on main
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          COVERAGE_BASELINE_RAISE_TOKEN: ${{ secrets.COVERAGE_BASELINE_RAISE_TOKEN }}
-        run: |
-          reports=(coverage-unit-a.xml coverage-unit-b.xml coverage-feature-a.xml coverage-feature-b.xml coverage-modules.xml)
-          python3 scripts/ci/platform-coverage-ratchet.py update \
-            "${reports[@]}" \
-            --baseline tests/ci/platform-coverage-baseline.json
-          if git diff --quiet -- tests/ci/platform-coverage-baseline.json; then
-            echo 'Coverage baseline unchanged.'
-            exit 0
-          fi
-          if [[ -z "${COVERAGE_BASELINE_RAISE_TOKEN:-}" ]]; then
-            echo '::error::COVERAGE_BASELINE_RAISE_TOKEN is required to open the baseline raise PR (org disables Actions PR creation with GITHUB_TOKEN).'
-            exit 1
-          fi
-          # Protect Main requires a pull_request; do not push to main. Raise via a
-          # dedicated branch/PR with auto-merge, in a disposable worktree so this
-          # job's checkout (and the Sonar step below) stay on the triggering SHA.
-          branch='ci/raise-coverage-baseline'
-          worktree=$(mktemp -d)
-          git fetch origin main
-          git worktree add -B "$branch" "$worktree" origin/main
-          mkdir -p "$worktree/tests/ci"
-          cp tests/ci/platform-coverage-baseline.json "$worktree/tests/ci/platform-coverage-baseline.json"
-          git -C "$worktree" config user.name 'github-actions[bot]'
-          git -C "$worktree" config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git -C "$worktree" add tests/ci/platform-coverage-baseline.json
-          git -C "$worktree" commit -m 'ci: raise platform coverage baseline'
-          git -C "$worktree" push --force-with-lease origin "HEAD:refs/heads/$branch"
-          git worktree remove "$worktree"
-          export GH_TOKEN="$COVERAGE_BASELINE_RAISE_TOKEN"
-          existing=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$branch" --base main --state open --json number --jq '.[0].number // empty')
-          body=$(printf '%s\n' \
-            'AI-Team-Lane-Issue: none' \
-            '' \
-            'Automated raise of `tests/ci/platform-coverage-baseline.json` after main measured a higher line rate (#629 / #686).' \
-            'The file is the only change; push `paths-ignore` keeps the merge commit from re-entering this workflow so composed required checks stay green on main.')
-          if [[ -z "$existing" ]]; then
-            existing=$(gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
-              --title 'ci: raise platform coverage baseline' \
-              --label task:ready \
-              --label bot-maintenance \
-              --body "$body")
-            existing="${existing##*/}"
-          else
-            gh pr edit "$existing" --repo "$GITHUB_REPOSITORY" --add-label task:ready >/dev/null
-            gh pr edit "$existing" --repo "$GITHUB_REPOSITORY" --add-label bot-maintenance >/dev/null
-            gh pr edit "$existing" --repo "$GITHUB_REPOSITORY" --body "$body" >/dev/null
-          fi
-          gh pr merge "$existing" --repo "$GITHUB_REPOSITORY" --auto --squash
-          echo "Opened/updated baseline raise PR #$existing with auto-merge."
 
       # Dependabot PRs receive the Dependabot secrets store, not Actions
       # secrets (#910). secrets.SONAR_TOKEN is empty there, so the scanner

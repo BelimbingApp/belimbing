@@ -202,6 +202,12 @@ the aggregate check; a failed, skipped, or cancelled matrix lane does not become
 a successful aggregate. Preserve the complete report set when changing shards.
 The PostgreSQL mirror remains a separate job with its own driver-sensitive set.
 
+Coverage baseline increases are deliberate: include a meaningful increase in the PR
+that improves coverage. Use `python3 scripts/ci/platform-coverage-ratchet.py update`
+with the five Clover reports listed above to calculate the new baseline; the command
+refuses to lower it. CI checks the baseline but does not open baseline-update PRs.
+Baseline changes receive normal review, without the bot-maintenance exemption.
+
 The platform coverage ratchet unions Clover statement identities by source-file
 name and line number, with coverage from any shard counting as covered. It does
 not sum project totals: isolated shards repeat the full source inventory. Reports
@@ -217,7 +223,7 @@ to report success from their configured integrations. It excludes agent lanes,
 forks, drafts, and holds. Repository merge settings, active rulesets, and classic
 protection determine the merge method; GitHub still enforces approval and other
 merge rules. The final merge is bound to the checked SHA and uses
-`COVERAGE_BASELINE_RAISE_TOKEN`. The same raise token also opens bot-maintenance PRs from `tests.yml` (coverage baseline), `refresh-pest-timing-baseline`, `refresh-feature-shard-timings`, and `refresh-livewire-action-baselines` (#853). If policy cannot be read, the workflow refuses.
+`COVERAGE_BASELINE_RAISE_TOKEN`. The same raise token also opens bot-maintenance PRs from `refresh-pest-timing-baseline`, `refresh-feature-shard-timings`, and `refresh-livewire-action-baselines` (#853). If policy cannot be read, the workflow refuses.
 Applying `bot-maintenance` authorizes a machine-generated maintenance PR to land on
 green required checks without an independent reviewer; it is not limited to numeric
 baseline refreshes. The label is the authorization, not the PR author's identity.
