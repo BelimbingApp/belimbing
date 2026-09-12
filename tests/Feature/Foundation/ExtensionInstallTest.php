@@ -7,6 +7,7 @@ use App\Base\Foundation\Services\ExtensionInstaller;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\Models\Setting;
 use App\Core\User\Models\User;
+use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
@@ -33,7 +34,14 @@ beforeEach(function (): void {
 });
 
 afterEach(function (): void {
-    File::deleteDirectory(base_path(EXTENSION_INSTALL_BASE_PATH.EXTENSION_INSTALL_FOLDER));
+    // Teardown deliberately does not go through the File facade. The test that
+    // proves the installer reports a checkout it could not remove mocks
+    // File::deleteDirectory to return false -- and that mock also swallowed
+    // this cleanup, so the fake checkout survived into the next test and
+    // failed it with "Extension [Zzkiat] is already installed". A concrete
+    // Filesystem is immune to whatever a test body faked, so cleanup cannot be
+    // disabled by the thing it is cleaning up after.
+    (new Filesystem)->deleteDirectory(base_path(EXTENSION_INSTALL_BASE_PATH.EXTENSION_INSTALL_FOLDER));
 });
 
 /** @param list<string> $runtimeRequirements */
