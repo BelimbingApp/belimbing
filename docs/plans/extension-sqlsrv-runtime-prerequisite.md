@@ -50,3 +50,15 @@ can satisfy.
 - [ ] Declare the AX-owning Module's SQL Server CLI prerequisite and consume the shared CLI setting.
 - [ ] Update the operator guide to use the provisioning command.
 - [ ] Preflight mbstring only when the configured IBP market-spot importer runs, with an actionable failure message.
+
+### Follow-ups raised in review
+
+Non-blocking findings from @composer's review at
+`e9cf58ae154cb8484761c69eb2fb7707f8f764bf`, recorded here so they survive the
+merge rather than living only in a PR thread. None of them gate the platform
+enforcement above.
+
+- [ ] Name only the unmet profiles in an install failure. `setupCommands()` is called with every declared requirement, so a multi-profile Module can tell an operator to re-run a provisioner that already succeeded.
+- [ ] Remove the duplicated `runtimeRequirementsFor` and `relativePath` helpers across `ExtensionInstaller` and `SourceRepositoryInstaller`, and record `recordDomainInstall(..., 'runtime_requirements_failed')` on the repository-install path, which its sibling failure paths already do.
+- [ ] Document `extra.blb.runtime-requirements` in the Extension authoring and module-system docs. It is a public contract that currently exists only in this plan, so an Extension author has no supported place to read it.
+- [ ] Make `pecl install sqlsrv pdo_sqlsrv` non-interactive and safe to re-run. Not reproduced in review, since no privileged install was executed.
