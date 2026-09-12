@@ -2,6 +2,7 @@
 
 use App\Base\Foundation\Contracts\DomainRuntimeReloader;
 use App\Base\Foundation\Livewire\Domains;
+use App\Base\Foundation\RuntimeRequirements\RuntimeRequirementVerifier;
 use App\Base\Foundation\Services\SourceRepositoryInstaller;
 use App\Base\Software\Inventory\InstalledSource;
 use App\Base\Software\Services\GitHubTokenStore;
@@ -27,7 +28,8 @@ afterEach(function (): void {
     File::deleteDirectory(app_path('Extensions/'.SOURCE_REPOSITORY_INSTALL_FOLDER));
 });
 
-function createSourceRepositoryInstallCheckout(string $kind, bool $validManifest = true, ?string $namespaceKind = null): string
+/** @param list<string> $runtimeRequirements */
+function createSourceRepositoryInstallCheckout(string $kind, bool $validManifest = true, ?string $namespaceKind = null, array $runtimeRequirements = []): string
 {
     $root = $kind === InstalledSource::KIND_DOMAIN ? 'Domains' : 'Extensions';
     $path = app_path($root.'/'.SOURCE_REPOSITORY_INSTALL_FOLDER.'/'.SOURCE_REPOSITORY_INSTALL_MODULE);
@@ -46,6 +48,7 @@ function createSourceRepositoryInstallCheckout(string $kind, bool $validManifest
                 'blb' => [
                     'module' => 'zz-payroll/payroll',
                     'version' => '1.0.0',
+                    'runtime-requirements' => $runtimeRequirements,
                 ],
             ],
         ], JSON_THROW_ON_ERROR));
@@ -154,6 +157,32 @@ it('removes a checkout that fails manifest validation before migrations run', fu
         ->and($result['log'])->toContain('Manifest validation failed')
         ->and(is_dir(app_path('Extensions/'.SOURCE_REPOSITORY_INSTALL_FOLDER)))->toBeFalse();
 
+    Process::assertDidntRun(fn ($process): bool => in_array('migrate', $process->command, true));
+});
+
+it('removes a repository checkout before migrations when a declared host runtime is unavailable', function (): void {
+    Process::fake(function ($process) {
+        if (in_array('clone', $process->command, true)) {
+            createSourceRepositoryInstallCheckout(
+                InstalledSource::KIND_EXTENSION,
+                runtimeRequirements: [RuntimeRequirementVerifier::PHP_CLI_SQLSRV],
+            );
+        }
+
+        return Process::result();
+    });
+
+    $result = app(SourceRepositoryInstaller::class)->install(
+        SOURCE_REPOSITORY_INSTALL_URL,
+        InstalledSource::KIND_EXTENSION,
+        SOURCE_REPOSITORY_INSTALL_FOLDER,
+    );
+
+    expect($result['ok'])->toBeFalse()
+        ->and($result['cleaned_up'])->toBeTrue()
+        ->and($result['log'])->toContain('The system PHP CLI does not have sqlsrv and pdo_sqlsrv available.')
+        ->and($result['log'])->toContain('./scripts/setup-steps/16-sqlsrv-cli.sh')
+        ->and(is_dir(app_path('Extensions/'.SOURCE_REPOSITORY_INSTALL_FOLDER)))->toBeFalse();
     Process::assertDidntRun(fn ($process): bool => in_array('migrate', $process->command, true));
 });
 

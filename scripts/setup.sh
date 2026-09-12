@@ -57,14 +57,18 @@ echo ""
 echo -e "${GREEN}✓${NC} Environment: ${CYAN}${APP_ENV}${NC}"
 echo ""
 
-# Auto-discover setup steps from setup-steps/ directory.
-# Each step file must have a "# Title: ..." line in its header.
+# Auto-discover only explicitly titled setup steps. Untitled scripts in this
+# directory are operator-invoked provisioners and must never run as part of a
+# standard environment setup.
 declare -a STEPS=()
 
 while IFS= read -r step_file; do
     script_name=$(basename "$step_file")
-    title=$(grep "^# Title:" "$step_file" | head -1 | sed 's/^# Title: //')
-    STEPS+=("${script_name}:${title:-Setup Step}")
+    title=$(sed -n 's/^# Title: //p' "$step_file" | head -1)
+
+    [[ -n "$title" ]] || continue
+
+    STEPS+=("${script_name}:${title}")
 done < <(find "$SCRIPT_DIR/setup-steps" -name "*.sh" -type f | sort)
 
 # Display setup plan

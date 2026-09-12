@@ -8,6 +8,7 @@ use App\Base\Foundation\Events\DomainLifecycleAction;
 use App\Base\Foundation\Exceptions\SourceRepositoryInstallException;
 use App\Base\Foundation\ModuleManifest\ModuleManifest;
 use App\Base\Foundation\ModuleManifest\ModuleManifestReader;
+use App\Base\Foundation\RuntimeRequirements\RuntimeRequirementVerifier;
 use App\Base\Software\Inventory\InstalledSource;
 use App\Base\Software\Services\GitHubTokenStore;
 use App\Base\Support\Git\GitRepository;
@@ -31,6 +32,7 @@ final class SourceRepositoryInstaller
     public function __construct(
         private readonly GitHubTokenStore $tokens,
         private readonly DomainRuntimeReloader $runtimeReloader,
+        private readonly RuntimeRequirementVerifier $runtimeRequirements,
     ) {}
 
     /** @return list<string> */
@@ -106,6 +108,22 @@ final class SourceRepositoryInstaller
                 : (string) __('The rejected checkout could not be removed. Remove :path before retrying.', ['path' => $this->relativePath($path)]);
 
             $this->recordDomainInstall($kind, $folder, 'manifest_failed', $repository['url']);
+
+            return $this->result(false, $log, $cleaned, $repository['url'], $kind, $folder);
+        }
+
+        $requirements = $this->runtimeRequirementsFor($path);
+        $unmetRequirements = $this->runtimeRequirements->unmet($requirements);
+        if ($unmetRequirements !== []) {
+            $cleaned = $this->deleteCheckout($path);
+            $log[] = implode("\n", $unmetRequirements);
+            $setupCommands = $this->runtimeRequirements->setupCommands($requirements);
+            if ($setupCommands !== []) {
+                $log[] = 'No migrations ran. Run '.implode(' then ', $setupCommands).' as the deployment operator, set BLB_SYSTEM_PHP_BINARY when that CLI is not on PATH, then retry the source install.';
+            }
+            $log[] = $cleaned
+                ? (string) __('The checkout was removed because its host-runtime prerequisites are not ready.')
+                : (string) __('The checkout has unmet host-runtime prerequisites and could not be removed. Remove :path before retrying.', ['path' => $this->relativePath($path)]);
 
             return $this->result(false, $log, $cleaned, $repository['url'], $kind, $folder);
         }
@@ -322,6 +340,19 @@ final class SourceRepositoryInstaller
     private function validFolder(string $folder): bool
     {
         return preg_match('/^[A-Z][A-Za-z0-9]*$/', $folder) === 1;
+    }
+
+    /** @return list<string> */
+    private function runtimeRequirementsFor(string $path): array
+    {
+        $manifests = (new ModuleManifestReader([$path]))->all();
+        $requirements = [];
+
+        foreach ($manifests as $manifest) {
+            $requirements = [...$requirements, ...$manifest->runtimeRequirements];
+        }
+
+        return array_values(array_unique($requirements));
     }
 
     private function relativePath(string $path): string
