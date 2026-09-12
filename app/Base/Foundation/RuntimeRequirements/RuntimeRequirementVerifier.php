@@ -11,6 +11,13 @@ use Throwable;
  * A manifest may select a profile, but it never supplies a command, package,
  * or shell fragment. Package installation remains platform-owned so cloning a
  * private Extension never becomes a privileged code-execution path.
+ *
+ * Checks run against the shared host CLI by default, which is what install-time
+ * preflight means. A caller that starts its own subprocess may name the
+ * executable it will actually run: a preflight against a different binary than
+ * the process under test is not a preflight, since it can pass while that
+ * process fails (SB-Tape/blb-sbg#16, where an Extension resolved
+ * SBG_AX_PHP_BINARY while this class only ever saw BLB_SYSTEM_PHP_BINARY).
  */
 final class RuntimeRequirementVerifier
 {
@@ -20,23 +27,42 @@ final class RuntimeRequirementVerifier
 
     /**
      * @param  list<string>  $requirements
+     * @param  string|null  $binary  the executable to probe; null means the shared host CLI
      * @return list<string>
      */
-    public function unmet(array $requirements): array
+    public function unmet(array $requirements, ?string $binary = null): array
     {
         $problems = [];
 
         foreach (array_values(array_unique($requirements)) as $requirement) {
             match ($requirement) {
-                self::PHP_CLI_SQLSRV => $this->phpCliHasSqlsrv()
-                    ?: $problems[] = 'The system PHP CLI does not have sqlsrv and pdo_sqlsrv available.',
-                self::PHP_CLI_MBSTRING => $this->phpCliHasExtension('mbstring')
-                    ?: $problems[] = 'The system PHP CLI does not have mbstring available.',
+                self::PHP_CLI_SQLSRV => $this->phpCliHasSqlsrv($binary)
+                    ?: $problems[] = $this->describe($binary).' does not have sqlsrv and pdo_sqlsrv available.',
+                self::PHP_CLI_MBSTRING => $this->phpCliHasExtension('mbstring', $binary)
+                    ?: $problems[] = $this->describe($binary).' does not have mbstring available.',
                 default => $problems[] = "Unsupported runtime prerequisite [{$requirement}].",
             };
         }
 
         return $problems;
+    }
+
+    /**
+     * Name the executable only when the caller chose one.
+     *
+     * An installer preflighting the shared host CLI has no better name for it
+     * than "the system PHP CLI", and an operator reading that message will
+     * look at the right thing. Once a caller supplies its own binary that
+     * wording becomes actively misleading -- it sends the operator to fix a
+     * CLI that was never checked.
+     */
+    private function describe(?string $binary): string
+    {
+        $explicit = trim((string) $binary);
+
+        return $explicit === ''
+            ? 'The system PHP CLI'
+            : sprintf('The PHP CLI at [%s]', $explicit);
     }
 
     /**
@@ -58,9 +84,9 @@ final class RuntimeRequirementVerifier
         return $commands;
     }
 
-    private function phpCliHasSqlsrv(): bool
+    private function phpCliHasSqlsrv(?string $requested = null): bool
     {
-        $binary = $this->phpBinary();
+        $binary = $this->phpBinary($requested);
 
         try {
             $modules = Process::timeout(20)->run([$binary, '-m']);
@@ -81,10 +107,10 @@ final class RuntimeRequirementVerifier
             && in_array('sqlsrv', $pdoDrivers, true);
     }
 
-    private function phpCliHasExtension(string $extension): bool
+    private function phpCliHasExtension(string $extension, ?string $requested = null): bool
     {
         try {
-            $modules = Process::timeout(20)->run([$this->phpBinary(), '-m']);
+            $modules = Process::timeout(20)->run([$this->phpBinary($requested), '-m']);
         } catch (Throwable) {
             return false;
         }
@@ -93,9 +119,13 @@ final class RuntimeRequirementVerifier
             && in_array($extension, $this->loadedExtensions($modules->output()), true);
     }
 
-    private function phpBinary(): string
+    private function phpBinary(?string $requested = null): string
     {
-        return trim((string) getenv('BLB_SYSTEM_PHP_BINARY')) ?: 'php';
+        $explicit = trim((string) $requested);
+
+        return $explicit !== ''
+            ? $explicit
+            : (trim((string) getenv('BLB_SYSTEM_PHP_BINARY')) ?: 'php');
     }
 
     /** @return list<string> */
