@@ -1,8 +1,8 @@
 # extension-sqlsrv-runtime-prerequisite
 
-Status: Ready for review
+Status: In progress — platform enforcement complete; SBGroup declaration not started
 Last Updated: 2026-09-12
-Sources: app/Base/Foundation/Services/ExtensionInstaller.php; app/Extensions/SbGroup/Admin/composer.json
+Sources: app/Base/Foundation/Services/ExtensionInstaller.php; app/Extensions/SbGroup/Admin/composer.json (nested repository, unchanged by this work)
 Agents: root/gpt-5
 
 ## Problem Essence
@@ -32,6 +32,21 @@ Modules may declare `extra.blb.runtime-requirements` as a list of platform profi
 
 ### SBGroup declaration
 
-- [x] Declare the AX-owning Module's SQL Server CLI prerequisite and consume the shared CLI setting. {root/gpt-5}
-- [x] Update the operator guide to use the provisioning command. {root/gpt-5}
-- [x] Preflight mbstring only when the configured IBP market-spot importer runs, with an actionable failure message. {root/gpt-5}
+Not started. The platform enforcement above stands on its own and is what this
+change ships; none of the work below is in it. These rows were ticked while
+that was untrue, which made the plan a false source of truth under
+`docs/plans/AGENTS.md`. Review at this head also confirmed the AX-owning
+Module's manifest in the nested SbGroup repository still declares no
+`extra.blb.runtime-requirements`, so the first row is not complete there either.
+
+The third row needs a design answer before it can be built. A Module manifest
+is static: it states what a Module always needs, and cannot express "only when
+the configured market-spot importer runs". A conditional preflight therefore
+belongs to that importer's own runtime path rather than to
+`extra.blb.runtime-requirements`, and the mbstring sentence in Desired Outcome
+should be read as the goal rather than as something the current Public Contract
+can satisfy.
+
+- [ ] Declare the AX-owning Module's SQL Server CLI prerequisite and consume the shared CLI setting.
+- [ ] Update the operator guide to use the provisioning command.
+- [ ] Preflight mbstring only when the configured IBP market-spot importer runs, with an actionable failure message.
