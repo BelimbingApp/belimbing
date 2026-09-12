@@ -38,8 +38,12 @@ run_root apt-get install -y "php${php_version}-dev" php-pear unixodbc-dev gcc g+
 
 phpize_binary="$(command -v "phpize${php_version}" || true)"
 [[ -n "$phpize_binary" ]] || { echo "PHP ${php_version} development tools did not provide phpize${php_version}." >&2; exit 1; }
-"$phpize_binary" --version | grep -Fq "PHP Version: ${php_version}" \
-    || { echo "phpize${php_version} does not match $php_binary." >&2; exit 1; }
+# Parse the version field rather than matching a formatted line. phpize pads
+# its output ("PHP Version:             8.5"), so a fixed-string grep for
+# "PHP Version: 8.5" never matched and this guard refused a correct host.
+phpize_version="$("$phpize_binary" --version 2>/dev/null | awk '/^PHP Version:/ { version = $3 } END { print version }')"
+[[ "$phpize_version" == "$php_version" || "$phpize_version" == "$php_version".* ]] \
+    || { echo "phpize${php_version} reports PHP ${phpize_version:-unknown}, which does not match $php_binary (PHP ${php_version})." >&2; exit 1; }
 
 if [[ ! -f /usr/share/keyrings/microsoft-prod.gpg ]]; then
     curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | run_root gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
