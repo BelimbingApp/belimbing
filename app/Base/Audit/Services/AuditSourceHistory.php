@@ -3,7 +3,6 @@
 namespace App\Base\Audit\Services;
 
 use App\Base\Audit\Models\AuditMutation;
-use App\Base\Authz\Enums\PrincipalType;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -65,12 +64,7 @@ final class AuditSourceHistory
         $sortDir = strtolower($sortDir) === 'asc' ? 'asc' : 'desc';
 
         $query = $this->tenantScope->apply(
-            AuditMutation::query()
-                ->leftJoin('users', function ($join): void {
-                    $join->on('base_audit_mutations.actor_id', '=', 'users.id')
-                        ->where('base_audit_mutations.actor_type', '=', PrincipalType::USER->value);
-                })
-                ->select('base_audit_mutations.*', 'users.name as actor_name'),
+            $this->searchSql->withActorName(AuditMutation::query(), 'base_audit_mutations'),
             'base_audit_mutations',
         )
             ->where(fn (Builder $query): Builder => $this->applyRecordScope($query, $normalizedSubjects, $auditableType, $normalizedAuditableId))

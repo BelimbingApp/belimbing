@@ -7,7 +7,6 @@ use App\Base\Audit\Models\AuditMutation;
 use App\Base\Audit\Services\AuditLogPresenter;
 use App\Base\Audit\Services\AuditSearchSql;
 use App\Base\Audit\Services\AuditTenantScope;
-use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\SelectsPerPage;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
@@ -121,14 +120,10 @@ class Mutations extends Component
     {
         $sortColumn = self::SORTABLE[$this->sortBy] ?? 'base_audit_mutations.occurred_at';
         $scope = app(AuditTenantScope::class);
+        $searchSql = app(AuditSearchSql::class);
 
         return $scope->apply(
-            AuditMutation::query()
-                ->leftJoin('users', function ($join): void {
-                    $join->on('base_audit_mutations.actor_id', '=', 'users.id')
-                        ->where('base_audit_mutations.actor_type', '=', PrincipalType::USER->value);
-                })
-                ->select('base_audit_mutations.*', 'users.name as actor_name'),
+            $searchSql->withActorName(AuditMutation::query(), 'base_audit_mutations'),
             'base_audit_mutations',
             $this->allTenants,
         )

@@ -5,6 +5,7 @@ namespace App\Base\Audit\Livewire\AuditLog;
 use App\Base\Audit\Livewire\AuditLog\Concerns\InteractsWithTraceTimeline;
 use App\Base\Audit\Models\AuditAction;
 use App\Base\Audit\Services\AuditLogPresenter;
+use App\Base\Audit\Services\AuditSearchSql;
 use App\Base\Audit\Services\AuditTenantScope;
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
@@ -40,12 +41,6 @@ class Actions extends Component
     public string $sortBy = 'occurred_at';
 
     public string $sortDir = 'desc';
-
-    private const COALESCED_TEXT_PREFIX = 'lower(coalesce(';
-
-    private const COALESCED_TEXT_SUFFIX = ', \'\'))';
-
-    private const SQL_LIKE_PLACEHOLDER = ' like ?';
 
     private const RESET_PAGE_PROPERTIES = [
         'filterActorType',
@@ -127,87 +122,85 @@ class Actions extends Component
     {
         $sortColumn = self::SORTABLE[$this->sortBy] ?? 'base_audit_actions.occurred_at';
         $scope = app(AuditTenantScope::class);
+        $searchSql = app(AuditSearchSql::class);
 
         return $scope->apply(
-            AuditAction::query()
-                ->leftJoin('users', function ($join): void {
-                    $join->on('base_audit_actions.actor_id', '=', 'users.id')
-                        ->where('base_audit_actions.actor_type', '=', PrincipalType::USER->value);
-                })
-                ->select('base_audit_actions.*', 'users.name as actor_name'),
+            $searchSql->withActorName(AuditAction::query(), 'base_audit_actions'),
             'base_audit_actions',
             $this->allTenants,
         )
-            ->when($this->search, function ($query, $search): void {
-                $query->where(function ($q) use ($search): void {
+            ->when($this->search, function ($query, $search) use ($searchSql): void {
+                $query->where(function ($q) use ($search, $searchSql): void {
                     $like = '%'.strtolower($search).'%';
                     $trace = app(AuditLogPresenter::class)->normalizeTrace((string) $search);
 
                     $q->whereRaw('lower(base_audit_actions.event) like ?', [$like])
-                        ->orWhereRaw($this->coalescedTextLike('users.name'), [$like])
-                        ->orWhereRaw($this->coalescedTextLike('base_audit_actions.actor_role'), [$like])
-                        ->orWhereRaw($this->coalescedTextLike('base_audit_actions.url'), [$like])
-                        ->orWhereRaw($this->coalescedTextLike($this->ipAddressTextExpression()), [$like])
-                        ->orWhereRaw($this->coalescedTextLike('base_audit_actions.user_agent'), [$like]);
+                        ->orWhereRaw($searchSql->lowerCoalescedLikeExpression('users.name'), [$like])
+                        ->orWhereRaw($searchSql->lowerCoalescedLikeExpression('base_audit_actions.actor_role'), [$like])
+                        ->orWhereRaw($searchSql->lowerCoalescedLikeExpression('base_audit_actions.url'), [$like])
+                        ->orWhereRaw($searchSql->lowerCoalescedLikeExpression($searchSql->ipAddressTextExpression('base_audit_actions.ip_address')), [$like])
+                        ->orWhereRaw($searchSql->lowerCoalescedLikeExpression('base_audit_actions.user_agent'), [$like]);
 
                     if ($trace !== '') {
                         $q->orWhereRaw('base_audit_actions.trace_id like ?', ['%'.$trace.'%']);
                     }
 
-                    $q->orWhereRaw($this->coalescedTextLike($this->payloadTextExpression()), [$like]);
+                    $q->orWhereRaw($searchSql->lowerCoalescedLikeExpression($searchSql->jsonTextExpression('base_audit_actions.payload')), [$like]);
                 });
             })
             ->when($this->filterActorType, function ($query, $actorType): void {
                 $query->where('base_audit_actions.actor_type', $actorType);
             })
-            ->when($this->filterEventFamily, function (Builder $query, string $family): void {
-                $this->applyEventFamilyFilter($query, $family);
+            ->when($this->filterEventFamily, function (Builder $query, string $family) use ($searchSql): void {
+                $this->applyEventFamilyFilter($query, $family, $searchSql);
             })
-            ->when($this->filterResult, function (Builder $query, string $result): void {
-                $this->applyResultFilter($query, $result);
+            ->when($this->filterResult, function (Builder $query, string $result) use ($searchSql): void {
+                $this->applyResultFilter($query, $result, $searchSql);
             })
-            ->when($this->filterDiagnostics === 'hide', function (Builder $query): void {
-                $this->hideSuccessfulDiagnosticRequests($query);
+            ->when($this->filterDiagnostics === 'hide', function (Builder $query) use ($searchSql): void {
+                $this->hideSuccessfulDiagnosticRequests($query, $searchSql);
             })
             ->orderBy($sortColumn, $this->sortDir)
             ->orderByDesc('base_audit_actions.id')
             ->paginate(25);
     }
 
-    private function applyEventFamilyFilter(Builder $query, string $family): void
+    private function applyEventFamilyFilter(Builder $query, string $family, AuditSearchSql $searchSql): void
     {
         match ($family) {
             'http' => $query->where('base_audit_actions.event', 'http.request'),
             'auth' => $query->where('base_audit_actions.event', 'like', 'auth.%'),
             'console' => $query->where('base_audit_actions.event', 'console.command'),
             'queue' => $query->where('base_audit_actions.event', 'like', 'queue.job.%'),
-            'product' => $query->whereRaw($this->coalescedTextLike($this->payloadTextExpression()), ['%semantic%']),
+            'product' => $query->whereRaw($searchSql->lowerCoalescedLikeExpression($searchSql->jsonTextExpression('base_audit_actions.payload')), ['%semantic%']),
             'domain' => $query->where('base_audit_actions.event', 'like', 'domain.%'),
             default => null,
         };
     }
 
-    private function applyResultFilter(Builder $query, string $result): void
+    private function applyResultFilter(Builder $query, string $result, AuditSearchSql $searchSql): void
     {
         match ($result) {
-            'failure' => $query->where(function (Builder $q): void {
+            'failure' => $query->where(function (Builder $q) use ($searchSql): void {
                 $q->where('base_audit_actions.event', 'auth.login.failed')
                     ->orWhere('base_audit_actions.event', 'queue.job.failed')
-                    ->orWhere(function (Builder $http): void {
+                    ->orWhere(function (Builder $http) use ($searchSql): void {
                         $http->where('base_audit_actions.event', 'http.request')
-                            ->whereRaw($this->httpStatusExpression().' >= 400');
+                            ->whereRaw($this->httpStatusExpression($searchSql).' >= 400');
                     })
-                    ->orWhere(function (Builder $console): void {
+                    ->orWhere(function (Builder $console) use ($searchSql): void {
                         $console->where('base_audit_actions.event', 'console.command')
-                            ->whereRaw('coalesce('.$this->payloadIntegerExpression('exit_code').', 0) <> 0');
+                            ->whereRaw('coalesce('.$searchSql->jsonIntegerExpression('base_audit_actions.payload', 'exit_code').', 0) <> 0');
                     })
-                    ->orWhere(function (Builder $domain): void {
+                    ->orWhere(function (Builder $domain) use ($searchSql): void {
                         $domain->where('base_audit_actions.event', 'like', 'domain.%')
-                            ->whereRaw($this->coalescedTextLike($this->payloadTextExpression()), ['%failed%']);
+                            ->whereRaw($searchSql->lowerCoalescedLikeExpression($searchSql->jsonTextExpression('base_audit_actions.payload')), ['%failed%']);
                     })
-                    ->orWhere(function (Builder $semantic): void {
-                        $semantic->whereRaw($this->coalescedTextLike($this->payloadTextExpression()), ['%semantic%'])
-                            ->whereRaw($this->coalescedTextLike($this->payloadTextExpression()), ['%failed%']);
+                    ->orWhere(function (Builder $semantic) use ($searchSql): void {
+                        $payloadTextExpression = $searchSql->jsonTextExpression('base_audit_actions.payload');
+
+                        $semantic->whereRaw($searchSql->lowerCoalescedLikeExpression($payloadTextExpression), ['%semantic%'])
+                            ->whereRaw($searchSql->lowerCoalescedLikeExpression($payloadTextExpression), ['%failed%']);
                     });
             }),
             'retained' => $query->where('base_audit_actions.is_retained', true),
@@ -215,75 +208,39 @@ class Actions extends Component
         };
     }
 
-    private function hideSuccessfulDiagnosticRequests(Builder $query): void
+    private function hideSuccessfulDiagnosticRequests(Builder $query, AuditSearchSql $searchSql): void
     {
-        $query->where(function (Builder $outer): void {
+        $query->where(function (Builder $outer) use ($searchSql): void {
             $outer->where('base_audit_actions.event', '<>', 'http.request')
-                ->orWhere(function (Builder $http): void {
+                ->orWhere(function (Builder $http) use ($searchSql): void {
                     $http->where('base_audit_actions.event', 'http.request')
-                        ->where(function (Builder $visible): void {
-                            $visible->whereRaw($this->httpStatusExpression().' >= 400')
-                                ->orWhere(function (Builder $normal): void {
-                                    $this->whereNotPayloadLike($normal, 'default-livewire.update');
-                                    $this->whereNotPayloadLike($normal, 'ai.chat.turn.events');
-                                    $this->whereNotPayloadLike($normal, 'media.assets.stream');
-                                    $this->whereNotUrlLike($normal, '/livewire');
-                                    $this->whereNotUrlLike($normal, '/api/ai/chat/turns/');
-                                    $this->whereNotUrlLike($normal, '/media/assets/');
+                        ->where(function (Builder $visible) use ($searchSql): void {
+                            $visible->whereRaw($this->httpStatusExpression($searchSql).' >= 400')
+                                ->orWhere(function (Builder $normal) use ($searchSql): void {
+                                    $this->whereNotPayloadLike($normal, $searchSql, 'default-livewire.update');
+                                    $this->whereNotPayloadLike($normal, $searchSql, 'ai.chat.turn.events');
+                                    $this->whereNotPayloadLike($normal, $searchSql, 'media.assets.stream');
+                                    $this->whereNotUrlLike($normal, $searchSql, '/livewire');
+                                    $this->whereNotUrlLike($normal, $searchSql, '/api/ai/chat/turns/');
+                                    $this->whereNotUrlLike($normal, $searchSql, '/media/assets/');
                                 });
                         });
                 });
         });
     }
 
-    private function whereNotPayloadLike(Builder $query, string $needle): void
+    private function whereNotPayloadLike(Builder $query, AuditSearchSql $searchSql, string $needle): void
     {
-        $query->whereRaw($this->coalescedTextExpression($this->payloadTextExpression()).' not'.self::SQL_LIKE_PLACEHOLDER, ['%'.strtolower($needle).'%']);
+        $query->whereRaw($searchSql->lowerCoalescedExpression($searchSql->jsonTextExpression('base_audit_actions.payload')).' not like ?', ['%'.strtolower($needle).'%']);
     }
 
-    private function whereNotUrlLike(Builder $query, string $needle): void
+    private function whereNotUrlLike(Builder $query, AuditSearchSql $searchSql, string $needle): void
     {
-        $query->whereRaw($this->coalescedTextExpression('base_audit_actions.url').' not'.self::SQL_LIKE_PLACEHOLDER, ['%'.strtolower($needle).'%']);
+        $query->whereRaw($searchSql->lowerCoalescedExpression('base_audit_actions.url').' not like ?', ['%'.strtolower($needle).'%']);
     }
 
-    private function payloadTextExpression(): string
+    private function httpStatusExpression(AuditSearchSql $searchSql): string
     {
-        return match (config('database.default')) {
-            'pgsql' => 'base_audit_actions.payload::text',
-            'mysql', 'mariadb' => 'cast(base_audit_actions.payload as char)',
-            default => 'base_audit_actions.payload',
-        };
-    }
-
-    private function ipAddressTextExpression(): string
-    {
-        return match (config('database.default')) {
-            'mysql', 'mariadb' => 'cast(base_audit_actions.ip_address as char)',
-            default => 'cast(base_audit_actions.ip_address as text)',
-        };
-    }
-
-    private function httpStatusExpression(): string
-    {
-        return 'coalesce('.$this->payloadIntegerExpression('status').', 0)';
-    }
-
-    private function coalescedTextLike(string $expression): string
-    {
-        return $this->coalescedTextExpression($expression).self::SQL_LIKE_PLACEHOLDER;
-    }
-
-    private function coalescedTextExpression(string $expression): string
-    {
-        return self::COALESCED_TEXT_PREFIX.$expression.self::COALESCED_TEXT_SUFFIX;
-    }
-
-    private function payloadIntegerExpression(string $key): string
-    {
-        return match (config('database.default')) {
-            'pgsql' => "nullif(base_audit_actions.payload->>'{$key}', '')::int",
-            'mysql', 'mariadb' => "cast(json_unquote(json_extract(base_audit_actions.payload, '$.{$key}')) as signed)",
-            default => "cast(json_extract(base_audit_actions.payload, '$.{$key}') as integer)",
-        };
+        return 'coalesce('.$searchSql->jsonIntegerExpression('base_audit_actions.payload', 'status').', 0)';
     }
 }

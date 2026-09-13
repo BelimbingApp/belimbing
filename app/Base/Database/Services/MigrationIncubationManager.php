@@ -40,6 +40,24 @@ final class MigrationIncubationManager
             throw IncubatingSchemaMutationException::localEnvironmentRequired(app()->environment());
         }
 
+        [$byMigration, $skipped] = $this->groupTablesByMigration($tableNames);
+        [$updated, $rewritten, $rewriteSkips] = $this->rewriteMigrationFiles($byMigration, $incubating);
+        $commit = $this->commitRewrites($rewritten, $incubating);
+
+        return [
+            'updated' => $updated,
+            'skipped' => [...$skipped, ...$rewriteSkips],
+            'committed' => $commit['committed'],
+            'uncommitted' => $commit['uncommitted'],
+        ];
+    }
+
+    /**
+     * @param  list<string>  $tableNames
+     * @return array{0: array<string, array{file: string, tables: list<string>}>, 1: list<string>}
+     */
+    private function groupTablesByMigration(array $tableNames): array
+    {
         $rows = TableRegistry::query()
             ->whereIn('table_name', $tableNames)
             ->get(['table_name', 'migration_file']);
@@ -68,11 +86,21 @@ final class MigrationIncubationManager
             $byMigration[$path]['tables'][] = $tableName;
         }
 
+        return [$byMigration, $skipped];
+    }
+
+    /**
+     * @param  array<string, array{file: string, tables: list<string>}>  $byMigration
+     * @return array{0: list<string>, 1: list<string>, 2: list<string>}
+     */
+    private function rewriteMigrationFiles(array $byMigration, bool $incubating): array
+    {
         $updated = [];
         $rewritten = [];
+        $skipped = [];
 
         foreach ($byMigration as $path => $payload) {
-            $tables = array_values(array_unique($payload['tables'] ?? []));
+            $tables = array_values(array_unique($payload['tables']));
             $result = $incubating
                 ? $this->insertTrait($path)
                 : $this->removeTrait($path);
@@ -91,14 +119,7 @@ final class MigrationIncubationManager
             }
         }
 
-        $commit = $this->commitRewrites($rewritten, $incubating);
-
-        return [
-            'updated' => $updated,
-            'skipped' => $skipped,
-            'committed' => $commit['committed'],
-            'uncommitted' => $commit['uncommitted'],
-        ];
+        return [$updated, $rewritten, $skipped];
     }
 
     /**
