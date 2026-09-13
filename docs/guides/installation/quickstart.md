@@ -171,7 +171,6 @@ docker compose --profile dev exec app php artisan <command>
 ### Access the App
 
 - **Web:** https://local.blb.lara
-- **API:** https://local.blb.lara/api
 
 ## Troubleshooting
 
