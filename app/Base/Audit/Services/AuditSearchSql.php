@@ -45,10 +45,7 @@ final class AuditSearchSql
 
     public function lowerTextExpression(string $column): string
     {
-        return match (config('database.default')) {
-            'mysql', 'mariadb' => 'lower(cast('.$column.' as char))',
-            default => 'lower(cast('.$column.' as text))',
-        };
+        return 'lower('.$this->textCastExpression($column).')';
     }
 
     public function lowerCoalescedExpression(string $column): string
@@ -65,17 +62,14 @@ final class AuditSearchSql
     {
         return match (config('database.default')) {
             'pgsql' => $column.'::text',
-            'mysql', 'mariadb' => 'cast('.$column.' as char)',
+            'mysql', 'mariadb' => $this->textCastExpression($column),
             default => $column,
         };
     }
 
     public function ipAddressTextExpression(string $column): string
     {
-        return match (config('database.default')) {
-            'mysql', 'mariadb' => 'cast('.$column.' as char)',
-            default => 'cast('.$column.' as text)',
-        };
+        return $this->textCastExpression($column);
     }
 
     public function jsonIntegerExpression(string $column, string $key): string
@@ -85,5 +79,15 @@ final class AuditSearchSql
             'mysql', 'mariadb' => "cast(json_unquote(json_extract({$column}, '$.{$key}')) as signed)",
             default => "cast(json_extract({$column}, '$.{$key}') as integer)",
         };
+    }
+
+    private function textCastExpression(string $column): string
+    {
+        $type = match (config('database.default')) {
+            'mysql', 'mariadb' => 'char',
+            default => 'text',
+        };
+
+        return 'cast('.$column.' as '.$type.')';
     }
 }
