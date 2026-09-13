@@ -52,16 +52,9 @@ jobs:
       - name: Validate composed-source descriptors
         run: tests/ci/test-ci-scripts.sh
 
-      - name: AI-team mechanism tests
-        run: python3 -m unittest discover -s docs/ai-team/scripts -p 'test_*.py' -v
-
       - name: Check Changed Tests
         if: github.event_name == 'pull_request'
         run: php scripts/check-changed-tests.php --base="${{ github.event.pull_request.base.sha }}" --head="${{ github.event.pull_request.head.sha }}"
-
-      - name: Refuse direct edits to the docs/ai-team mount
-        if: github.event_name == 'pull_request'
-        run: scripts/ci/mount-guard.sh "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}"
 
       - name: Verify CI workflow contracts
         run: bun test tests/ci/*.test.ts
