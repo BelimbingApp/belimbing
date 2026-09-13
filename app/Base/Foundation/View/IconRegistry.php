@@ -23,6 +23,8 @@ final class IconRegistry
 
     private const VIEW_BOX_24 = '0 0 24 24';
 
+    private const DOCUMENT_ICON_FOLD_PREFIX = 'M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 ';
+
     /**
      * @var array<string, array{viewBox: string, fill: string, path: string|list<string>}>
      */
@@ -128,14 +130,14 @@ final class IconRegistry
         'heroicon-o-arrow-left-on-rectangle' => ['viewBox' => self::VIEW_BOX_24, 'fill' => 'none', 'path' => 'M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 '
                                                                                                  .'2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 '
                                                                                                  .'2.25-2.25V15M9.75 9l-3 3m0 0 3 3m-3-3h12.75'],
-        'heroicon-o-document-magnifying-glass' => ['viewBox' => self::VIEW_BOX_24, 'fill' => 'none', 'path' => 'M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 '
+        'heroicon-o-document-magnifying-glass' => ['viewBox' => self::VIEW_BOX_24, 'fill' => 'none', 'path' => self::DOCUMENT_ICON_FOLD_PREFIX
                                                                                                    .'1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 '
                                                                                                    .'0-3.375-3.375H8.25m5.231 13.481L15 17.25m-4.5-15H5.625c-.621 '
                                                                                                    .'0-1.125.504-1.125 1.125v16.5c0 .621.504 1.125 1.125 '
                                                                                                    .'1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 '
                                                                                                    .'0-9-9Zm3.75 11.625a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 '
                                                                                                    .'5.25 0Z'],
-        'heroicon-o-document-plus' => ['viewBox' => self::VIEW_BOX_24, 'fill' => 'none', 'path' => 'M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 '
+        'heroicon-o-document-plus' => ['viewBox' => self::VIEW_BOX_24, 'fill' => 'none', 'path' => self::DOCUMENT_ICON_FOLD_PREFIX
                                                                                        .'1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 '
                                                                                        .'0-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 '
                                                                                        .'0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 '
@@ -501,7 +503,7 @@ final class IconRegistry
                                                                                             .'10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m12 '
                                                                                             .'6.625v-1.875a3.375 3.375 0 0 0-3.375-3.375h-1.5a1.125 1.125 0 0 '
                                                                                             .'1-1.125-1.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H9.75'],
-        'heroicon-o-document-text' => ['viewBox' => self::VIEW_BOX_24, 'fill' => 'none', 'path' => 'M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 '
+        'heroicon-o-document-text' => ['viewBox' => self::VIEW_BOX_24, 'fill' => 'none', 'path' => self::DOCUMENT_ICON_FOLD_PREFIX
                                                                                        .'1.125 0 0 1 13.5 7.125v-1.5A3.375 3.375 0 0 0 10.125 '
                                                                                        .'2.25H6.75A2.25 2.25 0 0 0 4.5 4.5v15A2.25 2.25 0 0 0 6.75 '
                                                                                        .'21.75h10.5A2.25 2.25 0 0 0 19.5 19.5v-1.5m-6-6h3m-3 3h3m-6 3h6'],
