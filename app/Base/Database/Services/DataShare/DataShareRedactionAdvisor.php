@@ -50,12 +50,7 @@ class DataShareRedactionAdvisor
      */
     public function normalize(array $tables, array $redactions): array
     {
-        $byName = [];
-
-        foreach ($tables as $table) {
-            $byName[$table->table] = $table;
-        }
-
+        $byName = $this->tableDefinitionsByName($tables);
         $normalized = [];
 
         foreach ($redactions as $tableName => $columns) {
@@ -63,24 +58,14 @@ class DataShareRedactionAdvisor
                 throw DataShareDefinitionException::invalid(__('redactions name the table :table, which is not in this share.', ['table' => (string) $tableName]));
             }
 
-            $columns = array_values(array_unique(array_filter(is_array($columns) ? $columns : [], is_string(...))));
+            $columns = $this->normalizeColumnNames($columns);
 
             if ($columns === []) {
                 continue;
             }
 
             $schema = $this->schemaFingerprint->forTable($byName[$tableName])['schema'];
-            $known = array_column($schema['columns'], 'name');
-
-            foreach ($columns as $column) {
-                if (! in_array($column, $known, true)) {
-                    throw DataShareDefinitionException::invalid(__('redactions name the column :column on :table, which does not exist.', ['column' => $column, 'table' => $tableName]));
-                }
-
-                if (in_array($column, $schema['primary_key'], true)) {
-                    throw DataShareDefinitionException::invalid(__(':column is part of the primary key of :table and cannot be redacted: the row would lose its identity at the destination.', ['column' => $column, 'table' => $tableName]));
-                }
-            }
+            $this->assertColumnsCanBeRedacted($tableName, $columns, $schema);
 
             sort($columns, SORT_STRING);
             $normalized[$tableName] = $columns;
@@ -105,39 +90,14 @@ class DataShareRedactionAdvisor
     public function advise(DataShareTableDefinition $table, array $redacted, int $records, ?array $schema = null): array
     {
         $schema ??= $this->schemaFingerprint->forTable($table)['schema'];
-        $foreignKeyColumns = [];
-
-        foreach ($schema['foreign_keys'] as $foreignKey) {
-            foreach ($foreignKey['columns'] as $column) {
-                $foreignKeyColumns[$column] = true;
-            }
-        }
-
-        $uniqueColumns = [];
-
-        foreach ($schema['unique_indexes'] as $index) {
-            foreach ($index['columns'] as $column) {
-                $uniqueColumns[$column] = true;
-            }
-        }
+        $foreignKeyColumns = $this->indexedColumns($schema['foreign_keys']);
+        $uniqueColumns = $this->indexedColumns($schema['unique_indexes']);
 
         $advisories = [];
 
         foreach ($schema['columns'] as $column) {
             $name = (string) $column['name'];
-            $roles = [];
-
-            if (in_array($name, $schema['primary_key'], true)) {
-                $roles[] = 'primary_key';
-            }
-
-            if (isset($foreignKeyColumns[$name])) {
-                $roles[] = 'foreign_key';
-            }
-
-            if (isset($uniqueColumns[$name])) {
-                $roles[] = 'unique';
-            }
+            $roles = $this->columnRoles($name, $schema['primary_key'], $foreignKeyColumns, $uniqueColumns);
 
             $isRedacted = in_array($name, $redacted, true);
             [$level, $message] = $this->consequence($table->table, $name, (bool) $column['nullable'], $roles, $isRedacted, $records);
@@ -158,33 +118,117 @@ class DataShareRedactionAdvisor
     }
 
     /**
+     * @param  list<DataShareTableDefinition>  $tables
+     * @return array<string, DataShareTableDefinition>
+     */
+    private function tableDefinitionsByName(array $tables): array
+    {
+        $byName = [];
+
+        foreach ($tables as $table) {
+            $byName[$table->table] = $table;
+        }
+
+        return $byName;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function normalizeColumnNames(mixed $columns): array
+    {
+        return array_values(array_unique(array_filter(is_array($columns) ? $columns : [], is_string(...))));
+    }
+
+    /**
+     * @param  list<string>  $columns
+     * @param  array{columns: list<array{name: string}>, primary_key: list<string>}  $schema
+     */
+    private function assertColumnsCanBeRedacted(string $tableName, array $columns, array $schema): void
+    {
+        $known = array_column($schema['columns'], 'name');
+
+        foreach ($columns as $column) {
+            if (! in_array($column, $known, true)) {
+                throw DataShareDefinitionException::invalid(__('redactions name the column :column on :table, which does not exist.', ['column' => $column, 'table' => $tableName]));
+            }
+
+            if (in_array($column, $schema['primary_key'], true)) {
+                throw DataShareDefinitionException::invalid(__(':column is part of the primary key of :table and cannot be redacted: the row would lose its identity at the destination.', ['column' => $column, 'table' => $tableName]));
+            }
+        }
+    }
+
+    /**
+     * @param  list<array{columns: list<string>}>  $indexes
+     * @return array<string, true>
+     */
+    private function indexedColumns(array $indexes): array
+    {
+        $columns = [];
+
+        foreach ($indexes as $index) {
+            foreach ($index['columns'] as $column) {
+                $columns[$column] = true;
+            }
+        }
+
+        return $columns;
+    }
+
+    /**
+     * @param  list<string>  $primaryKey
+     * @param  array<string, true>  $foreignKeyColumns
+     * @param  array<string, true>  $uniqueColumns
+     * @return list<string>
+     */
+    private function columnRoles(string $name, array $primaryKey, array $foreignKeyColumns, array $uniqueColumns): array
+    {
+        $roles = [];
+
+        if (in_array($name, $primaryKey, true)) {
+            $roles[] = 'primary_key';
+        }
+
+        if (isset($foreignKeyColumns[$name])) {
+            $roles[] = 'foreign_key';
+        }
+
+        if (isset($uniqueColumns[$name])) {
+            $roles[] = 'unique';
+        }
+
+        return $roles;
+    }
+
+    /**
      * @param  list<string>  $roles
      * @return array{0: string|null, 1: string|null}
      */
     private function consequence(string $table, string $column, bool $nullable, array $roles, bool $redacted, int $records): array
     {
         if (in_array('primary_key', $roles, true)) {
-            return [self::LEVEL_REFUSED, __(':column is part of the primary key and cannot be redacted.', ['column' => $column])];
-        }
-
-        if (! $redacted) {
-            return [null, null];
-        }
-
-        if (in_array('foreign_key', $roles, true)) {
-            return [self::LEVEL_REFERENCE, $nullable
+            $level = self::LEVEL_REFUSED;
+            $message = __(':column is part of the primary key and cannot be redacted.', ['column' => $column]);
+        } elseif (! $redacted) {
+            $level = null;
+            $message = null;
+        } elseif (in_array('foreign_key', $roles, true)) {
+            $level = self::LEVEL_REFERENCE;
+            $message = $nullable
                 ? __('Redacting :column drops the reference silently: rows restore with no link where one existed.', ['column' => $column])
-                : __('Redacting :column makes the reference unresolvable: :records rows of :table will plan as conflicts.', ['column' => $column, 'records' => $records, 'table' => $table])];
+                : __('Redacting :column makes the reference unresolvable: :records rows of :table will plan as conflicts.', ['column' => $column, 'records' => $records, 'table' => $table]);
+        } elseif (! $nullable) {
+            $level = self::LEVEL_UNRESTORABLE;
+            $message = __('Redacting :column makes :records rows of :table unrestorable at the destination: they will plan as conflicts.', ['column' => $column, 'records' => $records, 'table' => $table]);
+        } elseif (in_array('unique', $roles, true)) {
+            $level = self::LEVEL_UNIQUE;
+            $message = __('Redacting :column removes a unique identity: rows can no longer be matched by it, and nulls may collide with the index.', ['column' => $column]);
+        } else {
+            $level = self::LEVEL_QUIET;
+            $message = __('Values of :column will not travel; the destination receives null.', ['column' => $column]);
         }
 
-        if (! $nullable) {
-            return [self::LEVEL_UNRESTORABLE, __('Redacting :column makes :records rows of :table unrestorable at the destination: they will plan as conflicts.', ['column' => $column, 'records' => $records, 'table' => $table])];
-        }
-
-        if (in_array('unique', $roles, true)) {
-            return [self::LEVEL_UNIQUE, __('Redacting :column removes a unique identity: rows can no longer be matched by it, and nulls may collide with the index.', ['column' => $column])];
-        }
-
-        return [self::LEVEL_QUIET, __('Values of :column will not travel; the destination receives null.', ['column' => $column])];
+        return [$level, $message];
     }
 }

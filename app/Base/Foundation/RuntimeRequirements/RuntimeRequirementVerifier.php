@@ -123,9 +123,17 @@ final class RuntimeRequirementVerifier
     {
         $explicit = trim((string) $requested);
 
-        return $explicit !== ''
-            ? $explicit
-            : (trim((string) getenv('BLB_SYSTEM_PHP_BINARY')) ?: 'php');
+        if ($explicit !== '') {
+            return $explicit;
+        }
+
+        $configured = trim((string) getenv('BLB_SYSTEM_PHP_BINARY'));
+
+        if ($configured !== '') {
+            return $configured;
+        }
+
+        return 'php';
     }
 
     /** @return list<string> */
