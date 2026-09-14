@@ -80,12 +80,10 @@ class Index extends Component
             $tables->getCollection()->pluck('table_name')->all(),
         );
 
-        $tables->getCollection()->transform(function (TableRegistry $table) use ($details): TableRegistry {
+        $tables->getCollection()->each(function (TableRegistry $table) use ($details): void {
             $detail = $details[$table->table_name] ?? ['state' => 'unknown', 'source_declared' => false];
             $table->schema_state = $detail['state'];
             $table->source_declared = $detail['source_declared'];
-
-            return $table;
         });
 
         return view('livewire.admin.system.database-tables.index', [
