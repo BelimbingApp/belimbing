@@ -202,16 +202,14 @@ class Index extends Component
 
         $details = app(IncubatingSchemaPreflight::class)->schemaDetailsForTables($allVisible);
 
-        $transform = function (TableRegistry $table) use ($details): TableRegistry {
+        $annotate = function (TableRegistry $table) use ($details): void {
             $detail = $details[$table->table_name] ?? ['state' => 'unknown', 'source_declared' => false];
             $table->schema_state = $detail['state'];
             $table->source_declared = $detail['source_declared'];
-
-            return $table;
         };
 
-        $incubatingTables->getCollection()->transform($transform);
-        $searchTables->getCollection()->transform($transform);
+        $incubatingTables->getCollection()->each($annotate);
+        $searchTables->getCollection()->each($annotate);
 
         return view('livewire.admin.system.database-incubation.index', [
             'incubatingTables' => $incubatingTables,
