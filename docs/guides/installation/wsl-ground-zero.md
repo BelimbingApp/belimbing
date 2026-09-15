@@ -32,6 +32,11 @@ Key concepts: VM, WSL, Windows Terminal, PowerShell, Bash, Linux, Ubuntu, GitHub
 	&& sudo apt update \
 	&& sudo apt install gh -y
 ```
+9. [Ubuntu] Login to GutHub: `gh auth login`
+10. [Ubuntu] ... Finish the authentication ...
+   - Use the defaults, i.e. web-based browser flow
+   - Copy a one-time code like "7CDF-8959" to paste on the browser
+   - Check authentication: `gh auth status`
 
 ### Clone Belimbing
 Key concepts: Source Code, TUI, Bash, Git, CLI: `ll`, `cd`, `mkdir`, `git`, `gh`
@@ -58,10 +63,10 @@ Key concepts: DNS, Hosts File, IP address
 1. [Win] Windows Start → type `notepad` → right-click → **Run as administrator**
 2. [Notepad] File → Open → `C:\Windows\System32\drivers\etc\hosts`
 3. [Notepad] Change the file filter to **All Files** to see it
-4. [Notepad] Add this line at the bottom:
+4. [Notepad] Add the IP and hostname from the setup to the hosts file:
     `172.25.114.176 local.blb.lara`
      *(Replace `172.25.114.176` with your actual WSL2 IP address from setup.sh)*
-    - To check the WSL2 IP address: `hostname -I | awk '{print $1}'`
+    - Alternatively, get the WSL2 IP address: `hostname -I | awk '{print $1}'`
 5. [Notepad] Save and close
 
 ### Launch Belimbing
@@ -100,8 +105,9 @@ Key concepts: GitHub Settings, Private Repository, Public Repository
 3. [Ubuntu:~/repo/belimbing$] Setup remotes:
 ```bash
 git remote add upstream https://github.com/BelimbingApp/belimbing.git
-git remote add origin https://github.com/your-username/belimbing.git
+git remote set-url origin https://github.com/{company_org}/{belimbing}.git
 ```
+Note: replace the  last command with GitHub organization and name of the repo.
 4. Install Domains and company extension
 
 ### Development Environment
