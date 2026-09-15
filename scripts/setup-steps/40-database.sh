@@ -798,7 +798,7 @@ diagnose_postgresql_connection() {
     if ! PGPASSWORD="$db_password" psql -h "$db_host" -p "$db_port" -U "$db_user" -d "postgres" -c "SELECT 1;" >/dev/null 2>&1; then
         echo -e "  ${RED}✗${NC} Authentication failed for user ${CYAN}${db_user}${NC}" >&2
         echo -e "    ${YELLOW}Fix:${NC} Check DB_USERNAME and DB_PASSWORD in ${CYAN}.env${NC}" >&2
-        echo -e "    ${YELLOW}Or reset:${NC} ${CYAN}sudo -u postgres psql -c \"ALTER USER ${db_user} WITH PASSWORD 'new_password';\"${NC}" >&2
+        echo -e "    Ask the database administrator to verify this role on ${CYAN}${db_host}:${db_port}${NC}; a default local psql connection may target another cluster." >&2
         return 1
     fi
     echo -e "  ${GREEN}✓${NC} Authentication successful for user ${db_user}"
@@ -806,7 +806,12 @@ diagnose_postgresql_connection() {
     # 3. Does the database exist?
     if ! PGPASSWORD="$db_password" psql -h "$db_host" -p "$db_port" -U "$db_user" -d "$db_name" -c "SELECT 1;" >/dev/null 2>&1; then
         echo -e "  ${RED}✗${NC} Database ${CYAN}${db_name}${NC} does not exist or is not accessible" >&2
-        echo -e "    ${YELLOW}Fix:${NC} ${CYAN}sudo -u postgres psql -c \"CREATE DATABASE ${db_name} OWNER ${db_user};\"${NC}" >&2
+        echo -e "    If the database is missing and this role can create it, run against the configured server:" >&2
+        # createdb quotes SQL identifiers; %q preserves each argument when pasted into Bash.
+        # Do not print PGPASSWORD or use sudo's default socket/port: either can target the wrong cluster.
+        printf '      createdb -h %q -p %q -U %q --maintenance-db=postgres --owner %q -- %q\n' \
+            "$db_host" "$db_port" "$db_user" "$db_user" "$db_name" >&2
+        echo "    If it already exists on that server, ask its administrator to check ownership and CONNECT privileges." >&2
         return 1
     fi
     echo -e "  ${GREEN}✓${NC} Database ${db_name} is accessible"
