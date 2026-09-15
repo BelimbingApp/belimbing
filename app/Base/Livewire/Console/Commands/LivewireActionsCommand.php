@@ -21,21 +21,10 @@ final class LivewireActionsCommand extends Command
 
     public function handle(ActionInventory $inventory): int
     {
-        $domain = $this->option('domain');
-        $domain = is_string($domain) && $domain !== '' ? $domain : null;
-        $checkBaseline = $this->option('check-baseline');
-        $writeBaseline = $this->option('write-baseline');
+        $domain = $this->stringOption('domain');
 
         try {
-            if (is_string($writeBaseline) && $writeBaseline !== '') {
-                return $this->writeBaseline($inventory, $domain, $writeBaseline);
-            }
-
-            if (is_string($checkBaseline) && $checkBaseline !== '') {
-                return $this->checkBaseline($inventory, $domain, $checkBaseline);
-            }
-
-            $rows = $inventory->scan($domain);
+            return $this->runRequestedMode($inventory, $domain);
         } catch (ActionInventoryException $exception) {
             $this->error($exception->getMessage());
 
@@ -45,19 +34,49 @@ final class LivewireActionsCommand extends Command
 
             return self::FAILURE;
         }
+    }
 
-        if ($this->option('json')) {
-            $this->line(json_encode($rows, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
-        } else {
-            $this->table(['Component', 'Method', 'Origin', 'Test reference'], array_map(
-                fn (array $row): array => [$row['component'], $row['method'],
-                    $row['module_owned'] ? 'module' : 'shared', $row['referenced_in_tests'] ? 'yes' : 'no'],
-                $rows,
-            ));
-            $this->comment('Test references are lexical matches, including strings/comments and unrelated components; they do not prove coverage.');
+    private function runRequestedMode(ActionInventory $inventory, ?string $domain): int
+    {
+        $writeBaseline = $this->stringOption('write-baseline');
+        if ($writeBaseline !== null) {
+            return $this->writeBaseline($inventory, $domain, $writeBaseline);
         }
 
+        $checkBaseline = $this->stringOption('check-baseline');
+        if ($checkBaseline !== null) {
+            return $this->checkBaseline($inventory, $domain, $checkBaseline);
+        }
+
+        $this->renderRows($inventory->scan($domain));
+
         return self::SUCCESS;
+    }
+
+    private function stringOption(string $name): ?string
+    {
+        $value = $this->option($name);
+
+        return is_string($value) && $value !== '' ? $value : null;
+    }
+
+    /**
+     * @param  list<array{component: string, method: string, module_owned: bool, referenced_in_tests: bool}>  $rows
+     */
+    private function renderRows(array $rows): void
+    {
+        if ($this->option('json')) {
+            $this->line(json_encode($rows, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+
+            return;
+        }
+
+        $this->table(['Component', 'Method', 'Origin', 'Test reference'], array_map(
+            fn (array $row): array => [$row['component'], $row['method'],
+                $row['module_owned'] ? 'module' : 'shared', $row['referenced_in_tests'] ? 'yes' : 'no'],
+            $rows,
+        ));
+        $this->comment('Test references are lexical matches, including strings/comments and unrelated components; they do not prove coverage.');
     }
 
     private function writeBaseline(ActionInventory $inventory, ?string $domain, string $path): int
