@@ -91,6 +91,9 @@ class Index extends Component
         ]);
     }
 
+    /**
+     * @return Builder<TableRegistry>
+     */
     private function tableQuery(): Builder
     {
         return TableRegistry::query()
