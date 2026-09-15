@@ -1,4 +1,4 @@
-# Windows onboarding — Belimbing
+# Windows onboarding from ground zero
 
 Acknowledgement: These steps were developed in collaboration with the wonderful people from SB Tape Group.
 Please raise a PR if you find mistakes on this guide.
