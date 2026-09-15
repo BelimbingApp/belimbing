@@ -147,17 +147,21 @@ class WorkflowEngine
 
         $model->setRawAttributes($outcome['model']->getAttributes(), true);
 
-        try {
-            $this->recordTransitionSemanticAction($outcome['model'], $outcome['transition'], $context, $outcome['payload']);
-        } catch (\Throwable $exception) {
-            report($exception);
-        }
+        // The engine may run inside a larger business transaction. Savepoints
+        // are not commits: external effects must wait for the outermost commit.
+        DB::afterCommit(function () use ($outcome, $context): void {
+            try {
+                $this->recordTransitionSemanticAction($outcome['model'], $outcome['transition'], $context, $outcome['payload']);
+            } catch (\Throwable $exception) {
+                report($exception);
+            }
 
-        try {
-            $this->outboxDispatcher->deliver($outcome['outbox_id']);
-        } catch (\Throwable $exception) {
-            report($exception);
-        }
+            try {
+                $this->outboxDispatcher->deliver($outcome['outbox_id']);
+            } catch (\Throwable $exception) {
+                report($exception);
+            }
+        });
 
         return TransitionResult::success($outcome['history']);
     }

@@ -610,3 +610,29 @@ final class ContextAwareCoverageGuard implements ContextualTransitionGuard
             : GuardResult::deny('Context denied the transition.');
     }
 }
+
+it('delivers transition events only after the enclosing business transaction commits', function (bool $commit): void {
+    Event::fake([TransitionCompleted::class]);
+    $user = createAdminUser();
+    $company = Company::factory()->create(['status' => 'active']);
+    StatusTransition::create(['flow' => 'nested-commit', 'from_code' => 'active', 'to_code' => 'paused', 'is_active' => true]);
+    DB::beginTransaction();
+    try {
+        $result = app(WorkflowEngine::class)->transition($company, 'nested-commit', 'paused', new TransitionContext(Actor::forUser($user)));
+        expect($result->success)->toBeTrue();
+        Event::assertNotDispatched(TransitionCompleted::class);
+        expect(TransitionOutboxMessage::query()->sole()->delivered_at)->toBeNull();
+    } catch (Throwable $exception) {
+        DB::rollBack();
+        throw $exception;
+    }
+    if ($commit) {
+        DB::commit();
+        Event::assertDispatchedTimes(TransitionCompleted::class, 1);
+        expect($company->fresh()->status)->toBe('paused');
+    } else {
+        DB::rollBack();
+        Event::assertNotDispatched(TransitionCompleted::class);
+        expect($company->fresh()->status)->toBe('active')->and(TransitionOutboxMessage::query()->count())->toBe(0);
+    }
+})->with([true, false]);
