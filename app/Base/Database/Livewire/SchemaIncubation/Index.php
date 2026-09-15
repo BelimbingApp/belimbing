@@ -218,6 +218,9 @@ class Index extends Component
         ]);
     }
 
+    /**
+     * @return Builder<TableRegistry>
+     */
     private function incubatingTableQuery(): Builder
     {
         return TableRegistry::query()
@@ -228,6 +231,9 @@ class Index extends Component
             });
     }
 
+    /**
+     * @return Builder<TableRegistry>
+     */
     private function searchResultsQuery(): Builder
     {
         $search = trim($this->search);
