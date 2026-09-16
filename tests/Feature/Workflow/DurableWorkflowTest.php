@@ -1,11 +1,24 @@
 <?php
 
+use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
+use App\Base\Authz\DTO\AuthorizationDecision;
+use App\Base\Authz\DTO\ResourceContext;
 use App\Base\Database\Services\IncubatingSchemaPreflight;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Base\Workflow\Contracts\ContextualTransitionGuard;
 use App\Base\Workflow\DTO\GuardResult;
 use App\Base\Workflow\DTO\TransitionContext;
 use App\Base\Workflow\Events\TransitionCompleted;
+use App\Base\Workflow\Human\Contracts\HumanActionHandler;
+use App\Base\Workflow\Human\DTO\HumanActionDefinition;
+use App\Base\Workflow\Human\DTO\HumanActionOutcome;
+use App\Base\Workflow\Human\DTO\HumanActionRequest;
+use App\Base\Workflow\Human\HumanActionConflictException;
+use App\Base\Workflow\Human\HumanActionException;
+use App\Base\Workflow\Human\HumanActionRegistry;
+use App\Base\Workflow\Human\HumanActionService;
+use App\Base\Workflow\Models\HumanActionRequestRecord;
 use App\Base\Workflow\Models\ProcessEvent;
 use App\Base\Workflow\Models\ProcessRun;
 use App\Base\Workflow\Models\StatusHistory;
@@ -25,6 +38,7 @@ use App\Base\Workflow\Services\WorkflowEngine;
 use App\Core\Company\Models\Company;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 
@@ -209,6 +223,62 @@ it('reports only process runs that reconciliation actually inspected', function 
     $coordinator = app(ProcessCoordinator::class);
 
     expect($coordinator->reconcile(PHP_INT_MAX))->toBe(0);
+});
+
+it('executes tenant-authorized human work atomically and replays the same request', function (): void {
+    $user = createAdminUser();
+    $actor = Actor::forUser($user);
+    $tenantId = $actor->tenantId;
+    expect($tenantId)->toBeInt();
+    app(TenantContext::class)->set($tenantId);
+    $subject = Company::query()->findOrFail($actor->companyId);
+
+    $authorization = new AllowAllWorkflowAuthorizationService;
+    app()->instance(AuthorizationService::class, $authorization);
+    app()->forgetInstance(HumanActionService::class);
+    app(HumanActionRegistry::class)->register($subject::class,
+        new HumanActionDefinition('approve', 'Approve', 'test.workflow.approve', HumanActionCoverageHandler::class, 'human.approve'));
+
+    app(ProcessDefinitionRegistry::class)->register(new ProcessDefinition('test.human', 1, [
+        new ProcessStep('approval', 'Approval', executorKey: 'human.approve'),
+    ]));
+    $run = app(ProcessCoordinator::class)->startForTenant($tenantId, 'test.human', subjectType: $subject::class, subjectId: $subject->id);
+    $item = $run->workItems()->sole();
+    $service = app(HumanActionService::class);
+    $request = new HumanActionRequest('approve', 'request-1', $service->subjectVersion($subject),
+        ['decision' => 'approved'], $run->id, $item->id, $item->version);
+
+    $first = $service->execute($actor, $subject, $request);
+    $replay = $service->execute($actor, $subject, $request);
+
+    expect($first->replayed)->toBeFalse()
+        ->and($replay->replayed)->toBeTrue()
+        ->and($authorization->authorizations)->toBe(2)
+        ->and($item->refresh()->status)->toBe(ProcessWorkStatus::COMPLETED)
+        ->and($item->result_ref)->toBe('result:approved')
+        ->and($run->refresh()->status)->toBe(ProcessRunStatus::COMPLETED)
+        ->and(HumanActionRequestRecord::query()->count())->toBe(1);
+
+    $otherActor = new Actor($actor->type, $actor->id + 1000, $actor->companyId, tenantId: $tenantId);
+    expect(fn () => $service->execute($otherActor, $subject, $request))
+        ->toThrow(HumanActionConflictException::class);
+
+    $otherSubject = Company::factory()->create(['tenant_id' => $tenantId]);
+    expect(fn () => $service->execute($actor, $otherSubject, new HumanActionRequest(
+        'approve', 'request-other-subject', $service->subjectVersion($otherSubject), [],
+        $run->id, $item->id, $item->version,
+    )))->toThrow(HumanActionException::class, 'does not belong');
+
+    expect(fn () => $service->execute($actor, $subject, new HumanActionRequest(
+        'approve', 'request-1', $service->subjectVersion($subject), ['decision' => 'rejected'],
+        $run->id, $item->id, $item->version,
+    )))->toThrow(HumanActionConflictException::class);
+
+    $staleVersion = $service->subjectVersion($subject);
+    $subject->forceFill(['name' => 'Changed in the same second'])->save();
+    expect(fn () => $service->execute($actor, $subject, new HumanActionRequest(
+        'approve', 'request-2', $staleVersion, [], $run->id, $item->id, $item->version,
+    )))->toThrow(HumanActionConflictException::class, 'subject changed');
 });
 
 it('coordinates fan out and all or any fan in with explicit acceptable outcomes', function (): void {
@@ -608,6 +678,38 @@ final class ContextAwareCoverageGuard implements ContextualTransitionGuard
         return ($context->metadata['allow_transition'] ?? false) === true
             ? GuardResult::allow()
             : GuardResult::deny('Context denied the transition.');
+    }
+}
+
+final class HumanActionCoverageHandler implements HumanActionHandler
+{
+    public function handle(Actor $actor, Model $subject, HumanActionRequest $request): HumanActionOutcome
+    {
+        return new HumanActionOutcome(
+            ['decision' => $request->payload['decision']],
+            (string) $request->payload['decision'],
+            'result:'.$request->payload['decision'],
+        );
+    }
+}
+
+final class AllowAllWorkflowAuthorizationService implements AuthorizationService
+{
+    public int $authorizations = 0;
+
+    public function can(Actor $actor, string $capability, ?ResourceContext $resource = null, array $context = []): AuthorizationDecision
+    {
+        return AuthorizationDecision::allow();
+    }
+
+    public function authorize(Actor $actor, string $capability, ?ResourceContext $resource = null, array $context = []): void
+    {
+        $this->authorizations++;
+    }
+
+    public function filterAllowed(Actor $actor, string $capability, iterable $resources, array $context = []): Collection
+    {
+        return collect($resources);
     }
 }
 

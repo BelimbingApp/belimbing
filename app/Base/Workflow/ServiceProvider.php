@@ -10,6 +10,9 @@ use App\Base\Workflow\Console\Commands\WorkflowDescribeCommand;
 use App\Base\Workflow\Console\Commands\WorkflowReconcileCommand;
 use App\Base\Workflow\Console\Commands\WorkflowValidateCommand;
 use App\Base\Workflow\Events\TransitionCompleted;
+use App\Base\Workflow\Human\Contracts\HumanActionContributor;
+use App\Base\Workflow\Human\HumanActionRegistry;
+use App\Base\Workflow\Human\HumanActionService;
 use App\Base\Workflow\Listeners\SendTransitionNotification;
 use App\Base\Workflow\Process\Contracts\ProcessDefinitionContributor;
 use App\Base\Workflow\Process\ProcessCoordinator;
@@ -38,6 +41,8 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(TransitionOutboxDispatcher::class);
         $this->app->singleton(ProcessDefinitionRegistry::class);
         $this->app->singleton(ProcessCoordinator::class);
+        $this->app->singleton(HumanActionRegistry::class);
+        $this->app->singleton(HumanActionService::class);
         $this->app->singleton(WorkflowEngine::class);
 
         $this->app->booted(function (): void {
@@ -45,6 +50,11 @@ class ServiceProvider extends BaseServiceProvider
 
             foreach ($this->app->tagged(ProcessDefinitionContributor::CONTAINER_TAG) as $contributor) {
                 $contributor->contribute($definitions);
+            }
+
+            $actions = $this->app->make(HumanActionRegistry::class);
+            foreach ($this->app->tagged(HumanActionContributor::CONTAINER_TAG) as $contributor) {
+                $contributor->contribute($actions);
             }
 
             $this->app->make(Schedule::class)

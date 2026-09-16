@@ -12,6 +12,8 @@ use Illuminate\Support\Carbon;
  * Durable execution of one immutable, code-owned process definition version.
  *
  * @property int $id
+ * @property string $scope_type
+ * @property int|null $tenant_id
  * @property string $definition_key
  * @property int $definition_version
  * @property string $definition_fingerprint

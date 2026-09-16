@@ -3,11 +3,14 @@
 namespace App\Base\Media;
 
 use App\Base\AI\Contracts\AiProviderFamily;
+use App\Base\Media\Console\Commands\CleanupDraftAttachmentsCommand;
 use App\Base\Media\PhotoCleanup\Contracts\PhotoCleanupProvider;
 use App\Base\Media\PhotoCleanup\ImageProviderFamily;
 use App\Base\Media\PhotoCleanup\PhotoCleanupProviderRegistry;
 use App\Base\Media\PhotoCleanup\ResolvingPhotoCleanupProvider;
+use App\Base\Media\Services\AttachmentSubjectAuthorizerRegistry;
 use App\Base\Media\Services\MediaAssetStore;
+use App\Base\Media\Services\PrivateAttachmentStore;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
 class ServiceProvider extends BaseServiceProvider
@@ -15,6 +18,8 @@ class ServiceProvider extends BaseServiceProvider
     public function register(): void
     {
         $this->app->singleton(MediaAssetStore::class);
+        $this->app->singleton(AttachmentSubjectAuthorizerRegistry::class);
+        $this->app->singleton(PrivateAttachmentStore::class);
 
         // The active cleanup adapter is chosen per company through
         // PhotoCleanupSelection (reads `media.photo_cleanup.provider`). The
@@ -30,5 +35,9 @@ class ServiceProvider extends BaseServiceProvider
         // tag keeps Core/AI from importing Media — it discovers families like
         // it discovers tools. See docs/plans/ai-provider-families.md.
         $this->app->tag([ImageProviderFamily::class], AiProviderFamily::CONTAINER_TAG);
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([CleanupDraftAttachmentsCommand::class]);
+        }
     }
 }

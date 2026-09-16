@@ -13,6 +13,8 @@ use Illuminate\Support\Carbon;
  * One claimable unit of work in a durable process run.
  *
  * @property int $id
+ * @property int|null $tenant_id
+ * @property int $version
  * @property int $process_run_id
  * @property string $step_key
  * @property string $label
@@ -50,6 +52,7 @@ class ProcessWorkItem extends Model
     {
         return [
             'status' => ProcessWorkStatus::class,
+            'version' => 'integer',
             'dependency_mode' => DependencyMode::class,
             'signalled_at' => 'datetime',
             'signal_payload' => 'array',

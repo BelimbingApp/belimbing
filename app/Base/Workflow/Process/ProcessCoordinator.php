@@ -2,6 +2,7 @@
 
 namespace App\Base\Workflow\Process;
 
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Base\Workflow\Models\ProcessDefinitionVersion;
 use App\Base\Workflow\Models\ProcessDependency as PersistedDependency;
 use App\Base\Workflow\Models\ProcessEvent;
@@ -29,6 +30,7 @@ class ProcessCoordinator
 
     public function __construct(
         private readonly ProcessDefinitionRegistry $definitions,
+        private readonly ?TenantContext $tenants = null,
     ) {}
 
     /**
@@ -46,13 +48,15 @@ class ProcessCoordinator
         ?string $correlationKey = null,
         int $priority = 0,
         ?Carbon $availableAt = null,
+        ?ProcessScope $scope = null,
     ): ProcessRun {
+        $scope ??= $this->defaultScope($subjectType);
         $definition = $this->definitions->get($definitionKey, $definitionVersion);
         $definitionFingerprint = $definition->fingerprint();
         $this->assertDefinitionVersionIsImmutable($definition, $definitionFingerprint);
         $scopedKey = $idempotencyKey === null
             ? null
-            : $this->idempotencyKey('start', $definition->key, $idempotencyKey);
+            : $this->idempotencyKey('start', $scope->type, (string) ($scope->tenantId ?? '-'), $definition->key, $idempotencyKey);
 
         if ($scopedKey !== null) {
             $existing = ProcessRun::query()->where('idempotency_key', $scopedKey)->first();
@@ -65,7 +69,7 @@ class ProcessCoordinator
         }
 
         try {
-            return DB::transaction(function () use ($definition, $definitionFingerprint, $input, $scopedKey, $subjectType, $subjectId, $correlationKey, $priority, $availableAt): ProcessRun {
+            return DB::transaction(function () use ($definition, $definitionFingerprint, $input, $scopedKey, $subjectType, $subjectId, $correlationKey, $priority, $availableAt, $scope): ProcessRun {
                 if ($scopedKey !== null) {
                     $existing = ProcessRun::query()
                         ->where('idempotency_key', $scopedKey)
@@ -79,6 +83,8 @@ class ProcessCoordinator
 
                 $now = now();
                 $run = ProcessRun::query()->create([
+                    'scope_type' => $scope->type,
+                    'tenant_id' => $scope->tenantId,
                     'definition_key' => $definition->key,
                     'definition_version' => $definition->version,
                     'definition_fingerprint' => $definitionFingerprint,
@@ -117,6 +123,66 @@ class ProcessCoordinator
 
             throw $exception;
         }
+    }
+
+    /** @param array<string, mixed> $input */
+    public function startForTenant(int $tenantId, string $definitionKey, array $input = [], ?string $idempotencyKey = null,
+        ?string $subjectType = null, int|string|null $subjectId = null, ?int $definitionVersion = null,
+        ?string $correlationKey = null, int $priority = 0, ?Carbon $availableAt = null): ProcessRun
+    {
+        return $this->start($definitionKey, $input, $idempotencyKey, $subjectType, $subjectId, $definitionVersion,
+            $correlationKey, $priority, $availableAt, ProcessScope::tenant($tenantId));
+    }
+
+    /** @param array<string, mixed> $input */
+    public function startForSystem(string $definitionKey, array $input = [], ?string $idempotencyKey = null,
+        ?string $subjectType = null, int|string|null $subjectId = null, ?int $definitionVersion = null,
+        ?string $correlationKey = null, int $priority = 0, ?Carbon $availableAt = null): ProcessRun
+    {
+        return $this->start($definitionKey, $input, $idempotencyKey, $subjectType, $subjectId, $definitionVersion,
+            $correlationKey, $priority, $availableAt, ProcessScope::system());
+    }
+
+    /**
+     * Complete human work without issuing a browser-held worker lease.
+     * The caller must already be in the business transaction.
+     *
+     * @param  array<string, mixed>  $output
+     */
+    public function completeHumanWork(int $tenantId, int $runId, int $workItemId, int $expectedVersion,
+        string $executorKey, array $output = [], string $outcome = 'completed', ?string $resultRef = null,
+        array $eventContext = []): ProcessWorkItem
+    {
+        if (DB::transactionLevel() < 1) {
+            throw new ProcessCoordinationException('Human process work must complete inside its business transaction.');
+        }
+
+        $run = $this->lockRun($runId);
+        $item = ProcessWorkItem::query()->whereKey($workItemId)->lockForUpdate()->firstOrFail();
+
+        if ($run->scope_type !== 'tenant' || (int) $run->tenant_id !== $tenantId
+            || (int) $item->tenant_id !== $tenantId || (int) $item->process_run_id !== $runId) {
+            throw new ProcessCoordinationException('The process work is outside the current tenant boundary.');
+        }
+        if ($run->status !== ProcessRunStatus::RUNNING || $item->status !== ProcessWorkStatus::AVAILABLE) {
+            throw new ProcessCoordinationException('The process work is no longer available.');
+        }
+        if ($item->executor_key !== $executorKey) {
+            throw new ProcessCoordinationException('The action does not own this process work item.');
+        }
+        if ((int) $item->version !== $expectedVersion) {
+            throw new ProcessCoordinationException('The process work changed after it was displayed.');
+        }
+
+        $now = now();
+        $this->finishWork($item, ProcessWorkStatus::COMPLETED, $outcome, $output, null, $now);
+        $item->forceFill(['result_ref' => $resultRef ?? $item->result_ref])->save();
+        $this->appendEvent($run, $item, 'work.completed', array_merge($eventContext, [
+            'outcome' => $outcome, 'output' => $output, 'result_ref' => $item->result_ref, 'source' => 'human_action',
+        ]));
+        $this->reconcileLocked($run, $now);
+
+        return $item->refresh();
     }
 
     /**
@@ -792,6 +858,7 @@ class ProcessCoordinator
         foreach ($definition->steps as $step) {
             $workItem = ProcessWorkItem::query()->firstOrCreate(
                 [
+                    'tenant_id' => $run->tenant_id,
                     'process_run_id' => $run->id,
                     'step_key' => $step->key,
                 ],
@@ -829,7 +896,7 @@ class ProcessCoordinator
                         'work_item_id' => $items[$step->key]->id,
                         'depends_on_work_item_id' => $items[$dependency->stepKey]->id,
                     ],
-                    ['acceptable_outcomes' => $acceptable],
+                    ['tenant_id' => $run->tenant_id, 'acceptable_outcomes' => $acceptable],
                 );
 
                 $persisted = $edge->acceptable_outcomes;
@@ -1064,6 +1131,7 @@ class ProcessCoordinator
         Carbon $now,
     ): void {
         $workItem->forceFill([
+            'version' => $workItem->version + 1,
             'status' => $status,
             'outcome' => $outcome,
             'output' => $output,
@@ -1089,6 +1157,7 @@ class ProcessCoordinator
             ->max('sequence') + 1;
 
         return ProcessEvent::query()->create([
+            'tenant_id' => $run->tenant_id,
             'process_run_id' => $run->id,
             'work_item_id' => $workItem?->id,
             'sequence' => $sequence,
@@ -1114,6 +1183,20 @@ class ProcessCoordinator
         $raw = implode(':', $parts);
 
         return strlen($raw) <= 240 ? $raw : substr($raw, 0, 170).':'.hash('sha256', $raw);
+    }
+
+    private function defaultScope(?string $subjectType): ProcessScope
+    {
+        if (($tenantId = ($this->tenants ?? app(TenantContext::class))->currentTenantId()) !== null) {
+            return ProcessScope::tenant($tenantId);
+        }
+        if ($subjectType !== null) {
+            // Preserve old internal callers without granting tenant or system
+            // reach. New subject-owned integrations must use startForTenant().
+            return ProcessScope::unresolved();
+        }
+
+        return ProcessScope::system();
     }
 
     private function assertDefinitionVersionIsImmutable(ProcessDefinition $definition, string $fingerprint): void
