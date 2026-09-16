@@ -1,6 +1,6 @@
 # Workflow human actions and parallel work
 
-**Status:** Implemented; repository delivery in progress; tenant-safe coordination and human action backend implemented, shared presentation/evidence adoption remains
+**Status:** Implemented and delivered upstream/adopter; shared presentation and evidence adopted; broader accessibility acceptance remains below
 **Last Updated:** 2026-09-16
 **Sources:** `AGENTS.md`; `DESIGN.md`; `docs/architecture/authorization.md`; `docs/architecture/tenancy.md`; `docs/modules/workflow/design.md`; `docs/modules/workflow/workflow-design-review.md`; `docs/plans/workflow-transition-effect-delivery.md`; `app/Base/Workflow/`
 **Agents:** `codex/gpt-6-astra`
@@ -115,7 +115,7 @@ Validation: a minimal framework fixture demonstrates the contract without embedd
 
 - [x] Document module integration, definition upgrades and run supersession through the concrete API above and the consumer runbook. `codex/gpt-6-astra`, `codex/gpt-5.6-sol`
 - [x] Complete tenancy/shared UI regression and schema upgrade rehearsal; existing business histories survive unchanged. `codex/gpt-6-astra`, `codex/gpt-5.6-sol`
-- [ ] Land upstream framework changes first; consuming repositories pin/receive them before adopting the new API.
+- [x] Land upstream framework changes first; consuming repositories pin/receive them before adopting the new API. Implementation: upstream `be4135ee8`, adopter `c4150be4`.
 
 ## Boundaries
 
