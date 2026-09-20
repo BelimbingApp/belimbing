@@ -23,6 +23,7 @@ class DataShareTransferOfferManager
         private readonly DataSharePrivateStorage $storage,
         private readonly DataShareEventRecorder $events,
         private readonly DataShareSettings $settings,
+        private readonly DataShareLanOfferHints $lanHints,
     ) {}
 
     /** @param list<string> $tables */
@@ -100,6 +101,7 @@ class DataShareTransferOfferManager
             bytes: $export->bytes,
             counts: $export->manifest['counts'],
             expiresAt: $expiresAt->toIso8601String(),
+            connectionHints: $this->lanHints->forEndpoints($endpoints),
         );
     }
 
@@ -129,6 +131,7 @@ class DataShareTransferOfferManager
             bytes: $offer->bytes,
             counts: $offer->metadata['counts'],
             expiresAt: $offer->expires_at->toIso8601String(),
+            connectionHints: $this->lanHints->forEndpoints($endpoints),
         );
     }
 

@@ -383,11 +383,29 @@ it('rejects invalid fetch limits before exporting a package', function (): void 
 it('validates offer bundles and permits only an advertised route', function (): void {
     seedGenericDataShareFixture();
     ['bundle' => $bundle] = publishGenericDataShare();
+    $value = $bundle->toArray();
+    $value['connection_hints'] = [
+        $bundle->endpoint => [
+            'address' => '192.168.10.24',
+            'tls_public_key' => 'sha256//'.base64_encode(str_repeat('p', 32)),
+        ],
+    ];
+    $hinted = DataShareTransferOfferBundle::fromJson(json_encode($value, JSON_THROW_ON_ERROR));
 
-    expect($bundle->usingEndpoint($bundle->endpoints[1])->endpoint)->toBe($bundle->endpoints[1])
+    expect($hinted->connectionHint())->toBe($value['connection_hints'][$bundle->endpoint])
+        ->and($hinted->usingEndpoint($bundle->endpoints[1])->connectionHint())->toBeNull()
+        ->and($bundle->usingEndpoint($bundle->endpoints[1])->endpoint)->toBe($bundle->endpoints[1])
         ->and(fn () => $bundle->usingEndpoint('https://other.example.test'.GENERIC_SHARE_OFFER_PATH.$bundle->offerId))
         ->toThrow(DataShareTransportException::class)
         ->and(fn () => DataShareTransferOfferBundle::fromJson('{"not":"an offer"}'))
+        ->toThrow(DataShareTransportException::class);
+
+    $value['connection_hints'][$bundle->endpoint]['address'] = 'not-an-address';
+    expect(fn () => DataShareTransferOfferBundle::fromJson(json_encode($value, JSON_THROW_ON_ERROR)))
+        ->toThrow(DataShareTransportException::class);
+
+    $value['connection_hints'][$bundle->endpoint]['address'] = '203.0.113.10';
+    expect(fn () => DataShareTransferOfferBundle::fromJson(json_encode($value, JSON_THROW_ON_ERROR)))
         ->toThrow(DataShareTransportException::class);
 });
 
@@ -885,6 +903,14 @@ it('fetches an advertised offer into bounded target Incoming without planning', 
     seedGenericDataShareFixture();
     ['bundle' => $bundle, 'export' => $export] = publishGenericDataShare();
     $bytes = Storage::disk('local')->get($export->path);
+    $value = $bundle->toArray();
+    $value['connection_hints'] = [
+        $bundle->endpoint => [
+            'address' => '192.168.10.24',
+            'tls_public_key' => 'sha256//'.base64_encode(str_repeat('p', 32)),
+        ],
+    ];
+    $bundle = DataShareTransferOfferBundle::fromJson(json_encode($value, JSON_THROW_ON_ERROR));
     becomeGenericDataShareDestination();
     Http::fake([
         $bundle->endpoint => Http::response($bytes, 200, [

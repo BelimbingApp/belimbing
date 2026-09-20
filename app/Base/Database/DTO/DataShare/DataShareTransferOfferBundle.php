@@ -11,7 +11,11 @@ final readonly class DataShareTransferOfferBundle
 {
     public const FORMAT = 'belimbing-data-share/offer/v1';
 
-    /** @param list<string> $endpoints @param array{tables: int, records: int} $counts */
+    /**
+     * @param  list<string>  $endpoints
+     * @param  array{tables: int, records: int}  $counts
+     * @param  array<string, array{address: string, tls_public_key: string}>  $connectionHints
+     */
     public function __construct(
         public string $endpoint,
         public array $endpoints,
@@ -24,6 +28,7 @@ final readonly class DataShareTransferOfferBundle
         public int $bytes,
         public array $counts,
         public string $expiresAt,
+        public array $connectionHints = [],
     ) {}
 
     public static function fromJson(string $json): self
@@ -60,6 +65,8 @@ final readonly class DataShareTransferOfferBundle
             throw DataShareTransportException::invalidOfferBundle();
         }
 
+        $connectionHints = self::connectionHints($value['connection_hints'] ?? [], $endpoints);
+
         return new self(
             endpoint: $endpoint,
             endpoints: $endpoints,
@@ -72,13 +79,14 @@ final readonly class DataShareTransferOfferBundle
             bytes: $value['bytes'],
             counts: ['tables' => $value['counts']['tables'], 'records' => $value['counts']['records']],
             expiresAt: self::expiry($value['expires_at']),
+            connectionHints: $connectionHints,
         );
     }
 
     /** @return array<string, mixed> */
     public function toArray(): array
     {
-        return [
+        $value = [
             'format' => self::FORMAT,
             'endpoint' => $this->endpoint,
             'endpoints' => $this->endpoints,
@@ -92,6 +100,12 @@ final readonly class DataShareTransferOfferBundle
             'counts' => $this->counts,
             'expires_at' => $this->expiresAt,
         ];
+
+        if ($this->connectionHints !== []) {
+            $value['connection_hints'] = $this->connectionHints;
+        }
+
+        return $value;
     }
 
     public function toJson(): string
@@ -124,7 +138,14 @@ final readonly class DataShareTransferOfferBundle
             $this->bytes,
             $this->counts,
             $this->expiresAt,
+            $this->connectionHints,
         );
+    }
+
+    /** @return array{address: string, tls_public_key: string}|null */
+    public function connectionHint(): ?array
+    {
+        return $this->connectionHints[$this->endpoint] ?? null;
     }
 
     private static function isUlid(mixed $value): bool
@@ -179,6 +200,51 @@ final readonly class DataShareTransferOfferBundle
         }
 
         return array_values(array_unique($endpoints));
+    }
+
+    /**
+     * @param  list<string>  $endpoints
+     * @return array<string, array{address: string, tls_public_key: string}>
+     */
+    private static function connectionHints(mixed $value, array $endpoints): array
+    {
+        if (! is_array($value)) {
+            throw DataShareTransportException::invalidOfferBundle();
+        }
+
+        $hints = [];
+
+        foreach ($value as $endpoint => $hint) {
+            if (! is_string($endpoint)
+                || ! in_array($endpoint, $endpoints, true)
+                || ! is_array($hint)
+                || array_keys($hint) !== ['address', 'tls_public_key']
+                || ! is_string($hint['address'])
+                || ! self::isPrivateIpv4($hint['address'])
+                || ! is_string($hint['tls_public_key'])
+                || preg_match('#^sha256//[A-Za-z0-9+/]{43}=$#', $hint['tls_public_key']) !== 1) {
+                throw DataShareTransportException::invalidOfferBundle();
+            }
+
+            $hints[$endpoint] = $hint;
+        }
+
+        return $hints;
+    }
+
+    private static function isPrivateIpv4(string $address): bool
+    {
+        if (filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false) {
+            return false;
+        }
+
+        $value = ip2long($address);
+
+        return is_int($value) && (
+            ($value & 0xFF000000) === 0x0A000000
+            || ($value & 0xFFF00000) === 0xAC100000
+            || ($value & 0xFFFF0000) === 0xC0A80000
+        );
     }
 
     private static function expiry(string $value): string

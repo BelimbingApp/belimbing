@@ -67,6 +67,7 @@ Development work may be handed among local and cloud machines by explicitly push
 - Instance identity, offer routes, offer lifetime, fetch timeout, storage paths, retention, and limits live in global `base_settings` with code defaults and an authorized settings UI; `.env` is not the operator contract.
 - Offer-based Data Share permits every direction between development, staging, and production. Instance roles remain visible metadata; the target operator decides whether to fetch, plan, and apply each reviewed offer.
 - Offer endpoints are HTTPS, contain no credentials/query/fragment, and match the exact public offer ID.
+- A local offer may carry a private IPv4 connection hint and pinned TLS public key for its advertised endpoint. The target applies both only to that fetch, avoiding machine-wide DNS and CA configuration while retaining exact server authentication.
 - Offer secrets never enter URLs, package bytes, logs, ledger metadata, or persisted plaintext; the offer record holds only application-encrypted ciphertext so an authorized source operator can recopy an available bundle.
 - A package ID cannot be rebound to different bytes or another offer. An applied package cannot be applied again.
 - Planning and receipt do not mutate domain tables. Apply remains a separate capability and explicit act.

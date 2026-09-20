@@ -37,6 +37,7 @@ trait ManagesTransferOffers
                 'bytes' => $offer->bytes,
                 'counts' => $offer->counts,
                 'expires_at' => $offer->expiresAt,
+                'secure_lan_hint' => $offer->connectionHint() !== null,
             ];
             $this->setStatus(__('Offer from :source is ready for review. Fetching it will not plan or apply data.', [
                 'source' => $offer->source->name,

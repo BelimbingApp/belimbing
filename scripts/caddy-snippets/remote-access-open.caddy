@@ -1,0 +1,2 @@
+# Imported when the operator explicitly controls ingress or keeps the listener
+# loopback-only. No additional route restriction is required.

@@ -58,6 +58,10 @@
 	# types and websockets. Biggest benefit for large pages and network access.
 	encode zstd gzip
 
+	# A local launcher may expose only the authenticated Data Share offer route
+	# to the LAN while keeping every interactive route loopback-only.
+	import {$CADDY_REMOTE_ACCESS_SNIPPET:scripts/caddy-snippets/remote-access-open.caddy}
+
 	# The Vite routes resolve only while the local development server is running.
 	# The server sends reload updates only when VITE_HOT_RELOAD is enabled.
 	import {$CADDY_VITE_SNIPPET:scripts/caddy-snippets/vite-disabled.caddy}

@@ -43,6 +43,7 @@ return [
         'expiry_minutes' => 60,
         'fetch_timeout_seconds' => 600,
         'base_urls' => '',
+        'lan_connection_hints' => env('DATA_SHARE_LAN_CONNECTION_HINTS', false),
     ],
 
     /*

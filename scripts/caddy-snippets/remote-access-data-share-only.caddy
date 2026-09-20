@@ -1,0 +1,18 @@
+# Native local development listens on the LAN so another Belimbing instance can
+# redeem an operator-delivered offer. Only that narrow bearer-authenticated GET
+# route is reachable remotely; the application UI and every mutation stay local.
+@remote_data_share_offer {
+	not remote_ip 127.0.0.1 ::1
+	path /data-share/offers/*
+}
+handle @remote_data_share_offer {
+	root * {$APP_PUBLIC_PATH}
+	php_server
+}
+
+@other_remote_request {
+	not remote_ip 127.0.0.1 ::1
+}
+handle @other_remote_request {
+	respond 404
+}

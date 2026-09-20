@@ -42,6 +42,39 @@ class DataShareOfferFetcher
     private function fetchOffer(DataShareTransferOfferBundle $offer): DataShareReceipt
     {
         $this->assertLocalPolicy($offer);
+        $requestOptions = [
+            'sink' => null,
+            'on_headers' => function (ResponseInterface $response) use ($offer): void {
+                if ($response->getStatusCode() !== 200
+                    || $response->getHeaderLine('Content-Length') !== (string) $offer->bytes) {
+                    throw DataShareTransportException::fetchFailed(__('the response status or declared byte count is invalid.'));
+                }
+            },
+            'progress' => function (int $downloadTotal, int $downloaded) use ($offer): void {
+                if ($downloadTotal > $offer->bytes || $downloaded > $offer->bytes) {
+                    throw DataShareTransportException::fetchFailed(__('the response exceeded its advertised package size.'), 413);
+                }
+            },
+        ];
+        $hint = $offer->connectionHint();
+
+        if ($hint !== null) {
+            if (! defined('CURLOPT_PINNEDPUBLICKEY') || ! defined('CURLOPT_RESOLVE')) {
+                throw DataShareTransportException::fetchFailed(__('this PHP cURL build cannot use the offer’s secure LAN connection hint.'));
+            }
+
+            $host = (string) parse_url($offer->endpoint, PHP_URL_HOST);
+            $port = (int) (parse_url($offer->endpoint, PHP_URL_PORT) ?: 443);
+
+            // The operator-delivered offer is the trust handoff. cURL connects to
+            // its LAN address while authenticating the exact advertised TLS key.
+            $requestOptions['verify'] = false;
+            $requestOptions['curl'] = [
+                CURLOPT_PINNEDPUBLICKEY => $hint['tls_public_key'],
+                CURLOPT_RESOLVE => ["{$host}:{$port}:{$hint['address']}"],
+            ];
+        }
+
         $temporary = tempnam(sys_get_temp_dir(), 'blb-data-share-fetch-');
 
         if ($temporary === false) {
@@ -49,6 +82,7 @@ class DataShareOfferFetcher
         }
 
         @chmod($temporary, 0600);
+        $requestOptions['sink'] = $temporary;
 
         try {
             try {
@@ -56,20 +90,7 @@ class DataShareOfferFetcher
                     ->withToken($offer->secret)
                     ->connectTimeout(15)
                     ->timeout($this->settings->integer('data_share.offers.fetch_timeout_seconds', 600, 30, 7200))
-                    ->withOptions([
-                        'sink' => $temporary,
-                        'on_headers' => function (ResponseInterface $response) use ($offer): void {
-                            if ($response->getStatusCode() !== 200
-                                || $response->getHeaderLine('Content-Length') !== (string) $offer->bytes) {
-                                throw DataShareTransportException::fetchFailed(__('the response status or declared byte count is invalid.'));
-                            }
-                        },
-                        'progress' => function (int $downloadTotal, int $downloaded) use ($offer): void {
-                            if ($downloadTotal > $offer->bytes || $downloaded > $offer->bytes) {
-                                throw DataShareTransportException::fetchFailed(__('the response exceeded its advertised package size.'), 413);
-                            }
-                        },
-                    ])
+                    ->withOptions($requestOptions)
                     ->get($offer->endpoint);
             } catch (ConnectionException $e) {
                 throw DataShareTransportException::fetchFailed($e->getMessage());

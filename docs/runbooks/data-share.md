@@ -27,6 +27,8 @@ Data Share permits transfers in every direction between development, staging, an
 
 On a source’s **Transport** settings, enter reachable source HTTPS base URLs, private LAN first and Cloudflare second. Belimbing appends `/data-share/offers/{offerId}`. Set the offer lifetime and target fetch timeout. On every target, review its local storage and transfer limits; target limits may be stricter than the values declared by an offer.
 
+For native Windows development, the launcher automatically exposes only the bearer-authenticated offer download route to the LAN; interactive and mutating routes remain loopback-only. A published offer includes a secure LAN connection hint when the advertised hostname has a project mkcert certificate and the source hostname resolves to a private IPv4 address. The target connects to that address only for this request and authenticates the certificate’s exact public key. Operators do not edit hosts files, install the source CA, or disable server authentication. An explicit `CADDY_BIND_ADDRESS` keeps its operator-selected behavior; loopback explicitly disables LAN hints.
+
 Before publishing:
 
 - every advertised source hostname resolves from the target;
