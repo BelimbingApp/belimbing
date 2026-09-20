@@ -14,8 +14,6 @@ use Throwable;
 class DataShareOfferFetcher
 {
     public function __construct(
-        private readonly DataShareInstanceIdentityResolver $instances,
-        private readonly DataShareDirectionPolicy $directions,
         private readonly DataShareScopeCatalog $catalog,
         private readonly DataShareUploadStager $uploads,
         private readonly DataSharePrivateStorage $storage,
@@ -133,6 +131,5 @@ class DataShareOfferFetcher
         }
 
         $this->catalog->scope($offer->scope);
-        $this->directions->assertAllowed($offer->source, $this->instances->current());
     }
 }

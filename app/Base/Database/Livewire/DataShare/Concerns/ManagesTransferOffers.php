@@ -5,8 +5,6 @@ namespace App\Base\Database\Livewire\DataShare\Concerns;
 use App\Base\Database\DTO\DataShare\DataShareTransferOfferBundle;
 use App\Base\Database\Exceptions\DataShareTransportException;
 use App\Base\Database\Models\DataShareTransferOffer;
-use App\Base\Database\Services\DataShare\DataShareDirectionPolicy;
-use App\Base\Database\Services\DataShare\DataShareInstanceIdentityResolver;
 use App\Base\Database\Services\DataShare\DataShareOfferFetcher;
 use App\Base\Database\Services\DataShare\DataShareScopeCatalog;
 use App\Base\Database\Services\DataShare\DataShareTransferOfferManager;
@@ -20,8 +18,6 @@ trait ManagesTransferOffers
 
         try {
             $offer = DataShareTransferOfferBundle::fromJson($this->offerBundle);
-            app(DataShareDirectionPolicy::class)
-                ->assertAllowed($offer->source, app(DataShareInstanceIdentityResolver::class)->current());
             app(DataShareScopeCatalog::class)->scope($offer->scope);
 
             if ($offer->isExpired()) {

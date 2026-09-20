@@ -11,14 +11,6 @@ class DataSharePolicyException extends RuntimeException
         return new self(__('Unknown Data Share instance role: :role.', ['role' => $role]));
     }
 
-    public static function directionDenied(string $source, string $target): self
-    {
-        return new self(__('Data Share direction :source → :target is denied by default policy.', [
-            'source' => $source,
-            'target' => $target,
-        ]));
-    }
-
     public static function offerNotRevocable(string $status): self
     {
         return new self(__('A Data Share transfer offer in :status status cannot be revoked.', ['status' => $status]));

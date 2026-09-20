@@ -14,8 +14,6 @@ class DataSharePackageVerifier
     public function __construct(
         private readonly DataSharePrivateStorage $storage,
         private readonly DataSharePackageReader $reader,
-        private readonly DataShareInstanceIdentityResolver $instances,
-        private readonly DataShareDirectionPolicy $directions,
         private readonly DataShareScopeCatalog $catalog,
         private readonly DataShareSettings $settings,
     ) {}
@@ -69,7 +67,6 @@ class DataSharePackageVerifier
     /** @param array<string, mixed> $manifest */
     private function assertPolicy(array $manifest, DataSharePackageExpectation $expected): void
     {
-        $current = $this->instances->current();
         $sourceRole = DataShareInstanceRole::tryFrom((string) ($manifest['source']['role'] ?? ''));
 
         if ($sourceRole === null) {
@@ -102,7 +99,6 @@ class DataSharePackageVerifier
         }
 
         $this->catalog->scope($scopeName, $manifest['scope']['tables']);
-        $this->directions->assertAllowed($source, $current);
 
         try {
             $createdAt = CarbonImmutable::parse($manifest['created_at'], 'UTC');

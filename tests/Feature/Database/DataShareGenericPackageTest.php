@@ -189,15 +189,35 @@ function seedGenericDataShareFixture(): void
     ]);
 }
 
-function becomeGenericDataShareSource(): DataShareInstanceIdentity
-{
+function becomeGenericDataShareSource(
+    DataShareInstanceRole $role = DataShareInstanceRole::Development,
+): DataShareInstanceIdentity {
+    $id = $role === DataShareInstanceRole::Development ? 'generic-source-dev' : 'generic-source-'.$role->value;
+
     setGenericDataShareSettings([
-        'data_share.instance.id' => 'generic-source-dev',
+        'data_share.instance.id' => $id,
         'data_share.instance.name' => GENERIC_SHARE_SOURCE_NAME,
-        'data_share.instance.role' => 'development',
+        'data_share.instance.role' => $role->value,
     ]);
 
-    return new DataShareInstanceIdentity('generic-source-dev', GENERIC_SHARE_SOURCE_NAME, DataShareInstanceRole::Development);
+    return new DataShareInstanceIdentity($id, GENERIC_SHARE_SOURCE_NAME, $role);
+}
+
+function becomeGenericDataShareDevelopmentDestination(): DataShareInstanceIdentity
+{
+    $identity = new DataShareInstanceIdentity(
+        'generic-destination-dev',
+        GENERIC_SHARE_DESTINATION_NAME,
+        DataShareInstanceRole::Development,
+    );
+
+    setGenericDataShareSettings([
+        'data_share.instance.id' => $identity->id,
+        'data_share.instance.name' => $identity->name,
+        'data_share.instance.role' => $identity->role->value,
+    ]);
+
+    return $identity;
 }
 
 function becomeGenericDataShareDestination(bool $production = false): DataShareInstanceIdentity
@@ -217,8 +237,9 @@ function becomeGenericDataShareDestination(bool $production = false): DataShareI
 /** @return array{bundle: DataShareTransferOfferBundle, offer: DataShareTransferOffer, export: DataShareExportResult} */
 function publishGenericDataShare(
     array $tables = [GENERIC_SHARE_PARENT, GENERIC_SHARE_CHILD],
+    DataShareInstanceRole $sourceRole = DataShareInstanceRole::Development,
 ): array {
-    becomeGenericDataShareSource();
+    becomeGenericDataShareSource($sourceRole);
     $exporter = app(DataSharePackageExporter::class);
     $preview = $exporter->preview(GENERIC_SHARE_SCOPE, $tables);
     $bundle = app(DataShareTransferOfferManager::class)->publish(
@@ -801,19 +822,9 @@ it('invalidates a reviewed plan when destination data changes', function (): voi
     );
 })->throws(DataShareApplyException::class, 'Destination data changed after preview');
 
-it('rejects a lateral target, expired package, schema drift, and tampered bytes', function (string $failure): void {
+it('rejects an expired package, schema drift, and tampered bytes', function (string $failure): void {
     seedGenericDataShareFixture();
     ['bundle' => $bundle, 'export' => $export] = publishGenericDataShare();
-
-    if ($failure === 'lateral') {
-        becomeGenericDataShareSource();
-        expect(fn () => app(DataSharePackageInbox::class)->receiveFromProtectedPath(
-            $export->path,
-            DataSharePackageExpectation::fromOffer($bundle),
-        ))->toThrow(DataSharePolicyException::class, 'denied');
-
-        return;
-    }
 
     becomeGenericDataShareDestination();
 
@@ -829,18 +840,45 @@ it('rejects a lateral target, expired package, schema drift, and tampered bytes'
     expect(fn () => app(DataSharePackageVerifier::class)->verifyPath(
         $export->path,
         DataSharePackageExpectation::fromOffer($bundle),
-    ))->toThrow($failure === 'lateral' ? DataSharePolicyException::class : DataSharePackageException::class);
-})->with(['lateral', 'expired', 'schema', 'tampered']);
+    ))->toThrow(DataSharePackageException::class);
+})->with(['expired', 'schema', 'tampered']);
 
-it('rejects an offer locally before HTTP when direction is not allowed', function (): void {
+it('accepts development to development packages', function (): void {
     seedGenericDataShareFixture();
-    ['bundle' => $bundle] = publishGenericDataShare();
-    becomeGenericDataShareSource();
-    Http::fake();
+    ['bundle' => $bundle, 'export' => $export] = publishGenericDataShare();
+    $target = becomeGenericDataShareDevelopmentDestination();
 
-    expect(fn () => app(DataShareOfferFetcher::class)->fetch($bundle))
-        ->toThrow(DataSharePolicyException::class, 'denied');
-    Http::assertNothingSent();
+    $receipt = app(DataSharePackageInbox::class)->receiveFromProtectedPath(
+        $export->path,
+        DataSharePackageExpectation::fromOffer($bundle),
+    );
+
+    expect($receipt->source_role)->toBe(DataShareInstanceRole::Development->value)
+        ->and($receipt->target_instance_id)->toBe($target->id);
+});
+
+it('fetches a production offer into development when the operator chooses it', function (): void {
+    seedGenericDataShareFixture();
+    ['bundle' => $bundle, 'export' => $export] = publishGenericDataShare(
+        sourceRole: DataShareInstanceRole::Production,
+    );
+    $bytes = Storage::disk('local')->get($export->path);
+    $target = becomeGenericDataShareDevelopmentDestination();
+    Http::fake([
+        $bundle->endpoint => Http::response($bytes, 200, [
+            'Content-Type' => GENERIC_SHARE_NDJSON,
+            'Content-Length' => (string) strlen($bytes),
+            'X-Data-Share-Offer-Id' => $bundle->offerId,
+            'X-Data-Share-Package-Id' => $bundle->packageId,
+            'X-Data-Share-Package-Sha256' => $bundle->packageSha256,
+        ]),
+    ]);
+
+    $receipt = app(DataShareOfferFetcher::class)->fetch($bundle);
+
+    expect($receipt->source_role)->toBe(DataShareInstanceRole::Production->value)
+        ->and($receipt->target_instance_id)->toBe($target->id);
+    Http::assertSentCount(1);
 });
 
 it('fetches an advertised offer into bounded target Incoming without planning', function (): void {

@@ -23,6 +23,8 @@ Open **Data Share → Settings**. Operator configuration lives in global `base_s
 
 On **Identity**, save a stable ID, recognizable name, and truthful role. Do not change identity while offers or unapplied receipts remain outstanding.
 
+Data Share permits transfers in every direction between development, staging, and production. The displayed roles inform operator review; they do not decide whether an offer may be fetched or applied.
+
 On a source’s **Transport** settings, enter reachable source HTTPS base URLs, private LAN first and Cloudflare second. Belimbing appends `/data-share/offers/{offerId}`. Set the offer lifetime and target fetch timeout. On every target, review its local storage and transfer limits; target limits may be stricter than the values declared by an offer.
 
 Before publishing:
@@ -122,7 +124,7 @@ While the offer remains available, fetching it again must produce the same packa
 | Symptom | Response |
 |---|---|
 | Malformed, expired, or revoked offer | Obtain a newly published offer. |
-| Target rejects before networking | Correct direction, scope registration, expiry, or local limits. |
+| Target rejects before networking | Correct scope registration, expiry, or local limits. |
 | Truncated or invalid response | Partial Receiving data is deleted. Retry the same offer while available. |
 | Network error after the source began streaming | Check target Incoming/History, then retry safely; source bytes remain immutable. |
 | Repeated fetch | It returns the same bytes and existing matching receipt; it does not duplicate apply. |

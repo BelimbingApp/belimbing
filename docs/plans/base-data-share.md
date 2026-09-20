@@ -37,7 +37,7 @@ The source exposes only `GET /data-share/offers/{offerId}`. The request authenti
 
 ### Target pull and local receipt
 
-The target operator pastes and reviews the offer bundle. Before networking, target policy checks source role, upward direction, advertised route membership, expiry, declared bytes, and local hard limits. The target then pulls the stream into bounded private Receiving storage, verifies response headers, exact byte count, package hash, package ID, offer ID, manifest, schema, counts, and every payload hash, and only then records a target-local Incoming receipt.
+The target operator pastes and reviews the offer bundle. Before networking, the target checks the source identity and role metadata, advertised route membership, expiry, declared bytes, and local hard limits. The target then pulls the stream into bounded private Receiving storage, verifies response headers, exact byte count, package hash, package ID, offer ID, manifest, schema, counts, and every payload hash, and only then records a target-local Incoming receipt.
 
 Receipt binds the package to the current target locally. It never plans or applies. A partial or invalid fetch is deleted and can be retried while the source offer remains available. Package ID/hash/offer identity prevent rebinding or duplicate mutation.
 
@@ -55,7 +55,7 @@ The offer shape deliberately permits future catalogs or subscriptions: a target 
 
 ### Development table mirroring is a separate contract
 
-Development work may be handed among local and cloud machines by explicitly pushing or pulling complete selected-table data through a configured provider database. Supabase is the first provider; generic PostgreSQL uses the same provider boundary. Local SQLite uses portable row transfer into migration-owned PostgreSQL schema without local PostgreSQL client tools, while two qualified PostgreSQL endpoints may use an optional native table-image mode. That destructive lateral workflow is tracked in [`base-development-table-mirror.md`](base-development-table-mirror.md). It reuses Base table ownership and the Data Share operator area but does not create offers/packages or add update/delete behavior to this plan's production-facing planner and applier.
+Development work may be handed among local and cloud machines by explicitly pushing or pulling complete selected-table data through a configured provider database. Supabase is the first provider; generic PostgreSQL uses the same provider boundary. Local SQLite uses portable row transfer into migration-owned PostgreSQL schema without local PostgreSQL client tools, while two qualified PostgreSQL endpoints may use an optional native table-image mode. That destructive complete-table workflow is tracked in [`base-development-table-mirror.md`](base-development-table-mirror.md). It reuses Base table ownership and the Data Share operator area but does not create offers/packages or add update/delete behavior to this plan's conservative planner and applier.
 
 ## Public Contract
 
@@ -65,7 +65,7 @@ Development work may be handed among local and cloud machines by explicitly push
 - Binary and invalid UTF-8 values use an explicit Base64 envelope. JSON, booleans, numbers, dates, and datetimes normalize deterministically.
 - Package, table, record, line, and scalar limits are enforced before unbounded allocation or insertion.
 - Instance identity, offer routes, offer lifetime, fetch timeout, storage paths, retention, and limits live in global `base_settings` with code defaults and an authorized settings UI; `.env` is not the operator contract.
-- Offer-based Data Share direction is upward only by default: development to staging or production, and staging to production. Lateral and downward offer transfer fail closed on the target; the separate development-only table mirror has its own policy and cannot target staging or production.
+- Offer-based Data Share permits every direction between development, staging, and production. Instance roles remain visible metadata; the target operator decides whether to fetch, plan, and apply each reviewed offer.
 - Offer endpoints are HTTPS, contain no credentials/query/fragment, and match the exact public offer ID.
 - Offer secrets never enter URLs, package bytes, logs, ledger metadata, or persisted plaintext; the offer record holds only application-encrypted ciphertext so an authorized source operator can recopy an available bundle.
 - A package ID cannot be rebound to different bytes or another offer. An applied package cannot be applied again.
@@ -100,7 +100,7 @@ Development work may be handed among local and cloud machines by explicitly push
 
 ### Phase 2 — Source offers and pull transport
 
-- [x] Add Base Settings-backed stable identity and upward direction policy. {Codex/Sol}
+- [x] Add Base Settings-backed stable instance identity and role metadata. {Codex/Sol}
 - [x] Replace target receive grants and push transport with source-owned immutable transfer offers, secret hashes, expiry, revocation, and download telemetry. {Codex/Sol}
 - [x] Make preview and packages target-neutral while binding each published package to one source offer. {Codex/Sol}
 - [x] Add the authenticated read-only streaming offer endpoint with exact response metadata and repeatable download until expiry/revocation. {Codex/Sol}
