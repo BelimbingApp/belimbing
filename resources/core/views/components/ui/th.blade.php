@@ -14,7 +14,7 @@
         default => 'text-left',
     };
     $thAttrs = $attributes->class([
-        'px-table-cell-x py-table-header-y text-[11px] font-semibold text-muted uppercase tracking-wider',
+        'px-table-cell-x py-table-header-y text-[11px] font-semibold text-muted tracking-wider',
         $alignment,
         'tabular-nums' => $numeric,
         'whitespace-nowrap' => $nowrap,
