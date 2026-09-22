@@ -57,7 +57,7 @@ trait SelectsPerPage
     /**
      * Livewire trait mount hook (<code>mount{Trait}</code>): runs once on
      * initial render, <em>after</em> <code>#[Url]</code> hydration, and never
-     * on subsequent AJAX round-trips. Applies the per-class default only when
+     * on subsequent AJAX round-trips. Applies the default page size only when
      * the URL did not supply <code>perPage</code>, then normalizes/clamps so
      * the bound selector and the actual query agree.
      */
