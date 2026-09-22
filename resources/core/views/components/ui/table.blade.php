@@ -1,3 +1,4 @@
+{{-- Tables always use square corners; do not add a rounding option. --}}
 @props([
     'caption' => null,
     'captionPosition' => 'sr-only', // sr-only | top
@@ -17,10 +18,10 @@
 
 @php
     $wrapperBase = match ($container) {
-        'card' => 'overflow-x-auto rounded-2xl border border-border-default bg-surface-card shadow-sm',
+        'card' => 'overflow-x-auto border border-border-default bg-surface-card shadow-sm',
         'flush' => 'overflow-x-auto -mx-card-inner px-card-inner',
         'plain' => 'overflow-x-auto',
-        default => 'overflow-x-auto rounded-2xl border border-border-default',
+        default => 'overflow-x-auto border border-border-default',
     };
 
     $tableText = match ($size) {

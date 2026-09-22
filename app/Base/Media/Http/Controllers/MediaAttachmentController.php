@@ -6,8 +6,8 @@ use App\Base\Authz\DTO\Actor;
 use App\Base\Media\Models\MediaAttachment;
 use App\Base\Media\Services\AttachmentSubjectAuthorizerRegistry;
 use App\Base\Tenancy\Contracts\TenantContext;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -18,7 +18,7 @@ final readonly class MediaAttachmentController
         private AttachmentSubjectAuthorizerRegistry $authorizers,
     ) {}
 
-    public function __invoke(Request $request, string $attachment): StreamedResponse|Response
+    public function __invoke(Request $request, string $attachment): StreamedResponse
     {
         $user = $request->user();
 
@@ -32,7 +32,9 @@ final readonly class MediaAttachmentController
             ->firstOrFail();
 
         $subject = $reference->subject;
-        abort_if($subject === null, 404);
+        if (! $subject instanceof Model) {
+            abort(404);
+        }
 
         $actor = Actor::forUser($user);
         $this->authorizers->for($subject)->authorizeDownload($actor, $subject, $reference);
