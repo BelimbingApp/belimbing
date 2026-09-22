@@ -9,7 +9,6 @@ use App\Core\Company\Livewire\Companies\Show;
 use App\Core\Company\Models\Company;
 use App\Core\Geonames\Models\City;
 use App\Core\Geonames\Models\Country;
-use App\Core\User\Models\User;
 use Livewire\Livewire;
 
 const COMPANY_TZ_SETTINGS_KEY = TimezoneSettings::LOCALIZATION_TIMEZONE_KEY;
@@ -46,7 +45,7 @@ beforeEach(function (): void {
     config(['settings.cache_ttl' => 0]);
     $this->settings = app(SettingsService::class);
     $this->company = Company::factory()->minimal()->create();
-    $this->user = User::factory()->create(['company_id' => $this->company->id]);
+    $this->user = createTenantOwnerUser($this->company->id);
     app(TenantContext::class)->set((int) $this->company->tenant_id);
 });
 

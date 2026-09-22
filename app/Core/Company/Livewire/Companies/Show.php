@@ -2,6 +2,7 @@
 
 namespace App\Core\Company\Livewire\Companies;
 
+use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
 use App\Base\DateTime\Services\TimezoneSettings;
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
@@ -20,6 +21,7 @@ use Illuminate\Contracts\View\View;
 
 class Show extends AbstractAddressForm
 {
+    use ChecksCapabilityAuthorization;
     use ManagesCompanyTimezone;
     use SavesValidatedFields;
     use SortsCompanyProfileRelations;
@@ -133,6 +135,10 @@ class Show extends AbstractAddressForm
 
     public function saveField(string $field, mixed $value): void
     {
+        if (! $this->checkCapability('admin.company.update')) {
+            return;
+        }
+
         $rules = [
             'name' => ['required', 'string', 'max:255'],
             'code' => ['nullable', 'string', 'max:255'],
@@ -150,6 +156,10 @@ class Show extends AbstractAddressForm
 
     public function saveStatus(string $status): void
     {
+        if (! $this->checkCapability('admin.company.update')) {
+            return;
+        }
+
         if (! in_array($status, ['active', 'suspended', 'pending', 'archived'])) {
             $this->notifyError(__('The selected company status is not valid.'));
 
@@ -163,6 +173,10 @@ class Show extends AbstractAddressForm
 
     public function saveParent(?int $parentId): void
     {
+        if (! $this->checkCapability('admin.company.update')) {
+            return;
+        }
+
         /** @var User $user */
         $user = auth()->user();
 
@@ -180,6 +194,10 @@ class Show extends AbstractAddressForm
 
     public function addActivity(string $activity): void
     {
+        if (! $this->checkCapability('admin.company.update')) {
+            return;
+        }
+
         $activity = trim($activity);
         if ($activity === '') {
             return;
@@ -194,6 +212,10 @@ class Show extends AbstractAddressForm
 
     public function removeActivity(int $index): void
     {
+        if (! $this->checkCapability('admin.company.update')) {
+            return;
+        }
+
         $activities = $this->company->scope_activities ?? [];
         unset($activities[$index]);
         $this->company->scope_activities = array_values($activities) ?: null;
@@ -203,6 +225,10 @@ class Show extends AbstractAddressForm
 
     public function saveMetadata(string $json): void
     {
+        if (! $this->checkCapability('admin.company.update')) {
+            return;
+        }
+
         $json = trim($json);
 
         if ($json === '') {
@@ -228,6 +254,10 @@ class Show extends AbstractAddressForm
 
     public function updateAddressPivot(int $addressId, string $field, mixed $value): void
     {
+        if (! $this->checkCapability('admin.company.update')) {
+            return;
+        }
+
         $allowed = ['is_primary', 'priority'];
         if (! in_array($field, $allowed)) {
             $this->notifyError(__('The selected address setting is not valid.'));
@@ -247,6 +277,10 @@ class Show extends AbstractAddressForm
 
     public function saveAddressKinds(int $addressId, array $kinds): void
     {
+        if (! $this->checkCapability('admin.company.update')) {
+            return;
+        }
+
         $valid = ['headquarters', 'billing', 'shipping', 'branch', 'other'];
         $kinds = array_values(array_intersect($kinds, $valid));
 
@@ -256,12 +290,20 @@ class Show extends AbstractAddressForm
 
     public function unlinkAddress(int $addressId): void
     {
+        if (! $this->checkCapability('admin.company.update')) {
+            return;
+        }
+
         $this->company->addresses()->detach($addressId);
         $this->notify(__('Address unlinked.'));
     }
 
     public function attachAddress(): void
     {
+        if (! $this->checkCapability('admin.company.update')) {
+            return;
+        }
+
         if ($this->attachAddressId === 0) {
             $this->notifyError(__('Choose an address before attaching.'));
 
@@ -330,6 +372,10 @@ class Show extends AbstractAddressForm
 
     public function saveAddress(): void
     {
+        if (! $this->checkCapability('admin.company.update')) {
+            return;
+        }
+
         if ($this->addressFormId === null) {
             $this->createAndAttachAddress();
         } else {

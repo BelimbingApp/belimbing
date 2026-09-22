@@ -35,6 +35,10 @@ trait ManagesCompanyTimezone
      */
     public function updatedCompanyTimezone(?string $value): void
     {
+        if (! $this->checkCapability('admin.company.update')) {
+            return;
+        }
+
         $this->persistCompanyTimezone($value);
     }
 
@@ -98,6 +102,10 @@ trait ManagesCompanyTimezone
      */
     public function acceptSuggestedTimezone(): void
     {
+        if (! $this->checkCapability('admin.company.update')) {
+            return;
+        }
+
         if (! $this->suggestedTimezone) {
             return;
         }
