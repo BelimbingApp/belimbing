@@ -80,7 +80,7 @@ class AiRun extends Model
     /**
      * The attributes that are mass assignable.
      *
-     * @var array<int, string>
+     * @var list<string>
      */
     protected $fillable = [
         'id',
@@ -154,7 +154,9 @@ class AiRun extends Model
                 throw new \LogicException('An AI run must belong to an employee with tenant ownership.');
             }
 
-            if ($run->tenant_id !== null && (int) $run->tenant_id !== (int) $employeeTenantId) {
+            $assignedTenantId = $run->getAttribute('tenant_id');
+
+            if ($assignedTenantId !== null && (int) $assignedTenantId !== (int) $employeeTenantId) {
                 throw new \LogicException('An AI run tenant must match its employee company tenant.');
             }
 

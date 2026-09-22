@@ -28,8 +28,7 @@ class RunDiagnosticService
         private readonly MetaMilestoneAnnotator $milestoneAnnotator,
         private readonly DateTimeDisplayService $dateTimeDisplay,
         private readonly TenantContext $tenants,
-    ) {
-    }
+    ) {}
 
     public function inspectRun(string $runId): ?AiRun
     {
@@ -196,7 +195,10 @@ class RunDiagnosticService
         return $this->recentRunsQuery()
             ->limit($limit)
             ->get()
-            ->map(fn (AiRun $run): array => $this->mapRecentRun($run))
+            ->map(function ($run): array {
+                /** @var AiRun $run */
+                return $this->mapRecentRun($run);
+            })
             ->values()
             ->all();
     }

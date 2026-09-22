@@ -180,7 +180,7 @@ class ControlPlane extends Component
         $service = app(HealthAndPresenceService::class);
         $tenantId = app(TenantContext::class)->requireTenantId();
         $providerNames = AiProvider::query()
-            ->whereHas('company', fn ($query) => $query->forTenant($tenantId))
+            ->whereHas('company', fn ($query) => $query->where('companies.tenant_id', $tenantId))
             ->llm()
             ->active()
             ->orderBy('display_name')
@@ -201,7 +201,7 @@ class ControlPlane extends Component
         $agentIsVisible = $this->healthAgentId > 0
             && Employee::query()
                 ->whereKey($this->healthAgentId)
-                ->whereHas('company', fn ($query) => $query->forTenant($tenantId))
+                ->whereHas('company', fn ($query) => $query->where('companies.tenant_id', $tenantId))
                 ->agent()
                 ->exists();
 
@@ -359,7 +359,10 @@ class ControlPlane extends Component
         $recentRuns = $diagnostics
             ->recentRunsQuery($this->recentRunsSearch)
             ->paginate(25)
-            ->through(fn ($run): array => $diagnostics->mapRecentRun($run));
+            ->through(function ($run) use ($diagnostics): array {
+                /** @var AiRun $run */
+                return $diagnostics->mapRecentRun($run);
+            });
 
         $runView = $this->inspectRunId !== ''
             ? $diagnostics->buildRunView(
@@ -410,7 +413,7 @@ class ControlPlane extends Component
     {
         $tenantId = app(TenantContext::class)->requireTenantId();
         $this->agentOptions = Employee::query()
-            ->whereHas('company', fn ($query) => $query->forTenant($tenantId))
+            ->whereHas('company', fn ($query) => $query->where('companies.tenant_id', $tenantId))
             ->agent()
             ->orderBy('short_name')
             ->orderBy('full_name')

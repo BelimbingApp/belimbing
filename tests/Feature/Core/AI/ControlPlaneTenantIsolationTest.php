@@ -134,6 +134,8 @@ it('scopes control plane runs, health, agents, and providers to the active tenan
 });
 
 it('rejects foreign run detail and wire-log reads before serving files', function (): void {
+    $this->withoutVite();
+
     $user = createAdminUser();
     [, $ownRun] = createTenantControlPlaneRun(
         $user->company,
