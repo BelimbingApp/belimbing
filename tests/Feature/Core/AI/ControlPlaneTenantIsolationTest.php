@@ -22,6 +22,7 @@ beforeEach(function (): void {
 
     File::ensureDirectoryExists($this->testingStoragePath);
     app()->useStoragePath($this->testingStoragePath);
+    config()->set('ai.workspace_path', storage_path('app/ai/workspace'));
 });
 
 afterEach(function (): void {
@@ -177,4 +178,39 @@ it('rejects foreign run detail and wire-log reads before serving files', functio
 
     expect(app(RunDiagnosticService::class)->wireLogDiskUsageBytes())
         ->toBe(File::size($wireLogDirectory.'/'.$ownRun->id.'.jsonl'));
+});
+
+it('rejects malformed persisted session ids before diagnostic transcript lookup', function (): void {
+    $user = createAdminUser();
+    [$employee, $run] = createTenantControlPlaneRun(
+        $user->company,
+        TENANT_CONTROL_PLANE_OWN_RUN_ID,
+        AiRunStatus::Succeeded->value,
+    );
+    $run->session_id = '../../../diagnostic-secret';
+    $run->save();
+
+    $workspace = (string) config('ai.workspace_path');
+    File::ensureDirectoryExists($workspace.'/'.$employee->id.'/sessions');
+    $escapedTranscript = dirname($workspace).'/diagnostic-secret.jsonl';
+    File::ensureDirectoryExists(dirname($escapedTranscript));
+    File::put($escapedTranscript, implode("\n", [
+        json_encode([
+            'role' => 'user',
+            'content' => 'outside-tenant-prompt-secret',
+            'timestamp' => '2026-01-01T00:00:00+00:00',
+        ], JSON_THROW_ON_ERROR),
+        json_encode([
+            'role' => 'assistant',
+            'content' => 'outside-tenant-transcript-secret',
+            'timestamp' => '2026-01-01T00:00:01+00:00',
+            'run_id' => $run->id,
+        ], JSON_THROW_ON_ERROR),
+    ])."\n");
+
+    app(TenantContext::class)->set((int) $user->tenant_id);
+    $diagnostics = app(RunDiagnosticService::class);
+
+    expect($diagnostics->runTranscript($run))->toBe([])
+        ->and($diagnostics->triggeringPrompt($run))->toBeNull();
 });

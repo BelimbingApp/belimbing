@@ -7,10 +7,14 @@ use App\Base\Support\Json as BlbJson;
 use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\AI\DTO\ControlPlane\RunInspection;
 use App\Core\AI\DTO\Message;
+use App\Core\AI\Exceptions\InvalidSessionIdException;
+use App\Core\AI\Exceptions\SessionPathContainmentException;
 use App\Core\AI\Models\AiRun;
 use App\Core\AI\Models\AiRunCall;
 use App\Core\AI\Services\ControlPlane\WireLog\MetaMilestoneAnnotator;
 use App\Core\AI\Values\CallUsage;
+use App\Core\AI\Values\SessionId;
+use App\Core\AI\Values\SessionPath;
 use App\Core\Employee\Models\Employee;
 use DateTimeImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -365,17 +369,22 @@ class RunDiagnosticService
             return null;
         }
 
-        $base = rtrim((string) config('ai.workspace_path'), '/').'/'.$run->employee_id.'/sessions';
+        try {
+            $sessionId = SessionId::fromString($run->session_id);
+            $base = rtrim((string) config('ai.workspace_path'), '/\\').'/'.$run->employee_id.'/sessions';
 
-        if ($run->employee_id === Employee::LARA_ID) {
-            if (! is_int($run->acting_for_user_id)) {
-                return null;
+            if ($run->employee_id === Employee::LARA_ID) {
+                if (! is_int($run->acting_for_user_id)) {
+                    return null;
+                }
+
+                $base .= '/'.$run->acting_for_user_id;
             }
 
-            $base .= '/'.$run->acting_for_user_id;
+            return SessionPath::transcript($base, $sessionId);
+        } catch (InvalidSessionIdException|SessionPathContainmentException) {
+            return null;
         }
-
-        return $base.'/'.$run->session_id.'.jsonl';
     }
 
     private function runBelongsToCurrentTenant(AiRun $run): bool

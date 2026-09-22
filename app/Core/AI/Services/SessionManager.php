@@ -8,6 +8,7 @@ use App\Core\AI\DTO\Session;
 use App\Core\AI\Exceptions\InvalidSessionIdException;
 use App\Core\AI\Exceptions\SessionPathContainmentException;
 use App\Core\AI\Values\SessionId;
+use App\Core\AI\Values\SessionPath;
 use App\Core\Employee\Models\Employee;
 use App\Core\User\Models\User;
 use DateTimeImmutable;
@@ -326,7 +327,7 @@ class SessionManager
         $root = $this->sessionsPath($employeeId);
         $id = SessionId::fromString($sessionId);
 
-        return $this->containedSessionPath($root, [$id->value.'.meta.json']);
+        return SessionPath::meta($root, $id);
     }
 
     /**
@@ -337,7 +338,7 @@ class SessionManager
         $root = $this->sessionsPath($employeeId);
         $id = SessionId::fromString($sessionId);
 
-        return $this->containedSessionPath($root, [$id->value.'.jsonl']);
+        return SessionPath::transcript($root, $id);
     }
 
     /**
@@ -348,69 +349,7 @@ class SessionManager
         $root = $this->sessionsPath($employeeId);
         $id = SessionId::fromString($sessionId);
 
-        return $this->containedSessionPath($root, ['attachments', $id->value]);
-    }
-
-    /**
-     * Resolve a session-owned path and prove it remains beneath the authorized session root.
-     *
-     * @param  non-empty-list<string>  $segments
-     */
-    private function containedSessionPath(string $sessionRoot, array $segments): string
-    {
-        $root = $this->canonicalizePath($sessionRoot);
-        $candidate = $this->canonicalizePath($root.DIRECTORY_SEPARATOR.implode(DIRECTORY_SEPARATOR, $segments));
-        $comparableRoot = $this->comparablePath($root);
-        $comparableCandidate = $this->comparablePath($candidate);
-
-        if (! str_starts_with($comparableCandidate, $comparableRoot.DIRECTORY_SEPARATOR)) {
-            throw new SessionPathContainmentException;
-        }
-
-        return $candidate;
-    }
-
-    /**
-     * Resolve existing symlinks while retaining safe, not-yet-created path segments.
-     */
-    private function canonicalizePath(string $path): string
-    {
-        $cursor = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path);
-        $unresolved = [];
-
-        while (($resolved = realpath($cursor)) === false) {
-            if (is_link($cursor)) {
-                throw new SessionPathContainmentException;
-            }
-
-            $parent = dirname($cursor);
-
-            if ($parent === $cursor) {
-                throw new SessionPathContainmentException;
-            }
-
-            array_unshift($unresolved, basename($cursor));
-            $cursor = $parent;
-        }
-
-        foreach ($unresolved as $segment) {
-            if ($segment === '' || $segment === '.') {
-                continue;
-            }
-
-            $resolved = $segment === '..'
-                ? dirname($resolved)
-                : rtrim($resolved, '/\\').DIRECTORY_SEPARATOR.$segment;
-        }
-
-        return $resolved;
-    }
-
-    private function comparablePath(string $path): string
-    {
-        $normalized = rtrim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path), DIRECTORY_SEPARATOR);
-
-        return PHP_OS_FAMILY === 'Windows' ? strtolower($normalized) : $normalized;
+        return SessionPath::attachments($root, $id);
     }
 
     /**

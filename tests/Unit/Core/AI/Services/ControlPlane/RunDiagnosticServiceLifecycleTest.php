@@ -1,11 +1,13 @@
 <?php
 
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\AI\Enums\AiRunStatus;
 use App\Core\AI\Enums\RunEventType;
 use App\Core\AI\Models\AiRun;
 use App\Core\AI\Models\AiRunEvent;
 use App\Core\AI\Services\ControlPlane\RunDiagnosticService;
 use App\Core\AI\Services\ControlPlane\WireLogger;
+use App\Core\Employee\Models\Employee;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\File;
@@ -23,6 +25,11 @@ beforeEach(function (): void {
     config()->set('ai.wire_logging.enabled', true);
 
     $this->wireLogRoot = storage_path('framework/testing/rdlc-wire-'.Str::random(16));
+    $tenantId = Employee::query()
+        ->join('companies', 'companies.id', '=', 'employees.company_id')
+        ->where('employees.id', RDLC_EMPLOYEE_ID)
+        ->value('companies.tenant_id');
+    app(TenantContext::class)->set((int) $tenantId);
 
     app()->instance(WireLogger::class, new class($this->wireLogRoot) extends WireLogger
     {
