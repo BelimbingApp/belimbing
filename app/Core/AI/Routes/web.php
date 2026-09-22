@@ -14,6 +14,7 @@ use App\Core\AI\Livewire\RunDetail;
 use App\Core\AI\Livewire\Setup\Lara;
 use App\Core\AI\Livewire\TaskModels;
 use App\Core\AI\Livewire\Tools;
+use App\Core\AI\Values\SessionId;
 use Illuminate\Support\Facades\Route;
 
 // Inbound messaging webhook — unauthenticated (external platforms POST here)
@@ -33,7 +34,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('api/ai/chat/attachments/{employeeId}/{sessionId}/{attachmentId}', ChatAttachmentController::class)
         ->name('ai.chat.attachments.show')
         ->whereNumber('employeeId')
-        ->where('sessionId', '[0-9]{8}-[0-9]{6}(?:-[a-z0-9]{6})?')
+        ->where('sessionId', SessionId::ROUTE_PATTERN)
         ->where('attachmentId', '[a-zA-Z0-9_]+');
     // Lara setup
     Route::get('admin/setup/lara', Lara::class)

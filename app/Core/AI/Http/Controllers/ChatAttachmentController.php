@@ -29,7 +29,7 @@ class ChatAttachmentController
             abort(404);
         }
 
-        $dir = $sessionManager->sessionsPath($employeeId).'/attachments/'.$sessionId;
+        $dir = $sessionManager->attachmentsPath($employeeId, $sessionId);
         if (! is_dir($dir)) {
             abort(404);
         }
