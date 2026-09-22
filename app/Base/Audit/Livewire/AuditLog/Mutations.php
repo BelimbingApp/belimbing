@@ -37,26 +37,6 @@ class Mutations extends Component
 
     public string $sortDir = 'desc';
 
-    /**
-     * Audit default page size (tuned for dense, long-retained rows). Applied by
-     * the {@see SelectsPerPage} trait's mount hook only when the URL does not
-     * supply `?perPage=`, so shared/bookmarked URLs keep their page size.
-     */
-    protected function defaultPerPage(): int
-    {
-        return 20;
-    }
-
-    /**
-     * Per-page options for the audit log.
-     *
-     * @return list<int>
-     */
-    public function perPageOptions(): array
-    {
-        return [10, 20, 50, 100];
-    }
-
     private const SORTABLE = [
         'occurred_at' => 'base_audit_mutations.occurred_at',
         'event' => 'base_audit_mutations.event',

@@ -2,7 +2,7 @@
 
 use App\Base\Foundation\Livewire\Concerns\SelectsPerPage;
 
-function perPageHarness(array $options = [10, 25, 50, 100], int $default = 25): object
+function perPageHarness(array $options = [25, 50, 100, 300], int $default = 25): object
 {
     return new class($options, $default)
     {
@@ -56,7 +56,7 @@ it('snaps back to the first option when below the smallest option', function ():
 
     $harness->updatedPerPage(1);
 
-    expect($harness->perPage)->toBe(10);
+    expect($harness->perPage)->toBe(25);
 });
 
 it('caps an over-max value at the largest option', function (): void {
@@ -64,14 +64,14 @@ it('caps an over-max value at the largest option', function (): void {
 
     $harness->updatedPerPage(9999);
 
-    expect($harness->perPage)->toBe(100);
+    expect($harness->perPage)->toBe(300);
 });
 
 it('clamps to a sane max and never resets the page when no option list is declared', function (): void {
     // clampedPerPage() is a pure read — it must not trigger resetPage().
     $harness = perPageHarness(options: [], default: 25);
 
-    expect($harness->clampedPerPage(300))->toBe(200)
+    expect($harness->clampedPerPage(500))->toBe(300)
         ->and($harness->clampedPerPage(0))->toBe(1)
         ->and($harness->pageReset)->toBeFalse();
 });
@@ -85,7 +85,7 @@ it('coerces non-numeric input defensively by keeping the current page size', fun
         ->and($harness->pageReset)->toBeTrue();
 });
 
-function perPageMountHarness(bool $urlHasPerPage, int $defaultPerPage = 20): object
+function perPageMountHarness(bool $urlHasPerPage, int $defaultPerPage = 25): object
 {
     return new class($urlHasPerPage, $defaultPerPage)
     {
@@ -110,11 +110,6 @@ function perPageMountHarness(bool $urlHasPerPage, int $defaultPerPage = 20): obj
             return $this->urlHasPerPage;
         }
 
-        public function perPageOptions(): array
-        {
-            return [10, 20, 50, 100];
-        }
-
         public function resetPage(): void
         {
             $this->pageReset = true;
@@ -122,16 +117,16 @@ function perPageMountHarness(bool $urlHasPerPage, int $defaultPerPage = 20): obj
     };
 }
 
-it('applies the per-class default page size when the URL does not supply perPage', function (): void {
-    $harness = perPageMountHarness(urlHasPerPage: false, defaultPerPage: 20);
+it('applies the default page size when the URL does not supply perPage', function (): void {
+    $harness = perPageMountHarness(urlHasPerPage: false, defaultPerPage: 25);
 
     $harness->mountSelectsPerPage();
 
-    expect($harness->perPage)->toBe(20);
+    expect($harness->perPage)->toBe(25);
 });
 
-it('preserves a URL-supplied perPage over the per-class default', function (): void {
-    $harness = perPageMountHarness(urlHasPerPage: true, defaultPerPage: 20);
+it('preserves a URL-supplied perPage over the default', function (): void {
+    $harness = perPageMountHarness(urlHasPerPage: true, defaultPerPage: 25);
     $harness->perPage = 50; // simulate #[Url] hydration from ?perPage=50
 
     $harness->mountSelectsPerPage();
@@ -140,10 +135,10 @@ it('preserves a URL-supplied perPage over the per-class default', function (): v
 });
 
 it('clamps an out-of-range URL perPage during the mount hook', function (): void {
-    $harness = perPageMountHarness(urlHasPerPage: true, defaultPerPage: 20);
+    $harness = perPageMountHarness(urlHasPerPage: true, defaultPerPage: 25);
     $harness->perPage = 9999; // stale/hand-crafted ?perPage=9999
 
     $harness->mountSelectsPerPage();
 
-    expect($harness->perPage)->toBe(100);
+    expect($harness->perPage)->toBe(300);
 });

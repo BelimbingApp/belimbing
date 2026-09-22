@@ -60,17 +60,18 @@ it('does not render a relative page-2 href that would double the path', function
         ->and($html)->not->toContain('href="admin/geonames/admin/geonames/countries');
 });
 
-it('renders the per-page selector without a 10 option, with a 300 option, reacting live', function (): void {
+it('renders the per-page selector with the framework-standard options, reacting live', function (): void {
     GeonamesSeeder::countries(25);
 
     $html = $this->get(route('admin.geonames.countries.index'))->assertOk()->getContent();
 
     expect($html)
-        ->toContain('<option value="300"')
-        ->toContain('<option value="20"')
+        ->toContain('<option value="25"')
         ->toContain('<option value="50"')
         ->toContain('<option value="100"')
+        ->toContain('<option value="300"')
         ->not->toContain('<option value="10"')
+        ->not->toContain('<option value="20"')
         // Livewire 3 `wire:model` is deferred; the selector must use `.live`
         // or changing it never sends a round-trip.
         ->toContain('wire:model.live="perPage"');

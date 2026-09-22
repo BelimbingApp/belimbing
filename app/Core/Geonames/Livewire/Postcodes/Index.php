@@ -38,24 +38,6 @@ class Index extends Component
 
     public string $sortDir = 'asc';
 
-    /**
-     * Preserve the historical default page size for the postcodes list.
-     * Applied by the {@see SelectsPerPage} mount hook only when the URL does
-     * not supply `?perPage=`.
-     */
-    protected function defaultPerPage(): int
-    {
-        return 20;
-    }
-
-    /**
-     * @return list<int>
-     */
-    public function perPageOptions(): array
-    {
-        return [20, 50, 100, 300];
-    }
-
     private const SORTABLE = [
         'country_name' => 'country_name',
         'postcode' => 'geonames_postcodes.postcode',

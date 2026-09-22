@@ -13,31 +13,31 @@ use Livewire\WithPagination;
  * to expose a URL-persistent, option-clamped <code>$perPage</code> property and a
  * per-page option list for the {@see x_ui_pagination} Blade component.
  *
- * The default page size and option set are overridable per class via the
- * {@see defaultPerPage()} hook and {@see PER_PAGE_OPTIONS} constant. Override
- * {@see perPageOptions()} to return an empty array to hide the selector.
+ * The option set and default page size are framework-standard
+ * ({@see PER_PAGE_OPTIONS}, {@see defaultPerPage()}). Override
+ * {@see perPageOptions()} only to return an empty array and hide the selector.
  */
 trait SelectsPerPage
 {
     /** Maximum page size when no explicit option list is declared. */
-    protected const int PER_PAGE_MAX = 200;
+    protected const int PER_PAGE_MAX = 300;
 
     /**
-     * Default per-page option list. Override per class to change the selector.
+     * Framework-standard per-page option list.
      *
      * @var list<int>
      */
-    protected const array PER_PAGE_OPTIONS = [10, 25, 50, 100];
+    protected const array PER_PAGE_OPTIONS = [25, 50, 100, 300];
 
     #[Url]
     public int $perPage = 25;
 
     /**
-     * Per-class default page size applied when the URL does not supply
-     * <code>?perPage=</code>. Override instead of writing a <code>mount()</code>
-     * guard — Livewire hydrates <code>#[Url]</code> properties <em>before</em>
-     * the component's <code>mount()</code>, so an unconditional assignment there
-     * would clobber a shared/bookmarked URL.
+     * Default page size applied when the URL does not supply
+     * <code>?perPage=</code>. Kept as a hook so Livewire can apply it after
+     * <code>#[Url]</code> hydration — Livewire hydrates URL properties
+     * <em>before</em> the component's <code>mount()</code>, so an unconditional
+     * assignment there would clobber a shared/bookmarked URL.
      */
     protected function defaultPerPage(): int
     {

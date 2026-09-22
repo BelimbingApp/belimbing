@@ -26,24 +26,6 @@ class Index extends Component
 
     public string $sortDir = 'asc';
 
-    /**
-     * Preserve the historical default page size for the countries list.
-     * Applied by the {@see SelectsPerPage} mount hook only when the URL does
-     * not supply `?perPage=`.
-     */
-    protected function defaultPerPage(): int
-    {
-        return 20;
-    }
-
-    /**
-     * @return list<int>
-     */
-    public function perPageOptions(): array
-    {
-        return [20, 50, 100, 300];
-    }
-
     /** Allowed sort columns mapped to their DB column names. */
     private const SORTABLE = [
         'iso' => 'geonames_countries.iso',

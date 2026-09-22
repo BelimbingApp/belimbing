@@ -13,7 +13,7 @@ beforeEach(function (): void {
 
 describe('countries list', function (): void {
     it('falls back to the default page size when the URL does not supply perPage', function (): void {
-        assertGeonamesPerPage(CountriesIndex::class, 'countries', GeonamesSeeder::countries(...), null, 20);
+        assertGeonamesPerPage(CountriesIndex::class, 'countries', GeonamesSeeder::countries(...), null, 25);
     });
 
     it('honors a URL-supplied perPage over the default', function (): void {
@@ -36,7 +36,7 @@ describe('countries list', function (): void {
 
 describe('admin1 list', function (): void {
     it('falls back to the default page size when the URL does not supply perPage', function (): void {
-        assertGeonamesPerPage(Admin1Index::class, 'admin1s', GeonamesSeeder::admin1(...), null, 20);
+        assertGeonamesPerPage(Admin1Index::class, 'admin1s', GeonamesSeeder::admin1(...), null, 25);
     });
 
     it('honors a URL-supplied perPage over the default', function (): void {
@@ -50,7 +50,7 @@ describe('admin1 list', function (): void {
 
 describe('postcodes list', function (): void {
     it('falls back to the default page size when the URL does not supply perPage', function (): void {
-        assertGeonamesPerPage(PostcodesIndex::class, 'postcodes', GeonamesSeeder::postcodes(...), null, 20);
+        assertGeonamesPerPage(PostcodesIndex::class, 'postcodes', GeonamesSeeder::postcodes(...), null, 25);
     });
 
     it('honors a URL-supplied perPage over the default', function (): void {
