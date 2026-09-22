@@ -18,11 +18,11 @@ use Illuminate\Support\Carbon;
  * @property string $subject_type
  * @property int|string $subject_id
  * @property string $state
- * @property string $uploaded_by_type
+ * @property PrincipalType $uploaded_by_type
  * @property int $uploaded_by_id
  * @property Carbon|null $submitted_at
  * @property-read MediaAsset $mediaAsset
- * @property-read Model $subject
+ * @property-read Model|null $subject
  */
 class MediaAttachment extends Model
 {
