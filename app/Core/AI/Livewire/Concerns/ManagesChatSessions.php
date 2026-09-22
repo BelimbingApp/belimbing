@@ -8,6 +8,7 @@ use App\Core\AI\Models\AiRun;
 use App\Core\AI\Services\MessageManager;
 use App\Core\AI\Services\Runtime\SimpleTaskExecutor;
 use App\Core\AI\Services\SessionManager;
+use App\Core\AI\Values\SessionId;
 use App\Core\User\Models\User;
 use Illuminate\Support\Str;
 use Throwable;
@@ -124,10 +125,12 @@ trait ManagesChatSessions
      */
     public function selectSession(string $sessionId): void
     {
-        $this->selectedSessionId = $sessionId;
         $this->lastRunMeta = null;
         $this->syncSelectedSessionState($sessionId, dispatchSelectionEvent: true);
-        $this->dispatch('agent-chat-focus-composer');
+
+        if ($this->selectedSessionId !== null) {
+            $this->dispatch('agent-chat-focus-composer');
+        }
     }
 
     /**
@@ -434,10 +437,22 @@ trait ManagesChatSessions
             return;
         }
 
-        $session = app(SessionManager::class)->get($this->employeeId, $sessionId);
-        $this->selectedModel = $this->normalizeModelOverride($session?->llm['model_override'] ?? null);
+        $validatedId = SessionId::fromString($sessionId)->value;
+        $session = collect(app(SessionManager::class)->list($this->employeeId))
+            ->first(fn ($candidate): bool => $candidate->id === $validatedId);
 
-        $overrideEffort = $session?->llm['execution_controls_override']['reasoning']['effort'] ?? null;
+        if ($session === null) {
+            $this->selectedSessionId = null;
+            $this->selectedModel = null;
+            $this->selectedEffort = null;
+
+            return;
+        }
+
+        $this->selectedSessionId = $session->id;
+        $this->selectedModel = $this->normalizeModelOverride($session->llm['model_override'] ?? null);
+
+        $overrideEffort = $session->llm['execution_controls_override']['reasoning']['effort'] ?? null;
         $this->selectedEffort = $this->normalizeEffortSelection($overrideEffort);
 
         if ($overrideEffort !== null && $this->selectedEffort === null) {
@@ -448,10 +463,10 @@ trait ManagesChatSessions
             return;
         }
 
-        $activeTurn = $this->findActiveTurnForSession($sessionId);
+        $activeTurn = $this->findActiveTurnForSession($session->id);
         $this->dispatch(
             'agent-chat-session-selected',
-            sessionId: $sessionId,
+            sessionId: $session->id,
             activeTurnId: $activeTurn?->id,
             activeRunPhase: $activeTurn?->current_phase?->value,
             activeTurnLabel: $activeTurn?->current_label ?? $activeTurn?->current_phase?->label(),
