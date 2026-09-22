@@ -7,7 +7,7 @@ beforeEach(function (): void {
 });
 
 it('renders absolute page-2 hrefs and wire:click for the countries list', function (): void {
-    GeonamesSeeder::countries(25);
+    GeonamesSeeder::countries(26);
 
     $html = $this->get(route('admin.geonames.countries.index'))->assertOk()->getContent();
 
@@ -22,7 +22,7 @@ it('renders absolute page-2 hrefs and wire:click for the countries list', functi
 });
 
 it('renders absolute page-2 hrefs and wire:click for the admin1 list', function (): void {
-    GeonamesSeeder::admin1(25);
+    GeonamesSeeder::admin1(26);
 
     $html = $this->get(route('admin.geonames.admin1.index'))->assertOk()->getContent();
 
@@ -37,7 +37,7 @@ it('renders absolute page-2 hrefs and wire:click for the admin1 list', function 
 });
 
 it('renders absolute page-2 hrefs and wire:click for the postcodes list', function (): void {
-    GeonamesSeeder::postcodes(25);
+    GeonamesSeeder::postcodes(26);
 
     $html = $this->get(route('admin.geonames.postcodes.index'))->assertOk()->getContent();
 
@@ -52,7 +52,7 @@ it('renders absolute page-2 hrefs and wire:click for the postcodes list', functi
 });
 
 it('does not render a relative page-2 href that would double the path', function (): void {
-    GeonamesSeeder::countries(25);
+    GeonamesSeeder::countries(26);
 
     $html = $this->get(route('admin.geonames.countries.index'))->assertOk()->getContent();
 
