@@ -22,7 +22,7 @@ beforeEach(function (): void {
 
     File::ensureDirectoryExists($this->testingStoragePath);
     app()->useStoragePath($this->testingStoragePath);
-    config()->set('ai.workspace_path', storage_path('app/ai/workspace'));
+    config()->set('ai.workspace_path', $this->testingStoragePath.'/ai/workspace');
 });
 
 afterEach(function (): void {
