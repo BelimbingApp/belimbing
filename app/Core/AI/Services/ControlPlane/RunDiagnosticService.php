@@ -1,8 +1,10 @@
 <?php
+
 namespace App\Core\AI\Services\ControlPlane;
 
 use App\Base\DateTime\Contracts\DateTimeDisplayService;
 use App\Base\Support\Json as BlbJson;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\AI\DTO\ControlPlane\RunInspection;
 use App\Core\AI\DTO\Message;
 use App\Core\AI\Models\AiRun;
@@ -25,11 +27,14 @@ class RunDiagnosticService
         private readonly WireLogReadableFormatter $wireLogFormatter,
         private readonly MetaMilestoneAnnotator $milestoneAnnotator,
         private readonly DateTimeDisplayService $dateTimeDisplay,
-    ) {}
+        private readonly TenantContext $tenants,
+    ) {
+    }
 
     public function inspectRun(string $runId): ?AiRun
     {
         return AiRun::query()
+            ->forTenant($this->tenants->requireTenantId())
             ->with(['employee', 'actingForUser'])
             ->find($runId);
     }
@@ -199,6 +204,7 @@ class RunDiagnosticService
     public function recentRunsQuery(string $search = ''): Builder
     {
         $query = AiRun::query()
+            ->forTenant($this->tenants->requireTenantId())
             ->with(['employee', 'calls'])
             ->orderByDesc('started_at')
             ->orderByDesc('created_at');
@@ -236,7 +242,10 @@ class RunDiagnosticService
 
     public function wireLogDiskUsageBytes(): int
     {
-        return $this->wireLogger->totalBytes();
+        return AiRun::query()
+            ->forTenant($this->tenants->requireTenantId())
+            ->pluck('id')
+            ->sum(fn (string $runId): int => $this->wireLogger->footprintBytes($runId));
     }
 
     /**
@@ -244,6 +253,10 @@ class RunDiagnosticService
      */
     public function runTranscript(AiRun $run): array
     {
+        if (! $this->runBelongsToCurrentTenant($run)) {
+            return [];
+        }
+
         $allMessages = $this->readTranscriptMessages($run);
 
         $entries = array_values(array_filter(
@@ -265,6 +278,10 @@ class RunDiagnosticService
 
     public function triggeringPrompt(AiRun $run): ?Message
     {
+        if (! $this->runBelongsToCurrentTenant($run)) {
+            return null;
+        }
+
         $messages = $this->readTranscriptMessages($run);
 
         if ($messages === []) {
@@ -357,6 +374,11 @@ class RunDiagnosticService
         }
 
         return $base.'/'.$run->session_id.'.jsonl';
+    }
+
+    private function runBelongsToCurrentTenant(AiRun $run): bool
+    {
+        return (int) $run->tenant_id === $this->tenants->requireTenantId();
     }
 
     /**

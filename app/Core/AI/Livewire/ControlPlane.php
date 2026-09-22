@@ -10,6 +10,7 @@ use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Settings\Contracts\SettingsService;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\AI\DTO\ControlPlane\HealthSnapshot;
 use App\Core\AI\DTO\ControlPlane\LifecycleRequest as LifecycleRequestDTO;
 use App\Core\AI\Enums\LifecycleAction;
@@ -176,7 +177,9 @@ class ControlPlane extends Component
     public function loadProviderSnapshots(): void
     {
         $service = app(HealthAndPresenceService::class);
+        $tenantId = app(TenantContext::class)->requireTenantId();
         $providerNames = AiProvider::query()
+            ->whereHas('company', fn ($query) => $query->forTenant($tenantId))
             ->llm()
             ->active()
             ->orderBy('display_name')
@@ -193,7 +196,15 @@ class ControlPlane extends Component
 
     public function loadAgentSnapshot(): void
     {
-        if ($this->healthAgentId <= 0) {
+        $tenantId = app(TenantContext::class)->requireTenantId();
+        $agentIsVisible = $this->healthAgentId > 0
+            && Employee::query()
+                ->whereKey($this->healthAgentId)
+                ->whereHas('company', fn ($query) => $query->forTenant($tenantId))
+                ->agent()
+                ->exists();
+
+        if (! $agentIsVisible) {
             $this->agentSnapshot = null;
 
             return;
@@ -207,24 +218,25 @@ class ControlPlane extends Component
     public function loadRunHealthCounts(): void
     {
         $now = now();
+        $runs = AiRun::query()->forTenant(app(TenantContext::class)->requireTenantId());
 
         $this->runHealthCounts = [
-            'queued' => AiRun::query()->where('status', 'queued')->count(),
-            'booting' => AiRun::query()->where('status', 'booting')->count(),
-            'running' => AiRun::query()->where('status', 'running')->count(),
-            'stale_queued' => AiRun::query()
+            'queued' => (clone $runs)->where('status', 'queued')->count(),
+            'booting' => (clone $runs)->where('status', 'booting')->count(),
+            'running' => (clone $runs)->where('status', 'running')->count(),
+            'stale_queued' => (clone $runs)
                 ->whereIn('status', ['queued', 'booting'])
                 ->where('created_at', '<', $now->copy()->subMinutes(10))
                 ->count(),
-            'stale_running' => AiRun::query()
+            'stale_running' => (clone $runs)
                 ->where('status', 'running')
                 ->where('created_at', '<', $now->copy()->subMinutes(30))
                 ->count(),
-            'failed_last_hour' => AiRun::query()
+            'failed_last_hour' => (clone $runs)
                 ->where('status', 'failed')
                 ->where('finished_at', '>=', $now->copy()->subHour())
                 ->count(),
-            'completed_last_hour' => AiRun::query()
+            'completed_last_hour' => (clone $runs)
                 ->where('status', 'completed')
                 ->where('finished_at', '>=', $now->copy()->subHour())
                 ->count(),
@@ -391,7 +403,9 @@ class ControlPlane extends Component
 
     private function loadAgentOptions(): void
     {
+        $tenantId = app(TenantContext::class)->requireTenantId();
         $this->agentOptions = Employee::query()
+            ->whereHas('company', fn ($query) => $query->forTenant($tenantId))
             ->agent()
             ->orderBy('short_name')
             ->orderBy('full_name')
@@ -402,6 +416,10 @@ class ControlPlane extends Component
             ])
             ->values()
             ->all();
+
+        if (! in_array($this->healthAgentId, array_column($this->agentOptions, 'id'), true)) {
+            $this->healthAgentId = $this->agentOptions[0]['id'] ?? 0;
+        }
     }
 
     private function resolveLifecycleAction(): ?LifecycleAction

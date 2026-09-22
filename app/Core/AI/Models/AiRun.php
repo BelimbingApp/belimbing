@@ -23,6 +23,7 @@ use Illuminate\Support\Carbon;
  * Never stores prompts, response bodies, or secrets.
  *
  * @property string $id
+ * @property int $tenant_id
  * @property int $employee_id
  * @property string|null $session_id
  * @property int|null $acting_for_user_id
@@ -83,6 +84,7 @@ class AiRun extends Model
      */
     protected $fillable = [
         'id',
+        'tenant_id',
         'employee_id',
         'session_id',
         'acting_for_user_id',
@@ -138,6 +140,37 @@ class AiRun extends Model
             'started_at' => 'datetime',
             'finished_at' => 'datetime',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::creating(function (self $run): void {
+            $employeeTenantId = Employee::query()
+                ->join('companies', 'companies.id', '=', 'employees.company_id')
+                ->where('employees.id', $run->employee_id)
+                ->value('companies.tenant_id');
+
+            if (! is_numeric($employeeTenantId)) {
+                throw new \LogicException('An AI run must belong to an employee with tenant ownership.');
+            }
+
+            if ($run->tenant_id !== null && (int) $run->tenant_id !== (int) $employeeTenantId) {
+                throw new \LogicException('An AI run tenant must match its employee company tenant.');
+            }
+
+            $run->tenant_id = (int) $employeeTenantId;
+        });
+
+        static::updating(function (self $run): void {
+            if ($run->isDirty('tenant_id')) {
+                throw new \LogicException('An AI run tenant assignment is immutable.');
+            }
+        });
+    }
+
+    public function scopeForTenant($query, int $tenantId): void
+    {
+        $query->where($this->qualifyColumn('tenant_id'), $tenantId);
     }
 
     /**
