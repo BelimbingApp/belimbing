@@ -96,9 +96,7 @@ function perPageMountHarness(bool $urlHasPerPage, int $defaultPerPage = 25): obj
 
         public bool $pageReset = false;
 
-        public function __construct(public bool $urlHasPerPage, public int $defaultPerPageValue)
-        {
-        }
+        public function __construct(public bool $urlHasPerPage, public int $defaultPerPageValue) {}
 
         protected function defaultPerPage(): int
         {
