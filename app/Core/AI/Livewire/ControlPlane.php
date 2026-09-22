@@ -23,6 +23,7 @@ use App\Core\AI\Services\ControlPlane\LifecycleControlService;
 use App\Core\AI\Services\ControlPlane\RunDiagnosticService;
 use App\Core\AI\Services\ControlPlane\WireLogger;
 use App\Core\Employee\Models\Employee;
+use App\Core\User\Models\User;
 use Illuminate\Contracts\View\View;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -267,6 +268,10 @@ class ControlPlane extends Component
         $this->lifecycleResult = null;
         $this->lifecycleError = '';
 
+        /** @var User|null $user */
+        $user = auth()->user();
+        abort_if($user === null, 403);
+
         $action = $this->resolveLifecycleAction();
 
         if ($action === null) {
@@ -276,10 +281,10 @@ class ControlPlane extends Component
         }
 
         $this->lifecycleResult = $this->mapLifecycleRequest(
-            app(LifecycleControlService::class)->execute(
+            app(LifecycleControlService::class)->executeForUser(
                 $action,
                 $this->buildLifecycleScope($action),
-                requestedBy: auth()->id(),
+                $user,
             ),
         );
 
@@ -298,7 +303,7 @@ class ControlPlane extends Component
         SettingsService $settings,
         AiRuntimeSettings $runtimeSettings,
     ): void {
-        $this->authorizeRuntimeGuardrailManagement();
+        $this->authorizeControlPlaneManagement();
 
         $validated = $this->validate([
             'maxToolRounds' => $runtimeSettings->maxToolRoundsRules(),
@@ -335,7 +340,7 @@ class ControlPlane extends Component
         SettingsService $settings,
         AiRuntimeSettings $runtimeSettings,
     ): void {
-        $this->authorizeRuntimeGuardrailManagement();
+        $this->authorizeControlPlaneManagement();
 
         $settings->forget(AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY);
         $settings->forget(AiRuntimeSettings::LARA_PROMPT_EXTENSION_PATH_KEY);
@@ -366,7 +371,7 @@ class ControlPlane extends Component
 
         return view('livewire.admin.ai.control-plane', [
             'activeTab' => $this->activeTab,
-            'canManageRuntimeGuardrails' => $this->canManageRuntimeGuardrails(),
+            'canManageControlPlane' => $this->canManageControlPlane(),
             'recentRuns' => $recentRuns,
             'runView' => $this->mapRunView($runView),
             'maxToolRoundsDefinition' => $maxToolRoundsDefinition,
@@ -380,7 +385,7 @@ class ControlPlane extends Component
         ]);
     }
 
-    private function canManageRuntimeGuardrails(): bool
+    private function canManageControlPlane(): bool
     {
         $user = auth()->user();
 
@@ -389,7 +394,7 @@ class ControlPlane extends Component
             ->allowed;
     }
 
-    private function authorizeRuntimeGuardrailManagement(): void
+    private function authorizeControlPlaneManagement(): void
     {
         $user = auth()->user();
 

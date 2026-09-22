@@ -53,7 +53,7 @@ class LifecycleExecuteCommand extends Command
 
         $this->components->info("Executing: {$action->label()}...");
 
-        $result = $service->execute($action, $scope);
+        $result = $service->executeFromConsole($action, $scope);
         $data = $result->toArray();
 
         $this->components->twoColumnDetail('Request ID', $data['request_id']);

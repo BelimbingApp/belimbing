@@ -1,6 +1,9 @@
 <?php
+
 namespace App\Core\AI\Services\ControlPlane;
 
+use App\Base\Authz\Contracts\AuthorizationService;
+use App\Base\Authz\DTO\Actor;
 use App\Core\AI\DTO\ControlPlane\LifecyclePreview;
 use App\Core\AI\DTO\ControlPlane\LifecycleRequest as LifecycleRequestDTO;
 use App\Core\AI\DTO\ControlPlane\TelemetryRecordRequest;
@@ -14,7 +17,9 @@ use App\Core\AI\Services\Memory\MemoryCompactor;
 use App\Core\AI\Services\OperationsDispatchService;
 use App\Core\AI\Services\Pricing\RefreshPricingSnapshot;
 use App\Core\AI\Services\SessionManager;
+use App\Core\User\Models\User;
 use Illuminate\Support\Str;
+use LogicException;
 
 /**
  * Manages lifecycle control operations: preview, execute, and audit.
@@ -37,6 +42,7 @@ class LifecycleControlService
         private readonly OperationalTelemetryService $telemetry,
         private readonly WireLogger $wireLogger,
         private readonly RefreshPricingSnapshot $pricingSnapshotRefresher,
+        private readonly AuthorizationService $authorization,
     ) {}
 
     /**
@@ -59,17 +65,47 @@ class LifecycleControlService
     }
 
     /**
+     * Execute a lifecycle action requested by an authenticated user.
+     *
+     * Authorization happens before previewing the action or creating an
+     * audit-ledger row, so denied callers cannot trigger any lifecycle work.
+     *
+     * @param  array<string, mixed>  $scope
+     */
+    public function executeForUser(LifecycleAction $action, array $scope, User $user): LifecycleRequestDTO
+    {
+        $this->authorization->authorize(
+            Actor::forUser($user),
+            'admin.ai.control-plane.manage',
+        );
+
+        return $this->executeAuthorized($action, $scope, (int) $user->getKey());
+    }
+
+    /**
+     * Execute from the trusted Artisan command boundary.
+     *
+     * @param  array<string, mixed>  $scope
+     */
+    public function executeFromConsole(LifecycleAction $action, array $scope = []): LifecycleRequestDTO
+    {
+        if (! app()->runningInConsole()) {
+            throw new LogicException('Console lifecycle execution is only available from a console process.');
+        }
+
+        return $this->executeAuthorized($action, $scope, null);
+    }
+
+    /**
      * Execute a lifecycle action with preview, audit, and status tracking.
      *
-     * Creates a lifecycle request record, executes the action, and records
-     * the outcome. Returns the completed request as a DTO.
-     *
-     * @param  LifecycleAction  $action  The action to execute
-     * @param  array<string, mixed>  $scope  Action-specific parameters
-     * @param  int|null  $requestedBy  User ID who initiated the request
+     * @param  array<string, mixed>  $scope
      */
-    public function execute(LifecycleAction $action, array $scope = [], ?int $requestedBy = null): LifecycleRequestDTO
-    {
+    private function executeAuthorized(
+        LifecycleAction $action,
+        array $scope,
+        ?int $requestedBy,
+    ): LifecycleRequestDTO {
         $requestId = LifecycleRequest::ID_PREFIX.Str::ulid()->toBase32();
         $preview = $this->preview($action, $scope);
 

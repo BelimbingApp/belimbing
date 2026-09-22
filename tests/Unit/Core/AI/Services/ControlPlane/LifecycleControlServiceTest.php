@@ -1,5 +1,7 @@
 <?php
 
+use App\Base\Authz\Contracts\AuthorizationService;
+use App\Base\Authz\DTO\Actor;
 use App\Core\AI\DTO\ControlPlane\LifecyclePreview;
 use App\Core\AI\DTO\ControlPlane\LifecycleRequest as LifecycleRequestDTO;
 use App\Core\AI\DTO\ControlPlane\TelemetryEvent as TelemetryEventDTO;
@@ -64,6 +66,7 @@ function makeLcsMocks(): array
         'telemetry' => $telemetry,
         'wireLogger' => Mockery::mock(WireLogger::class),
         'pricingSnapshotRefresher' => Mockery::mock(RefreshPricingSnapshot::class),
+        'authorization' => Mockery::mock(AuthorizationService::class),
     ];
 }
 
@@ -78,6 +81,7 @@ function makeLcsService(array $mocks): LifecycleControlService
         $mocks['telemetry'],
         $mocks['wireLogger'],
         $mocks['pricingSnapshotRefresher'],
+        $mocks['authorization'],
     );
 }
 
@@ -266,12 +270,18 @@ describe('execute', function () {
         $mocks['operationsDispatch']->shouldReceive('sweepStale')
             ->with(30)
             ->andReturn(0);
+        $mocks['authorization']->shouldReceive('authorize')
+            ->once()
+            ->with(
+                Mockery::on(fn (Actor $actor): bool => $actor->id === $user->id),
+                'admin.ai.control-plane.manage',
+            );
 
         $service = makeLcsService($mocks);
-        $result = $service->execute(
+        $result = $service->executeForUser(
             LifecycleAction::SweepOperations,
             ['stale_minutes' => 30],
-            requestedBy: $user->id,
+            $user,
         );
 
         expect($result)->toBeInstanceOf(LifecycleRequestDTO::class)
@@ -303,7 +313,7 @@ describe('execute', function () {
             ->once();
 
         $service = makeLcsService($mocks);
-        $result = $service->execute(
+        $result = $service->executeFromConsole(
             LifecycleAction::PruneSessions,
             ['employee_id' => LCS_EMPLOYEE_ID, 'retention_days' => 30],
         );
@@ -321,7 +331,7 @@ describe('execute', function () {
             ->andReturn(3);
 
         $service = makeLcsService($mocks);
-        $result = $service->execute(
+        $result = $service->executeFromConsole(
             LifecycleAction::PruneWireLogs,
             ['retention_days' => 7],
         );
@@ -359,7 +369,7 @@ describe('execute', function () {
             ]);
 
         $service = makeLcsService($mocks);
-        $result = $service->execute(LifecycleAction::RefreshPricingSnapshot);
+        $result = $service->executeFromConsole(LifecycleAction::RefreshPricingSnapshot);
 
         expect($result->status)->toBe(LifecycleActionStatus::Completed)
             ->and($result->result['refreshed'])->toBeTrue()
@@ -374,7 +384,7 @@ describe('execute', function () {
             ->andReturn(3);
 
         $service = makeLcsService($mocks);
-        $result = $service->execute(LifecycleAction::SweepBrowserSessions);
+        $result = $service->executeFromConsole(LifecycleAction::SweepBrowserSessions);
 
         expect($result->status)->toBe(LifecycleActionStatus::Completed)
             ->and($result->result['swept_sessions'])->toBe(3);
@@ -388,7 +398,7 @@ describe('execute', function () {
             ->andThrow(new RuntimeException('Database connection lost'));
 
         $service = makeLcsService($mocks);
-        $result = $service->execute(LifecycleAction::SweepOperations);
+        $result = $service->executeFromConsole(LifecycleAction::SweepOperations);
 
         expect($result->status)->toBe(LifecycleActionStatus::Failed)
             ->and($result->errorMessage)->toBe('Database connection lost');
@@ -402,7 +412,7 @@ describe('execute', function () {
             ->andReturn(0);
 
         $service = makeLcsService($mocks);
-        $result = $service->execute(LifecycleAction::SweepOperations);
+        $result = $service->executeFromConsole(LifecycleAction::SweepOperations);
 
         $dbRecord = LifecycleRequest::query()->find($result->requestId);
         expect($dbRecord)->not->toBeNull()
@@ -430,8 +440,8 @@ describe('recent', function () {
 
         $service = makeLcsService($mocks);
 
-        $service->execute(LifecycleAction::SweepOperations);
-        $service->execute(LifecycleAction::SweepBrowserSessions);
+        $service->executeFromConsole(LifecycleAction::SweepOperations);
+        $service->executeFromConsole(LifecycleAction::SweepBrowserSessions);
 
         $recent = $service->recent(10);
 
