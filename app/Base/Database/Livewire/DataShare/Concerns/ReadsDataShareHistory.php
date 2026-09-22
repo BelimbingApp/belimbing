@@ -26,11 +26,6 @@ trait ReadsDataShareHistory
         $this->resetPage();
     }
 
-    protected function defaultPerPage(): int
-    {
-        return 25;
-    }
-
     protected function historyAvailableToCurrentTenant(): bool
     {
         return app(PlatformOperatorTenantAccess::class)->allows();

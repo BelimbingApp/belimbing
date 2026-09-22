@@ -7,7 +7,7 @@ beforeEach(function (): void {
 });
 
 it('uses the same vertical padding as the per-page select on page pills', function (): void {
-    GeonamesSeeder::countries(25);
+    GeonamesSeeder::countries(26);
 
     $html = $this->get(route('admin.geonames.countries.index'))->assertOk()->getContent();
 
@@ -19,7 +19,7 @@ it('uses the same vertical padding as the per-page select on page pills', functi
 });
 
 it('gives number and separator pills a uniform min width with tabular numerals', function (): void {
-    GeonamesSeeder::countries(25);
+    GeonamesSeeder::countries(26);
 
     $html = $this->get(route('admin.geonames.countries.index'))->assertOk()->getContent();
 
@@ -29,7 +29,7 @@ it('gives number and separator pills a uniform min width with tabular numerals',
 });
 
 it('sizes chevron icons to match the page-number line height so prev/next pills are not shorter', function (): void {
-    GeonamesSeeder::countries(25);
+    GeonamesSeeder::countries(26);
 
     $html = $this->get(route('admin.geonames.countries.index'))->assertOk()->getContent();
     preg_match('/<nav role="navigation" aria-label="Pagination Navigation".*?<\/nav>/s', $html, $m);
