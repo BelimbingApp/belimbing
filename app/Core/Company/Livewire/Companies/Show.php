@@ -115,6 +115,42 @@ class Show extends AbstractAddressForm
             ->explicitCompanyTimezone((int) $company->id) ?? '';
     }
 
+    public function updatedCountryIso($value): void
+    {
+        if (! $this->checkCapability('admin.company.update')) {
+            return;
+        }
+
+        parent::updatedCountryIso($value);
+    }
+
+    public function updatedPostcode($value): void
+    {
+        if (! $this->checkCapability('admin.company.update')) {
+            return;
+        }
+
+        parent::updatedPostcode($value);
+    }
+
+    public function updatedAdmin1Code($value = null): void
+    {
+        if (! $this->checkCapability('admin.company.update')) {
+            return;
+        }
+
+        parent::updatedAdmin1Code($value);
+    }
+
+    public function updatedLocality($value = null): void
+    {
+        if (! $this->checkCapability('admin.company.update')) {
+            return;
+        }
+
+        parent::updatedLocality($value);
+    }
+
     public function sortExternalAccesses(string $column): void
     {
         $this->toggleSort(
@@ -334,6 +370,10 @@ class Show extends AbstractAddressForm
 
     public function openAddressModal(?int $addressId = null): void
     {
+        if (! $this->checkCapability('admin.company.update')) {
+            return;
+        }
+
         $this->addressFormId = $addressId;
 
         if ($addressId === null) {

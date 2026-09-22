@@ -123,6 +123,10 @@ trait ManagesCompanyTimezone
      */
     public function dismissSuggestedTimezone(): void
     {
+        if (! $this->checkCapability('admin.company.update')) {
+            return;
+        }
+
         $this->suggestedTimezone = null;
         $this->suggestedTimezoneOld = null;
     }
