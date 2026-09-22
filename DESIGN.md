@@ -30,6 +30,10 @@ Compact, high-signal layouts; responsive on narrow screens. Compact does not mea
 
 Subtle contrast, borders, and shadows; motion clarifies state at 60fps.
 
+## Table geometry
+
+Tables, including their frames and headers, use square corners. Controls inside cells retain their normal component shapes.
+
 ## Reuse components
 
 Reuse `x-ui.*` and `<x-icon>` before inventing new markup. Inventory:

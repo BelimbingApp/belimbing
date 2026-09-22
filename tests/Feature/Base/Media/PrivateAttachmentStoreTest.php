@@ -113,6 +113,18 @@ it('rejects oversized, invalid-type, other-tenant and unauthorized uploads', fun
         ->toThrow(AuthorizationException::class);
 });
 
+it('returns not found when the attachment subject no longer resolves', function (): void {
+    [, $company, $user, $actor] = privateAttachmentFixture();
+    $attachment = app(PrivateAttachmentStore::class)->upload(attachmentPng(), $company, $actor);
+    app(PrivateAttachmentStore::class)->submit([$attachment->public_id], $company, $actor);
+
+    MediaAttachment::query()->whereKey($attachment->id)->update(['subject_id' => '999999999']);
+
+    $this->actingAs($user)
+        ->get(route('media.attachments.download', $attachment->public_id))
+        ->assertNotFound();
+});
+
 it('authorizes every download against tenant and subject', function (): void {
     [$tenant, $company, $user, $actor] = privateAttachmentFixture();
     $attachment = app(PrivateAttachmentStore::class)->upload(attachmentPng(), $company, $actor);

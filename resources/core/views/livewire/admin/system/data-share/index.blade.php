@@ -459,7 +459,7 @@ if ($instance->role->value === 'development') {
                                             ]) }}</p>
                                             <p class="mt-1 font-mono text-xs text-muted" title="{{ $reviewedOffer['sha256'] }}">{{ __('SHA-256: :hash', ['hash' => $shortHash($reviewedOffer['sha256'])]) }}</p>
                                             @if($reviewedOffer['secure_lan_hint'])
-                                                <p class="mt-2 text-xs text-success">{{ __('Secure LAN route included—no local DNS or certificate setup required.') }}</p>
+                                                <p class="mt-2 text-xs text-status-success">{{ __('Secure LAN route included—no local DNS or certificate setup required.') }}</p>
                                             @endif
                                         </div>
                                         <x-ui.button class="w-full justify-center" wire:click="fetchOffer" wire:loading.attr="disabled" wire:target="fetchOffer">
