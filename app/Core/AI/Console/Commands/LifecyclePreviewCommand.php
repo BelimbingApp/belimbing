@@ -42,7 +42,7 @@ class LifecyclePreviewCommand extends Command
         }
 
         $scope = $this->buildLifecycleActionScope($action);
-        $preview = $service->preview($action, $scope);
+        $preview = $service->previewFromConsole($action, $scope);
         $data = $preview->toArray();
 
         $this->components->info("Preview: {$action->label()}");

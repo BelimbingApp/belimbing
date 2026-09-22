@@ -2,6 +2,8 @@
 
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
+use App\Base\Tenancy\Contracts\TenantContext;
+use App\Base\Tenancy\Services\PlatformOperatorTenantAccess;
 use App\Core\AI\DTO\ControlPlane\LifecyclePreview;
 use App\Core\AI\DTO\ControlPlane\LifecycleRequest as LifecycleRequestDTO;
 use App\Core\AI\DTO\ControlPlane\TelemetryEvent as TelemetryEventDTO;
@@ -67,6 +69,13 @@ function makeLcsMocks(): array
         'wireLogger' => Mockery::mock(WireLogger::class),
         'pricingSnapshotRefresher' => Mockery::mock(RefreshPricingSnapshot::class),
         'authorization' => Mockery::mock(AuthorizationService::class),
+        'platformOperatorAccess' => new PlatformOperatorTenantAccess(
+            Mockery::mock(TenantContext::class)
+                ->shouldReceive('currentTenantId')
+                ->andReturn(platformOperatorTenant()->id)
+                ->byDefault()
+                ->getMock(),
+        ),
     ];
 }
 
@@ -82,6 +91,7 @@ function makeLcsService(array $mocks): LifecycleControlService
         $mocks['wireLogger'],
         $mocks['pricingSnapshotRefresher'],
         $mocks['authorization'],
+        $mocks['platformOperatorAccess'],
     );
 }
 
@@ -107,7 +117,7 @@ describe('preview', function () {
             ->andReturn([$staleSession]);
 
         $service = makeLcsService($mocks);
-        $preview = $service->preview(
+        $preview = $service->previewFromConsole(
             LifecycleAction::PruneSessions,
             ['employee_id' => LCS_EMPLOYEE_ID, 'retention_days' => 30],
         );
@@ -136,7 +146,7 @@ describe('preview', function () {
             ->andReturn([$recentSession]);
 
         $service = makeLcsService($mocks);
-        $preview = $service->preview(
+        $preview = $service->previewFromConsole(
             LifecycleAction::PruneSessions,
             ['employee_id' => LCS_EMPLOYEE_ID, 'retention_days' => 30],
         );
@@ -151,7 +161,7 @@ describe('preview', function () {
             ->andReturn(true);
 
         $service = makeLcsService($mocks);
-        $preview = $service->preview(LifecycleAction::SweepBrowserSessions);
+        $preview = $service->previewFromConsole(LifecycleAction::SweepBrowserSessions);
 
         expect($preview->action)->toBe(LifecycleAction::SweepBrowserSessions)
             ->and($preview->isDestructive)->toBeFalse()
@@ -164,7 +174,7 @@ describe('preview', function () {
             ->andReturn(false);
 
         $service = makeLcsService($mocks);
-        $preview = $service->preview(LifecycleAction::SweepBrowserSessions);
+        $preview = $service->previewFromConsole(LifecycleAction::SweepBrowserSessions);
 
         expect($preview->affectedSummary[0])->toContain('not available');
     });
@@ -181,7 +191,7 @@ describe('preview', function () {
             ->andReturn(new EloquentCollection([$staleDispatch]));
 
         $service = makeLcsService($mocks);
-        $preview = $service->preview(
+        $preview = $service->previewFromConsole(
             LifecycleAction::SweepOperations,
             ['stale_minutes' => 30],
         );
@@ -197,7 +207,7 @@ describe('preview', function () {
             ->andReturn(['artifact_1', 'artifact_2']);
 
         $service = makeLcsService($mocks);
-        $preview = $service->preview(
+        $preview = $service->previewFromConsole(
             LifecycleAction::PruneArtifacts,
             ['session_id' => LCS_SESSION_ID],
         );
@@ -210,7 +220,7 @@ describe('preview', function () {
     it('previews prune artifacts without session scope', function () {
         $mocks = makeLcsMocks();
         $service = makeLcsService($mocks);
-        $preview = $service->preview(LifecycleAction::PruneArtifacts);
+        $preview = $service->previewFromConsole(LifecycleAction::PruneArtifacts);
 
         expect($preview->affectedCount)->toBe(0)
             ->and($preview->affectedSummary[0])->toContain('Specify a session_id');
@@ -221,7 +231,7 @@ describe('preview', function () {
         $mocks['wireLogger']->shouldReceive('totalBytes')->once()->andReturn(4096);
 
         $service = makeLcsService($mocks);
-        $preview = $service->preview(
+        $preview = $service->previewFromConsole(
             LifecycleAction::PruneWireLogs,
             ['retention_days' => 14],
         );
@@ -246,7 +256,7 @@ describe('preview', function () {
             ]);
 
         $service = makeLcsService($mocks);
-        $preview = $service->preview(LifecycleAction::RefreshPricingSnapshot);
+        $preview = $service->previewFromConsole(LifecycleAction::RefreshPricingSnapshot);
 
         expect($preview->action)->toBe(LifecycleAction::RefreshPricingSnapshot)
             ->and($preview->isDestructive)->toBeFalse()
@@ -260,6 +270,77 @@ describe('preview', function () {
 // ------------------------------------------------------------------
 
 describe('execute', function () {
+    it('authorizes and executes every lifecycle action for a platform operator', function () {
+        $user = createLcsTestUser();
+        $cases = [
+            [LifecycleAction::CompactMemory, ['employee_id' => LCS_EMPLOYEE_ID]],
+            [LifecycleAction::PruneSessions, ['employee_id' => LCS_EMPLOYEE_ID, 'retention_days' => 30]],
+            [LifecycleAction::PruneArtifacts, ['session_id' => LCS_SESSION_ID]],
+            [LifecycleAction::SweepBrowserSessions, []],
+            [LifecycleAction::SweepOperations, ['stale_minutes' => 30]],
+            [LifecycleAction::PruneWireLogs, ['retention_days' => 7]],
+            [LifecycleAction::RefreshPricingSnapshot, []],
+        ];
+
+        foreach ($cases as [$action, $scope]) {
+            $mocks = makeLcsMocks();
+            $mocks['authorization']->shouldReceive('authorize')
+                ->once()
+                ->with(
+                    Mockery::on(fn (Actor $actor): bool => $actor->id === $user->id),
+                    'admin.ai.control-plane.manage',
+                );
+
+            match ($action) {
+                LifecycleAction::CompactMemory => $mocks['memoryCompactor']
+                    ->shouldReceive('compact')->once()->with(LCS_EMPLOYEE_ID)->andReturn(['compacted' => 0]),
+                LifecycleAction::PruneSessions => $mocks['sessionManager']
+                    ->shouldReceive('list')->twice()->with(LCS_EMPLOYEE_ID)->andReturn([]),
+                LifecycleAction::PruneArtifacts => (function () use ($mocks): void {
+                    $mocks['browserArtifactStore']->shouldReceive('listForSession')
+                        ->once()->with(LCS_SESSION_ID)->andReturn([]);
+                    $mocks['browserArtifactStore']->shouldReceive('deleteForSession')
+                        ->once()->with(LCS_SESSION_ID)->andReturn(0);
+                })(),
+                LifecycleAction::SweepBrowserSessions => (function () use ($mocks): void {
+                    $mocks['browserSessionManager']->shouldReceive('isAvailable')->once()->andReturn(true);
+                    $mocks['browserSessionManager']->shouldReceive('sweepStaleSessions')->once()->andReturn(0);
+                })(),
+                LifecycleAction::SweepOperations => (function () use ($mocks): void {
+                    $mocks['operationsDispatch']->shouldReceive('findStale')
+                        ->once()->with(30)->andReturn(new EloquentCollection);
+                    $mocks['operationsDispatch']->shouldReceive('sweepStale')
+                        ->once()->with(30)->andReturn(0);
+                })(),
+                LifecycleAction::PruneWireLogs => (function () use ($mocks): void {
+                    $mocks['wireLogger']->shouldReceive('totalBytes')->once()->andReturn(0);
+                    $mocks['wireLogger']->shouldReceive('pruneOlderThan')->once()->with(7)->andReturn(0);
+                })(),
+                LifecycleAction::RefreshPricingSnapshot => (function () use ($mocks): void {
+                    $stats = [
+                        'source' => 'litellm',
+                        'snapshot_date' => null,
+                        'last_refreshed_at' => null,
+                        'model_count' => 0,
+                        'row_count' => 0,
+                        'age_days' => null,
+                    ];
+                    $mocks['pricingSnapshotRefresher']->shouldReceive('stats')->once()->andReturn($stats);
+                    $mocks['pricingSnapshotRefresher']->shouldReceive('refresh')
+                        ->once()->andReturn([...$stats, 'refreshed' => true]);
+                })(),
+            };
+
+            $result = makeLcsService($mocks)->executeForUser($action, $scope, $user);
+
+            expect($result->action)->toBe($action)
+                ->and($result->status)->toBe(LifecycleActionStatus::Completed)
+                ->and($result->requestedBy)->toBe($user->id);
+        }
+
+        expect(LifecycleRequest::query()->count())->toBe(count(LifecycleAction::cases()));
+    });
+
     it('executes sweep operations and records lifecycle request', function () {
         $user = createLcsTestUser();
 
@@ -443,7 +524,7 @@ describe('recent', function () {
         $service->executeFromConsole(LifecycleAction::SweepOperations);
         $service->executeFromConsole(LifecycleAction::SweepBrowserSessions);
 
-        $recent = $service->recent(10);
+        $recent = $service->recentFromConsole(10);
 
         expect($recent)->toHaveCount(2)
             ->and($recent[0])->toBeInstanceOf(LifecycleRequestDTO::class)
@@ -456,7 +537,7 @@ describe('recent', function () {
         $mocks = makeLcsMocks();
         $service = makeLcsService($mocks);
 
-        $recent = $service->recent();
+        $recent = $service->recentFromConsole();
 
         expect($recent)->toBe([]);
     });

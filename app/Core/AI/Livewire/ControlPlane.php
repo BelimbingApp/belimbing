@@ -11,6 +11,7 @@ use App\Base\Authz\DTO\Actor;
 use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Tenancy\Contracts\TenantContext;
+use App\Base\Tenancy\Services\PlatformOperatorTenantAccess;
 use App\Core\AI\DTO\ControlPlane\HealthSnapshot;
 use App\Core\AI\DTO\ControlPlane\LifecycleRequest as LifecycleRequestDTO;
 use App\Core\AI\Enums\LifecycleAction;
@@ -92,6 +93,9 @@ class ControlPlane extends Component
     public function mount(AiRuntimeSettings $runtimeSettings): void
     {
         $this->activeTab = $this->resolveTab((string) request()->query('tab', 'inspector'));
+        if ($this->activeTab === 'lifecycle' && ! $this->canViewPlatformLifecycle()) {
+            $this->activeTab = 'inspector';
+        }
         $this->inspectRunId = (string) (request()->query('runId') ?? request()->query('inspectRunId') ?? '');
 
         $this->lifecycleRetentionDays = app(WireLogger::class)->retentionDays();
@@ -102,7 +106,9 @@ class ControlPlane extends Component
         $this->loadAgentOptions();
         $this->refreshInspectorLists();
         $this->refreshHealthSnapshots();
-        $this->loadRecentLifecycleRequests();
+        if ($this->canViewPlatformLifecycle()) {
+            $this->loadRecentLifecycleRequests();
+        }
 
         if ($this->inspectRunId !== '') {
             $this->resetWireLogWindow();
@@ -112,7 +118,10 @@ class ControlPlane extends Component
 
     public function setActiveTab(string $tab): void
     {
-        $this->activeTab = $this->resolveTab($tab);
+        $resolved = $this->resolveTab($tab);
+        $this->activeTab = $resolved === 'lifecycle' && ! $this->canViewPlatformLifecycle()
+            ? 'inspector'
+            : $resolved;
     }
 
     public function inspectRun(): void
@@ -258,8 +267,16 @@ class ControlPlane extends Component
             return;
         }
 
+        /** @var User|null $user */
+        $user = auth()->user();
+        abort_if($user === null, 403);
+
         $this->lifecyclePreview = $this->mapLifecyclePreview(
-            app(LifecycleControlService::class)->preview($action, $this->buildLifecycleScope($action)),
+            app(LifecycleControlService::class)->previewForUser(
+                $action,
+                $this->buildLifecycleScope($action),
+                $user,
+            ),
         );
     }
 
@@ -293,9 +310,13 @@ class ControlPlane extends Component
 
     public function loadRecentLifecycleRequests(): void
     {
+        /** @var User|null $user */
+        $user = auth()->user();
+        abort_if($user === null, 403);
+
         $this->recentLifecycleRequests = array_map(
             fn (LifecycleRequestDTO $request): array => $this->mapLifecycleRequest($request),
-            app(LifecycleControlService::class)->recent(10),
+            app(LifecycleControlService::class)->recentForUser($user, 10),
         );
     }
 
@@ -375,6 +396,8 @@ class ControlPlane extends Component
         return view('livewire.admin.ai.control-plane', [
             'activeTab' => $this->activeTab,
             'canManageControlPlane' => $this->canManageControlPlane(),
+            'canViewPlatformLifecycle' => $this->canViewPlatformLifecycle(),
+            'canManagePlatformLifecycle' => $this->canManagePlatformLifecycle(),
             'recentRuns' => $recentRuns,
             'runView' => $this->mapRunView($runView),
             'maxToolRoundsDefinition' => $maxToolRoundsDefinition,
@@ -395,6 +418,28 @@ class ControlPlane extends Component
         return $user !== null && app(AuthorizationService::class)
             ->can(Actor::forUser($user), 'admin.ai.control-plane.manage')
             ->allowed;
+    }
+
+    private function canViewPlatformLifecycle(): bool
+    {
+        $user = auth()->user();
+
+        return $user !== null
+            && app(PlatformOperatorTenantAccess::class)->allows()
+            && app(AuthorizationService::class)
+                ->can(Actor::forUser($user), 'admin.ai.control-plane.view')
+                ->allowed;
+    }
+
+    private function canManagePlatformLifecycle(): bool
+    {
+        $user = auth()->user();
+
+        return $user !== null
+            && app(PlatformOperatorTenantAccess::class)->allows()
+            && app(AuthorizationService::class)
+                ->can(Actor::forUser($user), 'admin.ai.control-plane.manage')
+                ->allowed;
     }
 
     private function authorizeControlPlaneManagement(): void
