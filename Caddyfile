@@ -72,10 +72,12 @@
 		php_server
 	}
 
-	# When FrankenPHP itself cannot run the request (worker crashed, still
-	# starting, or the worker script failed to load), Caddy raises a 5xx with
-	# no body. Serve the branded static fallback instead. Error pages the
-	# application renders are ordinary responses, so they never land here.
+	# Covers only 5xx errors Caddy itself raises for this site; it then serves
+	# the branded static fallback. Error pages the application renders are
+	# ordinary responses, so they never land here. When FrankenPHP's embedded
+	# PHP hangs, fails to start, or writes its own overload 503, no Caddy error
+	# is raised: an instance-direct deployment falls through to the CDN page,
+	# while the shared ingress serves the branded page.
 	# Regenerate the page with `php artisan blb:error-pages:publish`.
 	handle_errors 5xx {
 		import security_headers

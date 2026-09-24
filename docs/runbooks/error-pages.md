@@ -11,7 +11,7 @@ During a production server switch-over on 2026-09-24 a Belimbing site was down f
 | Layer | Answers when | Page | Served by |
 |-------|--------------|------|-----------|
 | 1. Application | Laravel is running: `500`, maintenance `503`, `403`, `404`, `419` | `resources/core/views/errors/*.blade.php` on `errors/layout.blade.php` | Laravel's exception handler |
-| 2. Web server | FrankenPHP cannot run the request, or PHP answers a raw 5xx with no page | `public/errors/5xx.html` | Caddy: the instance `Caddyfile`, and the system ingress block in shared mode |
+| 2. Web server | Caddy raises a 5xx, the instance is unreachable from the shared ingress, or PHP answers a raw 5xx with no page | `public/errors/5xx.html` | Caddy: the instance `Caddyfile`, and the system ingress block in shared mode |
 | 3. CDN | The whole server is unreachable | `public/errors/cloudflare-5xx.html` | Cloudflare custom 5xx page |
 
 The seam between the layers is `App\Base\Foundation\Services\ErrorPages`: it renders the static pages and defines the response header (`X-Belimbing-Error-Page: app`) that marks an error page the application rendered itself.
@@ -44,7 +44,7 @@ php artisan blb:error-pages:publish --check  # exits 1 when a committed page is 
 
 ### Instance Caddyfile (every mode)
 
-The project `Caddyfile` and `Caddyfile.orb` carry a `handle_errors 5xx` block that serves the page with the original status code. It fires when Caddy itself raises the error: the FrankenPHP worker crashed, is still starting, or its worker script failed to load. A response PHP produced, including Laravel's own error pages, is not a Caddy error and is never replaced here. A fatal before Laravel boots on the non-worker path is covered by `public/index.php`, which answers with the same static page instead of leaking the message.
+The project `Caddyfile` and `Caddyfile.orb` carry a `handle_errors 5xx` block that serves the page with the original status code. It fires only for 5xx errors Caddy itself raises for the site. When FrankenPHP's embedded PHP hangs, fails to start, or returns its own plain-text overload 503, Caddy sees no error, so this block does not fire: an instance-direct deployment then falls through to the CDN (Cloudflare) page, while the shared-ingress topology below serves the branded page. A response PHP produced, including Laravel's own error pages, is not a Caddy error and is never replaced here. A fatal before Laravel boots on the non-worker path is covered by `public/index.php`, which answers with the same static page instead of leaking the message.
 
 ### System ingress block (shared mode)
 
