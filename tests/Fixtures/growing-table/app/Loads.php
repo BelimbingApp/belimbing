@@ -27,6 +27,10 @@ final class Loads
         RunLog::query()->fromSub(RunLog::query()->toBase(), 'ranked')->where('rn', 1)->get();
         RunLogLine::query()->where('run_log_id', 1)->get();
         $log->lines()->get();
+        Task::findOrFail(1)->runs()->get();
+        Task::query()->find(1)->runs()->get();
+        RunLog::whereKey([1])->first()?->lines()->get();
+        Task::query()->limit(1)->first()->runs()->get();
     }
 
     public function bounded(Task $task): void
@@ -38,6 +42,8 @@ final class Loads
         RunLog::whereKey([1])->get();
         RunLog::limit(10)->get();
         RunLog::paginate()->pluck('id');
+        RunLog::query()->limit(10)->get()->pluck('id');
+        Task::findOrFail(1)->runs()->limit(5)->get();
         $task->runs()->limit(5)->get();
         RunLog::query()->paginate();
         RunLog::query()->cursor();

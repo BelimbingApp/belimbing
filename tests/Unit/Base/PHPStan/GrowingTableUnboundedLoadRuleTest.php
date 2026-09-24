@@ -1,6 +1,7 @@
 <?php
 
 use App\Base\Database\PHPStan\GrowingTableUnboundedLoadRule;
+use Illuminate\Foundation\Bootstrap\HandleExceptions;
 use PHPStan\Rules\Rule;
 use PHPStan\Testing\RuleTestCase;
 
@@ -10,6 +11,19 @@ class GrowingTableUnboundedLoadRuleTest extends RuleTestCase
     private function fixtureRoot(): string
     {
         return dirname(__DIR__, 3).'/Fixtures/growing-table';
+    }
+
+    /** @return list<string> */
+    public static function getAdditionalConfigFiles(): array
+    {
+        return [dirname(__DIR__, 4).'/vendor/larastan/larastan/extension.neon'];
+    }
+
+    protected function tearDown(): void
+    {
+        HandleExceptions::flushState($this);
+
+        parent::tearDown();
     }
 
     protected function getRule(): Rule
@@ -48,6 +62,10 @@ class GrowingTableUnboundedLoadRuleTest extends RuleTestCase
             [$message('->get()'), 27],
             [$message('->get()', 'GrowingTableFixture\Models\RunLogLine'), 28],
             [$message('->get()', 'GrowingTableFixture\Models\RunLogLine'), 29],
+            [$message('->get()'), 30],
+            [$message('->get()'), 31],
+            [$message('->get()', 'GrowingTableFixture\Models\RunLogLine'), 32],
+            [$message('->get()'), 33],
         ]);
     }
 }

@@ -9,6 +9,7 @@ use PhpParser\Node;
 use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\CallLike;
 use PhpParser\Node\Expr\MethodCall;
+use PhpParser\Node\Expr\NullsafeMethodCall;
 use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
@@ -18,6 +19,7 @@ use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
 use PHPStan\Type\Type;
+use PHPStan\Type\TypeCombinator;
 
 /**
  * Refuse loading every row of a growing table into PHP.
@@ -43,7 +45,7 @@ final class GrowingTableUnboundedLoadRule implements Rule
 
     private const LOADING_METHODS = ['get', 'all', 'pluck', 'getModels'];
 
-    /** Once one of these has run, later calls in the chain act on the result, not the query. */
+    /** Once one of these has run, later calls act on its result or start a new query from it. */
     private const TERMINAL_METHODS = [
         ...self::LOADING_METHODS,
         'first',
@@ -120,20 +122,14 @@ final class GrowingTableUnboundedLoadRule implements Rule
             return [];
         }
 
-        [$calls, $root] = $this->walkChain($node->var);
-        $chain = array_map(static fn (MethodCall $call): string => $call->name->toString(), $calls);
+        [$chain, $root] = $this->walkQuery($node->var);
 
-        if ($root instanceof StaticCall && $root->name instanceof Identifier) {
-            $chain[] = $root->name->toString();
-        }
-
-        if (array_intersect($chain, self::BOUNDING_METHODS) !== []
-            || array_intersect($chain, self::TERMINAL_METHODS) !== []) {
+        if (array_intersect($chain, self::BOUNDING_METHODS) !== []) {
             return [];
         }
 
         $model = $this->growingModelOfQuery($scope->getType($node->var))
-            ?? ($root instanceof StaticCall ? $this->growingModelNamedBy($root, $scope) : null);
+            ?? ($root !== null ? $this->growingModelNamedBy($root, $scope) : null);
 
         if ($model === null) {
             return [];
@@ -143,29 +139,43 @@ final class GrowingTableUnboundedLoadRule implements Rule
     }
 
     /**
-     * Named method calls between the receiver and the load, innermost first,
-     * and the expression the chain hangs off.
+     * Names of the calls that build the query being loaded, innermost first,
+     * walking back from the load to the nearest terminal call. A terminal ends
+     * the query: anything after it ($task->find(1)->runs()) starts a new one.
+     * The static call the query starts from, when it starts from one, is
+     * returned so its model can be resolved where the forwarding is untyped.
      *
-     * @return array{0: list<MethodCall>, 1: Expr}
+     * @return array{0: list<string>, 1: StaticCall|null}
      */
-    private function walkChain(Expr $expr): array
+    private function walkQuery(Expr $expr): array
     {
-        $calls = [];
+        $chain = [];
 
-        while ($expr instanceof MethodCall) {
-            if ($expr->name instanceof Identifier) {
-                $calls[] = $expr;
+        while ($expr instanceof MethodCall || $expr instanceof NullsafeMethodCall || $expr instanceof StaticCall) {
+            $name = $expr->name instanceof Identifier ? $expr->name->toString() : null;
+
+            if ($name !== null && in_array($name, self::TERMINAL_METHODS, true)) {
+                return [$chain, null];
+            }
+
+            if ($name !== null) {
+                $chain[] = $name;
+            }
+
+            if ($expr instanceof StaticCall) {
+                return [$chain, $expr];
             }
 
             $expr = $expr->var;
         }
 
-        return [$calls, $expr];
+        return [$chain, null];
     }
 
     /** @return class-string|null */
     private function growingModelOfQuery(Type $type): ?string
     {
+        $type = TypeCombinator::removeNull($type);
         $candidates = [
             ...$type->getTemplateType(EloquentBuilder::class, 'TModel')->getObjectClassNames(),
             ...$type->getTemplateType(Relation::class, 'TRelatedModel')->getObjectClassNames(),
