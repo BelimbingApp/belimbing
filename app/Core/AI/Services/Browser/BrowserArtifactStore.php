@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Core\AI\Services\Browser;
 
 use App\Base\Support\File as BlbFile;
@@ -86,6 +87,7 @@ class BrowserArtifactStore
      */
     public function listForSession(string $sessionId): array
     {
+        // @phpstan-ignore blb.growingTableUnboundedLoad (one browser session's artifacts)
         return BrowserArtifact::query()
             ->where('browser_session_id', $sessionId)
             ->orderBy('created_at')
@@ -122,6 +124,7 @@ class BrowserArtifactStore
      */
     public function deleteForSession(string $sessionId): int
     {
+        // @phpstan-ignore blb.growingTableUnboundedLoad (one browser session's artifacts)
         $artifacts = BrowserArtifact::query()
             ->where('browser_session_id', $sessionId)
             ->get();

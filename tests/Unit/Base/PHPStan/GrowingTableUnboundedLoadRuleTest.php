@@ -20,9 +20,8 @@ class GrowingTableUnboundedLoadRuleTest extends RuleTestCase
     public function test_unbounded_loads_of_a_growing_table_are_refused_and_bounded_ones_pass(): void
     {
         $root = $this->fixtureRoot();
-        $model = 'GrowingTableFixture\Models\RunLog';
-        $message = static fn (string $call): string => sprintf(
-            '%s on growing table model [%s] loads every row; limit/take/forPage it, paginate, chunk, lazy or cursor it, or reduce it in the database first (groupBy aggregate, whereKey on aggregated ids).',
+        $message = static fn (string $call, string $model = 'GrowingTableFixture\Models\RunLog'): string => sprintf(
+            '%s on growing table model [%s] loads every row; limit/take/forPage it, paginate, chunk, lazy or cursor it, or suppress it inline with the reason it is bounded.',
             $call,
             $model,
         );
@@ -45,7 +44,11 @@ class GrowingTableUnboundedLoadRuleTest extends RuleTestCase
             [$message('->get()'), 23],
             [$message('->get()'), 24],
             [$message('->get()'), 25],
-            [sprintf('->get() on growing table model [%s] loads every row; limit/take/forPage it, paginate, chunk, lazy or cursor it, or reduce it in the database first (groupBy aggregate, whereKey on aggregated ids).', 'GrowingTableFixture\Models\RunLogLine'), 26],
+            [$message('->get()'), 26],
+            [$message('->pluck()'), 27],
+            [$message('->get()'), 28],
+            [$message('->get()', 'GrowingTableFixture\Models\RunLogLine'), 29],
+            [$message('->get()', 'GrowingTableFixture\Models\RunLogLine'), 30],
         ]);
     }
 }

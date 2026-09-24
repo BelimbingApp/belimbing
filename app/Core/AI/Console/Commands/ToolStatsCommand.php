@@ -2,6 +2,7 @@
 
 namespace App\Core\AI\Console\Commands;
 
+use App\Base\Database\Services\HydrationGuard;
 use App\Core\AI\Enums\RunEventType;
 use App\Core\AI\Models\AiRunEvent;
 use App\Core\AI\Services\AgentToolRegistry;
@@ -87,15 +88,17 @@ class ToolStatsCommand extends Command
         $unknownAttempts = [];
         $missingCodes = ['unknown_tool', 'tool_not_available'];
 
-        AiRunEvent::query()
-            ->whereIn('event_type', [RunEventType::ToolFinished->value, RunEventType::ToolDenied->value])
-            ->where('created_at', '>=', $since)
-            ->orderBy('created_at')
-            ->chunk(500, function ($events) use (&$stats, &$unknownAttempts, $missingCodes): void {
-                foreach ($events as $event) {
-                    $this->recordToolEvent($event, $stats, $unknownAttempts, $missingCodes);
-                }
-            });
+        app(HydrationGuard::class)->suspend(function () use ($since, &$stats, &$unknownAttempts, $missingCodes): bool {
+            return AiRunEvent::query()
+                ->whereIn('event_type', [RunEventType::ToolFinished->value, RunEventType::ToolDenied->value])
+                ->where('created_at', '>=', $since)
+                ->orderBy('created_at')
+                ->chunk(500, function ($events) use (&$stats, &$unknownAttempts, $missingCodes): void {
+                    foreach ($events as $event) {
+                        $this->recordToolEvent($event, $stats, $unknownAttempts, $missingCodes);
+                    }
+                });
+        });
 
         return [$stats, $unknownAttempts];
     }

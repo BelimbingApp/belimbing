@@ -2,7 +2,6 @@
 
 namespace App\Core\AI\Models;
 
-use App\Base\Database\Attributes\PartitionedBy;
 use App\Base\Database\Contracts\GrowingTable;
 use App\Core\AI\Enums\ControlPlaneTarget;
 use App\Core\AI\Enums\TelemetryEventType;
@@ -32,7 +31,6 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  * @property-read Employee|null $employee
  */
-#[PartitionedBy('run_id', 'session_id')]
 class TelemetryEvent extends Model implements GrowingTable
 {
     /**

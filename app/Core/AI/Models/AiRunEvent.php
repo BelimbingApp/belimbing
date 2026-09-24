@@ -2,7 +2,6 @@
 
 namespace App\Core\AI\Models;
 
-use App\Base\Database\Attributes\PartitionedBy;
 use App\Base\Database\Contracts\GrowingTable;
 use App\Core\AI\Enums\RunEventType;
 use Illuminate\Database\Eloquent\Model;
@@ -26,7 +25,6 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at When the event was persisted
  * @property-read AiRun $run
  */
-#[PartitionedBy('run_id')]
 class AiRunEvent extends Model implements GrowingTable
 {
     /**

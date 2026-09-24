@@ -161,24 +161,6 @@ it('does not count a suspended bulk pass', function (): void {
     expect(fn () => hydrate($guard, 1))->toThrow(HydrationLimitExceededException::class);
 });
 
-it('raises the limit for the duration of withLimit only', function (): void {
-    $guard = hydrationGuard(HydrationGuardMode::Throw);
-
-    $guard->withLimit(10, fn () => hydrate($guard, 8));
-
-    expect($guard->limit())->toBe(3)->and($guard->hydrated())->toBe(8);
-
-    // Already over the restored limit: the next hydration reports.
-    expect(fn () => hydrate($guard, 1))->toThrow(HydrationLimitExceededException::class);
-});
-
-it('restores the limit when the callback throws', function (): void {
-    $guard = hydrationGuard(HydrationGuardMode::Throw);
-
-    expect(fn () => $guard->withLimit(10, fn () => throw new RuntimeException('boom')))->toThrow(RuntimeException::class);
-    expect($guard->limit())->toBe(3);
-});
-
 it('makes the request the unit of work and names it from the route facts', function (): void {
     $guard = hydrationGuard(HydrationGuardMode::Throw);
     hydrate($guard, 3);

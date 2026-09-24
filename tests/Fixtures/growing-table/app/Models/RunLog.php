@@ -2,13 +2,11 @@
 
 namespace GrowingTableFixture\Models;
 
-use App\Base\Database\Attributes\PartitionedBy;
 use App\Base\Database\Contracts\GrowingTable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[PartitionedBy('task_id')]
 final class RunLog extends Model implements GrowingTable
 {
     /** @return BelongsTo<Task, $this> */

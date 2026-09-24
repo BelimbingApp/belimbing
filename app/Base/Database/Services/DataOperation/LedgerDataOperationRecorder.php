@@ -231,6 +231,7 @@ final class LedgerDataOperationRecorder implements DataOperationRecorder
 
     private function sumAffected(DataOperationRun $run): ?int
     {
+        // @phpstan-ignore blb.growingTableUnboundedLoad (one table summary per table in this run)
         $summaries = $run->tables()->get();
 
         if ($summaries->isEmpty()) {

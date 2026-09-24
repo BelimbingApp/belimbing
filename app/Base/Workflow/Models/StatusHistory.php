@@ -2,7 +2,6 @@
 
 namespace App\Base\Workflow\Models;
 
-use App\Base\Database\Attributes\PartitionedBy;
 use App\Base\Database\Contracts\GrowingTable;
 use Illuminate\Database\Eloquent\Attributes\Scope as ScopeAttribute;
 use Illuminate\Database\Eloquent\Builder;
@@ -34,7 +33,6 @@ use Illuminate\Support\Carbon;
  * @property Carbon $transitioned_at
  * @property Carbon|null $created_at
  */
-#[PartitionedBy('flow_id')]
 class StatusHistory extends Model implements GrowingTable
 {
     public const UPDATED_AT = null;
@@ -85,6 +83,7 @@ class StatusHistory extends Model implements GrowingTable
      */
     public static function timeline(string $flow, int $flowId): Collection
     {
+        // @phpstan-ignore blb.growingTableUnboundedLoad (one workflow instance's timeline)
         return static::query()
             ->where('flow', $flow)
             ->where('flow_id', $flowId)

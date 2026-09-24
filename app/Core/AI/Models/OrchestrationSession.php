@@ -2,7 +2,6 @@
 
 namespace App\Core\AI\Models;
 
-use App\Base\Database\Attributes\PartitionedBy;
 use App\Base\Database\Contracts\GrowingTable;
 use App\Core\AI\Enums\OrchestrationSessionStatus;
 use App\Core\Employee\Models\Employee;
@@ -41,7 +40,6 @@ use Illuminate\Support\Carbon;
  * @property-read Employee|null $childEmployee
  * @property-read OrchestrationSession|null $parentSession
  */
-#[PartitionedBy('parent_session_id')]
 class OrchestrationSession extends Model implements GrowingTable
 {
     /**

@@ -223,6 +223,7 @@ class ProcessCoordinator
             );
 
             $now = now();
+            // @phpstan-ignore blb.growingTableUnboundedLoad (one process run's work items)
             $matchedItems = ProcessWorkItem::query()
                 ->where('process_run_id', $lockedRun->id)
                 ->where('required_signal', $signal)
@@ -764,6 +765,7 @@ class ProcessCoordinator
                 return null;
             }
 
+            // @phpstan-ignore blb.growingTableUnboundedLoad (one process run's work items)
             $items = ProcessWorkItem::query()
                 ->where('process_run_id', $lockedRun->id)
                 ->orderBy('id')
@@ -947,6 +949,7 @@ class ProcessCoordinator
 
     private function reconcileLocked(ProcessRun $run, Carbon $now): void
     {
+        // @phpstan-ignore blb.growingTableUnboundedLoad (one process run's work items)
         $expired = ProcessWorkItem::query()
             ->where('process_run_id', $run->id)
             ->where('status', ProcessWorkStatus::LEASED->value)
@@ -983,6 +986,7 @@ class ProcessCoordinator
 
         do {
             $changed = false;
+            // @phpstan-ignore blb.growingTableUnboundedLoad (one process run's work items)
             $pending = ProcessWorkItem::query()
                 ->where('process_run_id', $run->id)
                 ->where('status', ProcessWorkStatus::PENDING->value)
@@ -1091,6 +1095,7 @@ class ProcessCoordinator
             return;
         }
 
+        // @phpstan-ignore blb.growingTableUnboundedLoad (one process run's work items)
         $items = ProcessWorkItem::query()->where('process_run_id', $run->id)->get();
 
         if ($items->contains(fn (ProcessWorkItem $item): bool => ! $item->status->terminal())) {

@@ -20,8 +20,9 @@ use Throwable;
  * suspends model events (Model::withoutEvents, an unset dispatcher) is not
  * counted; those are already deliberate bulk paths. chunk(), lazy() and
  * cursor() fire `retrieved` per row and are counted like everything else:
- * the guard measures work per unit, not peak memory, and a deliberate bulk
- * pass declares itself with suspend() or withLimit().
+ * the guard measures work per unit, not peak memory, so streaming only
+ * satisfies the guard inside suspend(), which is how a deliberate bulk pass
+ * declares itself.
  *
  * In throw mode the crossing raises HydrationLimitExceededException from
  * inside the load, so the offending code path fails. In log mode it writes
@@ -42,7 +43,7 @@ final class HydrationGuard
     private int $suspendDepth = 0;
 
     public function __construct(
-        private int $limit,
+        private readonly int $limit,
         private readonly HydrationGuardMode $mode,
         private readonly LoggerInterface $logger,
     ) {
@@ -155,27 +156,6 @@ final class HydrationGuard
             return $callback();
         } finally {
             $this->suspendDepth--;
-        }
-    }
-
-    /**
-     * Run a pass under a different limit. The count already accrued in the
-     * current window still applies; only the threshold changes.
-     *
-     * @template T
-     *
-     * @param  callable(): T  $callback
-     * @return T
-     */
-    public function withLimit(int $limit, callable $callback): mixed
-    {
-        $previous = $this->limit;
-        $this->limit = max(1, $limit);
-
-        try {
-            return $callback();
-        } finally {
-            $this->limit = $previous;
         }
     }
 

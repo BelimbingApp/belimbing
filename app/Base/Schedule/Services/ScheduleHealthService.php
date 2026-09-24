@@ -169,6 +169,7 @@ final class ScheduleHealthService
             ->select(['id', 'key', 'name', 'status', 'started_at'])
             ->selectRaw("ROW_NUMBER() OVER (PARTITION BY {$key} ORDER BY {$startedAt} DESC, {$id} DESC) AS run_rank");
 
+        // @phpstan-ignore blb.growingTableUnboundedLoad (at most RUNS_PER_TASK ranked runs per task)
         return ScheduleRun::query()
             ->fromSub($ranked->toBase(), 'recent_schedule_runs')
             ->where('run_rank', '<=', self::RUNS_PER_TASK)

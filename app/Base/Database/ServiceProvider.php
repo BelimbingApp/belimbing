@@ -55,7 +55,6 @@ use App\Base\Database\Services\ModuleMigrationDependencyChecker;
 use App\Base\Database\Services\SchemaDrift\SchemaDriftInspector;
 use App\Base\Database\Services\SessionStateDevelopmentSanitizer;
 use App\Base\Foundation\Contracts\DataOperationRecorder;
-use App\Base\Foundation\Exceptions\BlbConfigurationException;
 use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Contracts\Events\Dispatcher;
@@ -98,7 +97,7 @@ class ServiceProvider extends BaseServiceProvider
 
         $this->app->singleton(HydrationGuard::class, fn ($app): HydrationGuard => new HydrationGuard(
             max(1, (int) $app['config']->get('hydration_guard.limit', 5000)),
-            $this->hydrationGuardMode($app['config']->get('hydration_guard.mode')),
+            $this->hydrationGuardMode(),
             $app->make(LoggerInterface::class),
         ));
 
@@ -204,22 +203,14 @@ class ServiceProvider extends BaseServiceProvider
     }
 
     /**
-     * Unset: fail loudly where a developer or a test will see it, warn where
-     * a user would. Anything else is a configuration mistake worth stopping on.
+     * Fail loudly where a developer or a test will see it, warn where a user
+     * would.
      */
-    private function hydrationGuardMode(mixed $configured): HydrationGuardMode
+    private function hydrationGuardMode(): HydrationGuardMode
     {
-        if ($configured === null || $configured === '') {
-            return $this->app->environment('local', 'testing')
-                ? HydrationGuardMode::Throw
-                : HydrationGuardMode::Log;
-        }
-
-        return HydrationGuardMode::tryFrom((string) $configured)
-            ?? throw new BlbConfigurationException(sprintf(
-                'hydration_guard.mode must be "throw" or "log"; got [%s].',
-                is_scalar($configured) ? (string) $configured : get_debug_type($configured),
-            ));
+        return $this->app->environment('local', 'testing')
+            ? HydrationGuardMode::Throw
+            : HydrationGuardMode::Log;
     }
 
     /**
@@ -230,10 +221,6 @@ class ServiceProvider extends BaseServiceProvider
      */
     private function registerHydrationGuard(): void
     {
-        if (! $this->app['config']->get('hydration_guard.enabled', true)) {
-            return;
-        }
-
         $guard = $this->app->make(HydrationGuard::class);
 
         Event::listen('eloquent.retrieved: *', static function (string $event, array $payload) use ($guard): void {

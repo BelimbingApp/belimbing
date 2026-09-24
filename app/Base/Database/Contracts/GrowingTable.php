@@ -11,7 +11,7 @@ namespace App\Base\Database\Contracts;
  * The marker is explicit rather than inferred from a name so the contract is
  * reviewable. It drives GrowingTableUnboundedLoadRule in static analysis: a
  * ->get(), ->all(), ->pluck() or ::all() on such a model must be limited,
- * paged, reduced by the database first, or filtered to one partition the
- * model declares with #[PartitionedBy] (see docs/architecture/query-bounds.md).
+ * paginated, chunked or cursored, or carry a reviewed inline suppression
+ * stating why it is bounded (see docs/architecture/query-bounds.md).
  */
 interface GrowingTable {}

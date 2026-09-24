@@ -2,6 +2,7 @@
 
 namespace App\Base\Integration\Services;
 
+use App\Base\Database\Services\HydrationGuard;
 use App\Base\Integration\Models\OutboundExchange;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -17,42 +18,44 @@ class OutboundExchangePruner
     {
         $pruned = 0;
 
-        ($query ?? OutboundExchange::query())
-            ->where(function ($query): void {
-                $query->whereNotNull('request_body')
-                    ->orWhereNotNull('response_body')
-                    ->orWhereNotNull('request_headers')
-                    ->orWhereNotNull('response_headers');
-            })
-            ->orderBy('id')
-            ->chunkById(200, function ($rows) use (&$pruned): void {
-                foreach ($rows as $exchange) {
-                    if (! $exchange instanceof OutboundExchange) {
-                        continue;
+        app(HydrationGuard::class)->suspend(function () use ($query, &$pruned): bool {
+            return ($query ?? OutboundExchange::query())
+                ->where(function ($query): void {
+                    $query->whereNotNull('request_body')
+                        ->orWhereNotNull('response_body')
+                        ->orWhereNotNull('request_headers')
+                        ->orWhereNotNull('response_headers');
+                })
+                ->orderBy('id')
+                ->chunkById(200, function ($rows) use (&$pruned): void {
+                    foreach ($rows as $exchange) {
+                        if (! $exchange instanceof OutboundExchange) {
+                            continue;
+                        }
+
+                        $cutoff = now()->subDays($this->retentionDays($exchange));
+                        if (! $exchange->occurred_at instanceof Carbon || $exchange->occurred_at->greaterThanOrEqualTo($cutoff)) {
+                            continue;
+                        }
+
+                        $updated = OutboundExchange::query()
+                            ->whereKey($exchange->getKey())
+                            ->where('updated_at', $exchange->updated_at)
+                            ->update([
+                                'request_headers' => null,
+                                'request_body' => null,
+                                'request_body_truncated' => false,
+                                'request_body_original_bytes' => null,
+                                'response_headers' => null,
+                                'response_body' => null,
+                                'response_body_truncated' => false,
+                                'response_body_original_bytes' => null,
+                            ]);
+
+                        $pruned += $updated;
                     }
-
-                    $cutoff = now()->subDays($this->retentionDays($exchange));
-                    if (! $exchange->occurred_at instanceof Carbon || $exchange->occurred_at->greaterThanOrEqualTo($cutoff)) {
-                        continue;
-                    }
-
-                    $updated = OutboundExchange::query()
-                        ->whereKey($exchange->getKey())
-                        ->where('updated_at', $exchange->updated_at)
-                        ->update([
-                            'request_headers' => null,
-                            'request_body' => null,
-                            'request_body_truncated' => false,
-                            'request_body_original_bytes' => null,
-                            'response_headers' => null,
-                            'response_body' => null,
-                            'response_body_truncated' => false,
-                            'response_body_original_bytes' => null,
-                        ]);
-
-                    $pruned += $updated;
-                }
-            });
+                });
+        });
 
         return $pruned;
     }

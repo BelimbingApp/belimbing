@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Core\AI\Services\ControlPlane;
 
 use App\Core\AI\DTO\ControlPlane\RunInspection;
@@ -40,6 +41,7 @@ class RunInspectionService
      */
     public function inspectSession(int $employeeId, string $sessionId): array
     {
+        // @phpstan-ignore blb.growingTableUnboundedLoad (one session's runs)
         $runs = AiRun::query()
             ->with(['actingForUser', 'employee', 'calls'])
             ->where('employee_id', $employeeId)
@@ -58,6 +60,7 @@ class RunInspectionService
      */
     public function inspectDispatchRun(string $dispatchId): array
     {
+        // @phpstan-ignore blb.growingTableUnboundedLoad (one dispatch's runs)
         $runs = AiRun::query()
             ->with(['actingForUser', 'employee', 'calls'])
             ->where('dispatch_id', $dispatchId)

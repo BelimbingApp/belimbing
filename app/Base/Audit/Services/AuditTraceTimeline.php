@@ -113,6 +113,7 @@ final class AuditTraceTimeline
     /** @return Collection<int, AuditAction> */
     private function actions(string $traceId): Collection
     {
+        // @phpstan-ignore blb.growingTableUnboundedLoad (one trace's actions)
         return $this->tenantScope->apply(
             AuditAction::query()
                 ->leftJoin('users', function ($join): void {
@@ -131,6 +132,7 @@ final class AuditTraceTimeline
     /** @return Collection<int, AuditMutation> */
     private function mutations(string $traceId): Collection
     {
+        // @phpstan-ignore blb.growingTableUnboundedLoad (one trace's mutations)
         return $this->tenantScope->apply(
             AuditMutation::query()
                 ->leftJoin('users', function ($join): void {

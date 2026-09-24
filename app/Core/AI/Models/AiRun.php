@@ -2,7 +2,6 @@
 
 namespace App\Core\AI\Models;
 
-use App\Base\Database\Attributes\PartitionedBy;
 use App\Base\Database\Contracts\GrowingTable;
 use App\Core\AI\Enums\AiRunStatus;
 use App\Core\AI\Enums\RunEventType;
@@ -68,7 +67,6 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, AiRunEvent> $events
  * @property-read Collection<int, AiRunCall> $calls
  */
-#[PartitionedBy('session_id', 'dispatch_id')]
 class AiRun extends Model implements GrowingTable
 {
     use HasUlids;

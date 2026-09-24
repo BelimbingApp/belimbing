@@ -124,6 +124,7 @@ class OperationsDispatchService
      */
     public function statusCounts(): array
     {
+        // @phpstan-ignore blb.growingTableUnboundedLoad (one count per status)
         $counts = OperationDispatch::query()
             ->selectRaw('status, count(*) as total')
             ->groupBy('status')

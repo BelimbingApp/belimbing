@@ -108,6 +108,7 @@ class Index extends Component
      */
     private function distinct(string $column): array
     {
+        // @phpstan-ignore blb.growingTableUnboundedLoad (distinct values of a low-cardinality filter column)
         return OutboundExchange::visibleToCurrentTenant()
             ->whereNotNull($column)
             ->distinct()

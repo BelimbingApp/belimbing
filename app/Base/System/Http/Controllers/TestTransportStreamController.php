@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\System\Http\Controllers;
 
 use App\Core\AI\Models\AiRun;
@@ -26,6 +27,7 @@ class TestTransportStreamController
             return $this->ndjsonErrorStream(403, 'Forbidden');
         }
 
+        // @phpstan-ignore blb.growingTableUnboundedLoad (one test turn's events)
         $events = AiRunEvent::query()
             ->where('run_id', $turnId)
             ->orderBy('seq')
