@@ -10,6 +10,7 @@ use App\Base\Database\Exceptions\DataShareApplyException;
 use App\Base\Database\Exceptions\DataSharePackageException;
 use App\Base\Database\Models\DataSharePlan;
 use App\Base\Database\Models\DataSharePlanAction;
+use App\Base\Database\Services\HydrationGuard;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -114,56 +115,58 @@ class DataSharePackageApplier
         }
 
         try {
-            $this->reader->inspect(
-                $stream,
-                function (
-                    DataShareScopeDefinition $scope,
-                    DataShareTableDefinition $table,
-                    array $record,
-                ) use ($plan, $mutate, &$sequence, &$actionBuffer, &$bufferStart, $actionHash): void {
-                    $sequence++;
+            app(HydrationGuard::class)->suspend(function () use ($stream, $plan, $mutate, &$sequence, &$actionBuffer, &$bufferStart, $actionHash): void {
+                $this->reader->inspect(
+                    $stream,
+                    function (
+                        DataShareScopeDefinition $scope,
+                        DataShareTableDefinition $table,
+                        array $record,
+                    ) use ($plan, $mutate, &$sequence, &$actionBuffer, &$bufferStart, $actionHash): void {
+                        $sequence++;
 
-                    if ($actionBuffer === [] || $sequence < $bufferStart || $sequence >= $bufferStart + count($actionBuffer)) {
-                        $bufferStart = $sequence;
-                        $actionBuffer = DataSharePlanAction::query()
-                            ->where('plan_id', $plan->id)
-                            ->whereBetween('sequence', [$sequence, $sequence + 499])
-                            ->orderBy('sequence')
-                            ->limit(500)
-                            ->get()
-                            ->all();
-                    }
+                        if ($actionBuffer === [] || $sequence < $bufferStart || $sequence >= $bufferStart + count($actionBuffer)) {
+                            $bufferStart = $sequence;
+                            $actionBuffer = DataSharePlanAction::query()
+                                ->where('plan_id', $plan->id)
+                                ->whereBetween('sequence', [$sequence, $sequence + 499])
+                                ->orderBy('sequence')
+                                ->limit(500)
+                                ->get()
+                                ->all();
+                        }
 
-                    $expected = $actionBuffer[$sequence - $bufferStart] ?? null;
-                    $classification = $this->destination->classify($table, $record);
+                        $expected = $actionBuffer[$sequence - $bufferStart] ?? null;
+                        $classification = $this->destination->classify($table, $record);
 
-                    if ($expected === null
-                        || $expected->sequence !== $sequence
-                        || $expected->scope_name !== $scope->name
-                        || $expected->table_name !== $table->table
-                        || ! hash_equals($expected->primary_key_hash, hash('sha256', CanonicalJson::encode($record['primary_key'])))
-                        || $expected->action !== $classification['action']
-                        || ! hash_equals($expected->incoming_fingerprint, $record['fingerprint'])
-                        || $expected->destination_fingerprint !== $classification['destination_fingerprint']) {
-                        throw DataShareApplyException::stalePlan();
-                    }
+                        if ($expected === null
+                            || $expected->sequence !== $sequence
+                            || $expected->scope_name !== $scope->name
+                            || $expected->table_name !== $table->table
+                            || ! hash_equals($expected->primary_key_hash, hash('sha256', CanonicalJson::encode($record['primary_key'])))
+                            || $expected->action !== $classification['action']
+                            || ! hash_equals($expected->incoming_fingerprint, $record['fingerprint'])
+                            || $expected->destination_fingerprint !== $classification['destination_fingerprint']) {
+                            throw DataShareApplyException::stalePlan();
+                        }
 
-                    hash_update($actionHash, CanonicalJson::encode([
-                        'sequence' => $sequence,
-                        'scope_name' => $scope->name,
-                        'table_name' => $table->table,
-                        'primary_key_hash' => $expected->primary_key_hash,
-                        'primary_key' => CanonicalJson::encode($record['primary_key']),
-                        'action' => $classification['action'],
-                        'incoming_fingerprint' => $record['fingerprint'],
-                        'destination_fingerprint' => $classification['destination_fingerprint'],
-                    ]));
+                        hash_update($actionHash, CanonicalJson::encode([
+                            'sequence' => $sequence,
+                            'scope_name' => $scope->name,
+                            'table_name' => $table->table,
+                            'primary_key_hash' => $expected->primary_key_hash,
+                            'primary_key' => CanonicalJson::encode($record['primary_key']),
+                            'action' => $classification['action'],
+                            'incoming_fingerprint' => $record['fingerprint'],
+                            'destination_fingerprint' => $classification['destination_fingerprint'],
+                        ]));
 
-                    if ($mutate) {
-                        $this->applyRecord($table, $record, $classification['action']);
-                    }
-                },
-            );
+                        if ($mutate) {
+                            $this->applyRecord($table, $record, $classification['action']);
+                        }
+                    },
+                );
+            });
         } finally {
             fclose($stream);
         }

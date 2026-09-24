@@ -33,6 +33,7 @@ use App\Base\Database\Services\DataShare\DataShareScopeCatalog;
 use App\Base\Database\Services\DataShare\DataShareSettings;
 use App\Base\Database\Services\DataShare\DataShareTransferOfferManager;
 use App\Base\Database\Services\DataShare\DataShareValueNormalizer;
+use App\Base\Database\Services\HydrationGuard;
 use App\Base\Settings\Contracts\SettingsService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Artisan;
@@ -695,6 +696,29 @@ it('plans and applies inserts, preserves relationships, rejects replay, and repl
     ['bundle' => $repeatBundle, 'export' => $repeatExport] = publishGenericDataShare();
     $repeatPlan = app(DataShareImportPlanner::class)->plan(receiveGenericDataShare($repeatBundle, $repeatExport));
     expect($repeatPlan->summary['counts'])->toBe(['insert' => 0, 'unchanged' => 3, 'conflict' => 0]);
+});
+
+it('applies a package with more records than the hydration guard limit', function (): void {
+    $count = app(HydrationGuard::class)->limit() + 1;
+
+    foreach (array_chunk(range(1, $count), 500) as $chunk) {
+        DB::table(GENERIC_SHARE_PARENT)->insert(array_map(static fn (int $id): array => [
+            'id' => $id,
+            'code' => "parent-{$id}",
+            'name' => "Parent {$id}",
+            'amount' => '1.0000',
+        ], $chunk));
+    }
+
+    ['bundle' => $bundle, 'export' => $export] = publishGenericDataShare([GENERIC_SHARE_PARENT]);
+    DB::table(GENERIC_SHARE_PARENT)->delete();
+    $receipt = receiveGenericDataShare($bundle, $export);
+    $plan = app(DataShareImportPlanner::class)->plan($receipt);
+
+    app(DataSharePackageApplier::class)->apply($plan, $receipt->package_sha256, $plan->plan_hash, confirmed: true);
+
+    expect(DB::table(GENERIC_SHARE_PARENT)->count())->toBe($count)
+        ->and($plan->refresh()->status)->toBe('applied');
 });
 
 it('refuses apply while the global Data Share lock is held', function (): void {
