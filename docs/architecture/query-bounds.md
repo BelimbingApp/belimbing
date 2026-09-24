@@ -80,7 +80,7 @@ A model whose table grows with use and is never bounded by the size of the busin
 
 ### What is reported
 
-`->get()`, `->all()`, `->pluck()`, `->getModels()` and `::all()` on a growing-table model, whether reached through `Model::query()`, a static forwarder such as `Model::where()`, or a relation (`$task->runs()->get()`), unless the same call chain is limited by `limit`, `take`, `forPage`, `forPageAfterId` or `forPageBeforeId`, or restricted to known ids with `whereKey`.
+`->get()`, `->all()`, `->pluck()`, `->getModels()` and `::all()` on a growing-table model, whether reached through `Model::query()`, a static forwarder such as `Model::where()`, or a relation (`$task->runs()->get()`), unless the query being loaded is limited by `limit`, `take`, `forPage`, `forPageAfterId` or `forPageBeforeId`, or restricted to known ids with `whereKey`. Only bounds after the nearest earlier terminal call count: in `Task::findOrFail($id)->runs()->get()` the relation starts a new, unbounded query and is reported, while `RunLog::limit(10)->get()` passes.
 
 `paginate()`, `chunk()`, `lazy()`, `lazyById()`, `cursor()`, `first()`, `count()` and other non-loading terminals are never reported, and neither are collection calls made after one of them.
 
