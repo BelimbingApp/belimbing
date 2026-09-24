@@ -8,6 +8,7 @@ use App\Base\Foundation\Enums\FoundationErrorCode;
 use App\Base\Foundation\Exceptions\BlbException;
 use App\Base\Foundation\Http\Middleware\SecurityHeaders;
 use App\Base\Foundation\Http\Middleware\TrustConfiguredProxies;
+use App\Base\Foundation\Services\ErrorPages;
 use App\Base\Locale\Middleware\ApplyLocaleContext;
 use App\Base\Perf\Http\Middleware\RecordRequestPerformance;
 use App\Base\System\Http\Middleware\ApplyRuntimeConfiguration;
@@ -218,4 +219,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->report($reportBlbException);
         $exceptions->render($renderBlbException);
         $exceptions->report($recordReportedError);
+
+        // A 5xx the application rendered itself (branded 500, maintenance 503)
+        // is marked so the ingress proxy keeps it; an unmarked 5xx is a raw PHP
+        // failure and gets the static fallback (see ErrorPages).
+        $exceptions->respond(static fn (Response $response): Response => ErrorPages::markRendered($response));
     })->create();

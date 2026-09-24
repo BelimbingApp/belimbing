@@ -39,4 +39,14 @@
 		root * public
 		php_server
 	}
+
+	# Same fallback as the project Caddyfile: a Caddy-level 5xx (worker crashed
+	# or unavailable) serves the branded static page instead of a blank error.
+	handle_errors 5xx {
+		root * public/errors
+		rewrite * /5xx.html
+		file_server {
+			status {err.status_code}
+		}
+	}
 }

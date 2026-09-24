@@ -1,11 +1,46 @@
 <?php
 
+use App\Base\Foundation\Services\ErrorPages;
 use App\Base\Software\Services\DeploymentMaintenanceGuard;
 use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\User\Models\User;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
+
+/**
+ * Point the default connection at a database that cannot be opened, so any
+ * query the code under test attempts fails instead of silently succeeding.
+ */
+function withUnreachableDatabase(Closure $callback): void
+{
+    $original = config('database.default');
+
+    // The test suite keeps the maintenance flag in the cache, whose default
+    // store is the database; keep it process-local so the flag check itself
+    // is not what fails when the database goes away.
+    config(['app.maintenance.store' => 'array']);
+
+    config([
+        'database.default' => 'unreachable',
+        'database.connections.unreachable' => [
+            'driver' => 'sqlite',
+            'database' => '/nonexistent/belimbing-error-pages.sqlite',
+            'prefix' => '',
+        ],
+    ]);
+
+    try {
+        expect(fn () => DB::select('select 1'))->toThrow(QueryException::class);
+
+        $callback();
+    } finally {
+        DB::purge('unreachable');
+        config(['database.default' => $original]);
+    }
+}
 
 it('offers try again instead of a self-referential back to home when the error happened on home', function (): void {
     Route::get('/', fn () => abort(500))->middleware([]);
@@ -211,3 +246,74 @@ test('the maintenance page offers no recovery link when nothing is stranded', fu
         Artisan::call('up');
     }
 });
+
+// Layer 1 of the error-page contract (docs/runbooks/error-pages.md): a 500 or a
+// maintenance 503 is exactly the moment the database, the session, or the asset
+// build may be the thing that broke, so the page must need none of them.
+
+it('renders the branded 500 page without a database, a session, or built assets', function (): void {
+    Route::get('/broken-without-services', fn () => abort(500))->middleware([]);
+
+    withUnreachableDatabase(function (): void {
+        $response = $this->get('/broken-without-services')
+            ->assertStatus(500)
+            ->assertHeader(ErrorPages::RENDERED_HEADER, ErrorPages::RENDERED_HEADER_VALUE)
+            ->assertCookieMissing(config('session.cookie'))
+            ->assertSee(config('app.name'))
+            ->assertSee(__('Something broke on our side'));
+
+        expect($response->getContent())->toContain('<svg')
+            ->not->toContain('/build/')
+            ->not->toContain('<script')
+            ->not->toContain('<link');
+    });
+});
+
+it('renders the branded maintenance page without a database or a session', function (): void {
+    config(['app.maintenance.store' => 'array']);
+    Artisan::call('down', ['--retry' => 5]);
+
+    try {
+        withUnreachableDatabase(function (): void {
+            $response = $this->get('/')
+                ->assertStatus(503)
+                ->assertHeader(ErrorPages::RENDERED_HEADER, ErrorPages::RENDERED_HEADER_VALUE)
+                ->assertCookieMissing(config('session.cookie'))
+                ->assertSee(config('app.name'))
+                ->assertSee(__('Down for maintenance'))
+                ->assertSee('http-equiv="refresh"', false);
+
+            expect($response->getContent())->toContain('<svg')
+                ->not->toContain('/build/')
+                ->not->toContain('<script');
+        });
+    } finally {
+        Artisan::call('up');
+    }
+});
+
+it('marks only server-side failures as application-rendered error pages', function (): void {
+    // The ingress proxy swaps unmarked 5xx responses for the static fallback;
+    // a 4xx is never at risk of that, so it carries no mark.
+    $this->get('/guest-not-found-xyz')
+        ->assertNotFound()
+        ->assertHeaderMissing(ErrorPages::RENDERED_HEADER);
+
+    Route::get('/broken-json', fn () => abort(500))->middleware([]);
+
+    $this->getJson('/broken-json')
+        ->assertStatus(500)
+        ->assertHeader(ErrorPages::RENDERED_HEADER, ErrorPages::RENDERED_HEADER_VALUE);
+});
+
+it('shows the same branded shell on every standalone error page', function (int $status): void {
+    Route::get('/standalone-'.$status, fn () => abort($status))->middleware([]);
+
+    $html = $this->get('/standalone-'.$status)
+        ->assertStatus($status)
+        ->getContent();
+
+    expect(substr_count($html, '<div class="brand">'))->toBe(1)
+        ->and($html)->toContain('<svg')
+        ->and($html)->toContain('<span>'.config('app.name').'</span>');
+})->with([403, 404, 419, 500]);

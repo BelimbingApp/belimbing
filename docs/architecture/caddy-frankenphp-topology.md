@@ -2,7 +2,7 @@
 
 **Document Type:** Architecture Specification
 **Scope:** Native BLB runtime across development, staging, and production
-**Last Updated:** 2026-04-16
+**Last Updated:** 2026-09-24
 
 ## Overview
 

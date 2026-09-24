@@ -2,7 +2,11 @@
 
 define('LARAVEL_START', microtime(true));
 
-// Catch fatal errors before Laravel boots so the browser shows the error instead of 502
+// A fatal before Laravel boots (broken vendor/, bad PHP build) would otherwise
+// reach the browser as a blank 500. Answer with the branded static fallback
+// instead; the message itself belongs in the PHP error log, not on screen.
+// When display_errors is on, PHP has already printed the error and sent
+// headers, so this handler stays out of the way.
 register_shutdown_function(function (): void {
     $err = error_get_last();
     if ($err === null || headers_sent() || headers_list() !== []) {
@@ -14,11 +18,14 @@ register_shutdown_function(function (): void {
     }
     http_response_code(500);
     header('Content-Type: text/html; charset=UTF-8');
-    $msg = htmlspecialchars($err['message'], ENT_QUOTES, 'UTF-8');
-    $file = htmlspecialchars($err['file'] ?? 'unknown', ENT_QUOTES, 'UTF-8');
-    $line = (int) ($err['line'] ?? 0);
-    echo '<!DOCTYPE html><html><head><title>Fatal Error</title></head><body>';
-    echo "<h1>Fatal Error</h1><pre>{$msg}\n\nin {$file} on line {$line}</pre></body></html>";
+    $fallback = __DIR__.'/errors/5xx.html';
+    if (is_file($fallback)) {
+        readfile($fallback);
+
+        return;
+    }
+    echo '<!DOCTYPE html><html><head><title>Server unavailable</title></head><body>';
+    echo '<h1>Server unavailable</h1><p>The server did not answer. Please try again shortly.</p></body></html>';
 });
 
 use Illuminate\Foundation\Application;

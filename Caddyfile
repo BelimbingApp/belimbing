@@ -71,4 +71,18 @@
 		root * public
 		php_server
 	}
+
+	# When FrankenPHP itself cannot run the request (worker crashed, still
+	# starting, or the worker script failed to load), Caddy raises a 5xx with
+	# no body. Serve the branded static fallback instead. Error pages the
+	# application renders are ordinary responses, so they never land here.
+	# Regenerate the page with `php artisan blb:error-pages:publish`.
+	handle_errors 5xx {
+		import security_headers
+		root * public/errors
+		rewrite * /5xx.html
+		file_server {
+			status {err.status_code}
+		}
+	}
 }
