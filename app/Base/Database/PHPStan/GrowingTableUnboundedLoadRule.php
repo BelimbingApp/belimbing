@@ -123,6 +123,10 @@ final class GrowingTableUnboundedLoadRule implements Rule
         [$calls, $root] = $this->walkChain($node->var);
         $chain = array_map(static fn (MethodCall $call): string => $call->name->toString(), $calls);
 
+        if ($root instanceof StaticCall && $root->name instanceof Identifier) {
+            $chain[] = $root->name->toString();
+        }
+
         if (array_intersect($chain, self::BOUNDING_METHODS) !== []
             || array_intersect($chain, self::TERMINAL_METHODS) !== []) {
             return [];
@@ -202,7 +206,7 @@ final class GrowingTableUnboundedLoadRule implements Rule
     private function error(string $model, string $call, int $line): IdentifierRuleError
     {
         return RuleErrorBuilder::message(sprintf(
-            '%s on growing table model [%s] loads every row; limit/take/forPage it, paginate, chunk, lazy or cursor it, or suppress it inline with the reason it is bounded.',
+            '%s on growing table model [%s] loads every row; limit/take/forPage it, restrict it to known ids with whereKey, paginate, chunk, lazy or cursor it, or suppress it inline with the reason it is bounded.',
             $call,
             $model,
         ))

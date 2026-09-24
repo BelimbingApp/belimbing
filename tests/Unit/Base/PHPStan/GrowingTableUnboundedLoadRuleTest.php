@@ -21,7 +21,7 @@ class GrowingTableUnboundedLoadRuleTest extends RuleTestCase
     {
         $root = $this->fixtureRoot();
         $message = static fn (string $call, string $model = 'GrowingTableFixture\Models\RunLog'): string => sprintf(
-            '%s on growing table model [%s] loads every row; limit/take/forPage it, paginate, chunk, lazy or cursor it, or suppress it inline with the reason it is bounded.',
+            '%s on growing table model [%s] loads every row; limit/take/forPage it, restrict it to known ids with whereKey, paginate, chunk, lazy or cursor it, or suppress it inline with the reason it is bounded.',
             $call,
             $model,
         );

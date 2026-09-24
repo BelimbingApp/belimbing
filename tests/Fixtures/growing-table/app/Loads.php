@@ -35,6 +35,9 @@ final class Loads
         RunLog::query()->orderByDesc('id')->take(1)->get();
         RunLog::query()->forPage(2, 50)->get();
         RunLog::query()->whereKey([1, 2, 3])->get();
+        RunLog::whereKey([1])->get();
+        RunLog::limit(10)->get();
+        RunLog::paginate()->pluck('id');
         $task->runs()->limit(5)->get();
         RunLog::query()->paginate();
         RunLog::query()->cursor();
