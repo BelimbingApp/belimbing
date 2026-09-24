@@ -68,11 +68,11 @@ final class PerfLog
         });
 
         try {
-            if (! is_dir($directory) && ! mkdir($directory, 0755, true) && ! is_dir($directory)) {
+            if (! is_dir($directory) && ! mkdir($directory, 0755, true) && ! is_dir($directory)) { // NOSONAR — directory is the admin-configured perf.log_path setting (or storage/logs), not request input
                 throw new RuntimeException("Could not create perf log directory [$directory]: ".($error ?? 'unknown error'));
             }
 
-            if (file_put_contents($path, $line, FILE_APPEND | LOCK_EX) === false) {
+            if (file_put_contents($path, $line, FILE_APPEND | LOCK_EX) === false) { // NOSONAR — directory is the admin-configured perf.log_path setting (or storage/logs), not request input
                 throw new RuntimeException("Could not append to perf log [$path]: ".($error ?? 'unknown error'));
             }
         } finally {
