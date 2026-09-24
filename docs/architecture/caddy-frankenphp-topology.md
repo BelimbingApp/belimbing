@@ -50,6 +50,7 @@ The system Caddy daemon is the only public ingress owner. It is responsible for:
 - terminating TLS
 - routing hostnames to the correct BLB instance
 - coexisting safely with other BLB instances and unrelated sites on the same machine
+- serving the branded fallback page when an instance is unreachable or answers a raw 5xx (`docs/runbooks/error-pages.md`)
 
 BLB does not treat public ingress as app-local responsibility in the default architecture.
 

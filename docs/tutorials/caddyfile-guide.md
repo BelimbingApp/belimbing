@@ -119,8 +119,9 @@ Located in the project root (`$PROJECT_ROOT/Caddyfile`), this single file handle
 
 ### `handle_errors`
 
-Runs a separate route when Caddy itself fails to produce a response, such as a
-proxy target that is down or a FrankenPHP worker that cannot run the request.
+Runs a separate route when Caddy itself raises an error, such as a proxy target
+that is down. A response PHP produced is not a Caddy error, and a hung or
+failed FrankenPHP worker raises none, so neither reaches this route.
 Belimbing uses it to serve the branded static fallback page with the original
 status code:
 
@@ -137,7 +138,6 @@ handle_errors 5xx {
 `file_server` would otherwise answer `200`; the `status` placeholder keeps the
 failure visible to clients and monitoring. Which page is served at which layer,
 and how the page is regenerated, is in `docs/runbooks/error-pages.md`.
-
 
 ### `tls`
 
