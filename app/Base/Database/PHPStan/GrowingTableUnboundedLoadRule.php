@@ -25,7 +25,7 @@ use PHPStan\Type\Type;
  * A model implementing GrowingTable (logs, history, runs, audit, events)
  * has no natural upper bound, so ->get(), ->all(), ->pluck(), ->getModels()
  * and ::all() on it are reported unless the same call chain limits the
- * result with limit/take/forPage*. paginate(), chunk(), lazy() and cursor()
+ * result with limit/take/forPage* or whereKey. paginate(), chunk(), lazy() and cursor()
  * are different methods and never reported.
  *
  * Any other bound (a bound applied on another statement, one parent's rows,
@@ -74,6 +74,7 @@ final class GrowingTableUnboundedLoadRule implements Rule
         'forPage',
         'forPageAfterId',
         'forPageBeforeId',
+        'whereKey',
     ];
 
     public function __construct(private ReflectionProvider $reflectionProvider) {}

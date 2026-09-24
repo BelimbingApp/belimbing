@@ -22,7 +22,6 @@ final class Loads
         RunLog::query()->whereIn('key', ['a', 'b'])->get();
         RunLog::query()->where('task_id', $task->id)->get();
         RunLog::query()->whereBelongsTo($task)->get();
-        RunLog::query()->whereKey([1, 2, 3])->get();
         RunLog::query()->select('key', DB::raw('max(id) as id'))->groupBy('key')->get();
         RunLog::query()->distinct()->pluck('key');
         RunLog::query()->fromSub(RunLog::query()->toBase(), 'ranked')->where('rn', 1)->get();
@@ -35,6 +34,7 @@ final class Loads
         RunLog::query()->limit(10)->get();
         RunLog::query()->orderByDesc('id')->take(1)->get();
         RunLog::query()->forPage(2, 50)->get();
+        RunLog::query()->whereKey([1, 2, 3])->get();
         $task->runs()->limit(5)->get();
         RunLog::query()->paginate();
         RunLog::query()->cursor();

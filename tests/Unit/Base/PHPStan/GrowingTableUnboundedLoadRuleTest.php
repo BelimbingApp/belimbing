@@ -44,11 +44,10 @@ class GrowingTableUnboundedLoadRuleTest extends RuleTestCase
             [$message('->get()'), 23],
             [$message('->get()'), 24],
             [$message('->get()'), 25],
-            [$message('->get()'), 26],
-            [$message('->pluck()'), 27],
-            [$message('->get()'), 28],
+            [$message('->pluck()'), 26],
+            [$message('->get()'), 27],
+            [$message('->get()', 'GrowingTableFixture\Models\RunLogLine'), 28],
             [$message('->get()', 'GrowingTableFixture\Models\RunLogLine'), 29],
-            [$message('->get()', 'GrowingTableFixture\Models\RunLogLine'), 30],
         ]);
     }
 }

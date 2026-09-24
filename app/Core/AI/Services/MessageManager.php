@@ -344,7 +344,6 @@ class MessageManager
      */
     private function batchLoadRunMeta(array $runIds): array
     {
-        // @phpstan-ignore blb.growingTableUnboundedLoad (only the run ids named in one transcript)
         $runs = AiRun::query()
             ->whereKey($runIds)
             ->get()

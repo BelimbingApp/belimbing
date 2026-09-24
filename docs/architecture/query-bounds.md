@@ -80,20 +80,20 @@ A model whose table grows with use and is never bounded by the size of the busin
 
 ### What is reported
 
-`->get()`, `->all()`, `->pluck()`, `->getModels()` and `::all()` on a growing-table model, whether reached through `Model::query()`, a static forwarder such as `Model::where()`, or a relation (`$task->runs()->get()`), unless the same call chain is limited by `limit`, `take`, `forPage`, `forPageAfterId` or `forPageBeforeId`.
+`->get()`, `->all()`, `->pluck()`, `->getModels()` and `::all()` on a growing-table model, whether reached through `Model::query()`, a static forwarder such as `Model::where()`, or a relation (`$task->runs()->get()`), unless the same call chain is limited by `limit`, `take`, `forPage`, `forPageAfterId` or `forPageBeforeId`, or restricted to known ids with `whereKey`.
 
 `paginate()`, `chunk()`, `lazy()`, `lazyById()`, `cursor()`, `first()`, `count()` and other non-loading terminals are never reported, and neither are collection calls made after one of them.
 
 ### Reviewed exceptions
 
-Every other bound is invisible to the rule and is reported: one parent's rows (a run's events, a trace's audit entries), an aggregate that reduces the result (`groupBy`, a latest-per-key ranked subquery), ids already reduced elsewhere (`whereKey`), a bound applied on another statement, or a subset bounded by live state (running jobs, active sessions). After review, suppress such a call inline, on the line above the statement, with the reason it is bounded:
+Every other bound is invisible to the rule and is reported: one parent's rows (a run's events, a trace's audit entries), an aggregate that reduces the result (`groupBy`, a latest-per-key ranked subquery), a bound applied on another statement, or a subset bounded by live state (running jobs, active sessions). After review, suppress such a call inline, on the line above the statement, with the reason it is bounded:
 
 ```php
 // @phpstan-ignore blb.growingTableUnboundedLoad (one ranked run per requested task key)
 $latest = ScheduleRun::query()->fromSub($ranked->toBase(), 'ranked')->where('run_rank', 1)->get();
 ```
 
-Each such exception is a reviewed claim about the data. Prefer restating the bound in the query (`limit`) whenever one exists.
+Each such exception is a reviewed claim about the data. Prefer restating the bound in the query (`limit`, `whereKey`) whenever one exists.
 
 Lazy relation properties (`$task->runs`) and `DB::table()` access are outside the rule; the runtime guard is the backstop for those.
 
