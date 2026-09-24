@@ -13,6 +13,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Schema;
 use Symfony\Component\Console\Input\ArrayInput;
@@ -32,6 +33,7 @@ beforeEach(function (): void {
 });
 
 afterEach(function (): void {
+    @chmod($this->perfDir, 0755);
     File::deleteDirectory($this->perfDir);
 });
 
@@ -165,6 +167,38 @@ it('records console commands as command entries', function (): void {
         ->and($entry['method'])->toBe('CMD')
         ->and($entry['status'])->toBe(200)
         ->and($entry['queries'])->toBeGreaterThanOrEqual(1);
+});
+
+it('never fails the measured command when the perf log cannot be written', function (): void {
+    if (function_exists('posix_getuid') && posix_getuid() === 0) {
+        $this->markTestSkipped('Directory permissions do not restrict root.');
+    }
+
+    File::ensureDirectoryExists($this->perfDir);
+    chmod($this->perfDir, 0555);
+    Log::shouldReceive('warning')->once();
+
+    $input = new ArrayInput([]);
+    $output = new NullOutput;
+
+    event(new CommandStarting('perf:prune', $input, $output));
+    event(new CommandFinished('perf:prune', $input, $output, 0));
+
+    expect(glob($this->perfDir.'/perf-*.jsonl'))->toBeEmpty();
+});
+
+it('never fails the measured request when the perf log cannot be written', function (): void {
+    if (function_exists('posix_getuid') && posix_getuid() === 0) {
+        $this->markTestSkipped('Directory permissions do not restrict root.');
+    }
+
+    File::ensureDirectoryExists($this->perfDir);
+    chmod($this->perfDir, 0555);
+    Log::shouldReceive('warning')->once();
+
+    $this->get(PERF_LOGIN_PATH)->assertOk();
+
+    expect(glob($this->perfDir.'/perf-*.jsonl'))->toBeEmpty();
 });
 
 it('skips console instrumentation until the settings table exists', function (): void {
