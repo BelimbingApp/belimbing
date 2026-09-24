@@ -62,15 +62,81 @@ it('reports stale pages from --check and repairs them by publishing', function (
     }
 });
 
-it('serves the static fallback from the instance Caddyfiles when FrankenPHP cannot answer', function (string $caddyfile): void {
-    $config = File::get(base_path($caddyfile));
-    $handler = substr($config, (int) strpos($config, 'handle_errors 5xx {'));
+/**
+ * Adapt a Caddyfile to Caddy's JSON config with the real consumer, so the
+ * assertions below read what Caddy will run rather than the file's text.
+ *
+ * @return array<string, mixed>
+ */
+function adaptStaticErrorPagesCaddyfile(string $config, bool $needsFrankenPhp): array
+{
+    $binaries = $needsFrankenPhp ? ['frankenphp'] : ['frankenphp', 'caddy'];
+    $binary = collect($binaries)->first(fn (string $name): bool => Process::run(['which', $name])->successful());
 
-    expect($config)->toContain('handle_errors 5xx {')
-        ->and($handler)->toContain('root * public/'.ErrorPages::PUBLIC_DIRECTORY)
-        ->and($handler)->toContain('rewrite * /'.ErrorPages::STATIC_PAGE)
-        // file_server answers 200 unless told otherwise; a fallback must keep the failure status.
-        ->and($handler)->toContain('status {err.status_code}');
+    if ($binary === null) {
+        test()->markTestSkipped(implode(' or ', $binaries).' is required to adapt the Caddyfile.');
+    }
+
+    $result = Process::path(base_path())->run([$binary, 'adapt', '--config', $config, '--adapter', 'caddyfile']);
+
+    expect($result->successful())->toBeTrue($result->errorOutput());
+
+    return json_decode($result->output(), true, flags: JSON_THROW_ON_ERROR);
+}
+
+/**
+ * The handlers a list of routes runs, in order, with subroutes flattened.
+ *
+ * @param  list<array<string, mixed>>  $routes
+ * @return list<array<string, mixed>>
+ */
+function staticErrorPagesHandlers(array $routes): array
+{
+    $handlers = [];
+
+    foreach ($routes as $route) {
+        foreach ($route['handle'] ?? [] as $handler) {
+            if ($handler['handler'] === 'subroute') {
+                array_push($handlers, ...staticErrorPagesHandlers($handler['routes']));
+            } else {
+                $handlers[] = $handler;
+            }
+        }
+    }
+
+    return $handlers;
+}
+
+/**
+ * The route a static fallback must run: set the root, rewrite to the page, and
+ * serve it with the failure status (file_server answers 200 unless told otherwise).
+ *
+ * @param  list<array<string, mixed>>  $handlers
+ * @return list<array<string, mixed>>
+ */
+function staticErrorPagesFallback(array $handlers): array
+{
+    return collect($handlers)
+        ->filter(fn (array $handler): bool => in_array($handler['handler'], ['vars', 'rewrite', 'file_server'], true))
+        ->map(fn (array $handler): array => match ($handler['handler']) {
+            'vars' => ['vars', $handler['root'] ?? null],
+            'rewrite' => ['rewrite', $handler['uri']],
+            'file_server' => ['file_server', $handler['status_code'] ?? null],
+        })
+        ->values()
+        ->all();
+}
+
+it('serves the static fallback from the instance Caddyfiles when FrankenPHP cannot answer', function (string $caddyfile): void {
+    $servers = adaptStaticErrorPagesCaddyfile($caddyfile, needsFrankenPhp: true)['apps']['http']['servers'];
+    $errorRoutes = collect($servers)->flatMap(fn (array $server): array => $server['errors']['routes'] ?? [])->all();
+
+    expect($errorRoutes)->not->toBeEmpty()
+        ->and(staticErrorPagesFallback(staticErrorPagesHandlers($errorRoutes)))->toBe([
+            ['vars', 'public/'.ErrorPages::PUBLIC_DIRECTORY],
+            ['rewrite', '/'.ErrorPages::STATIC_PAGE],
+            ['file_server', '{http.error.status_code}'],
+        ]);
 })->with(['Caddyfile', 'Caddyfile.orb']);
 
 it('renders a system ingress block that keeps app-rendered errors and brands raw ones', function (): void {
@@ -81,20 +147,37 @@ it('renders a system ingress block that keeps app-rendered errors and brands raw
 
     expect($result->successful())->toBeTrue($result->errorOutput());
 
-    $block = $result->output();
-    $responseHandler = substr($block, (int) strpos($block, 'reverse_proxy'), (int) strpos($block, 'handle_errors') - (int) strpos($block, 'reverse_proxy'));
-    $errorHandler = substr($block, (int) strpos($block, 'handle_errors'));
+    $config = storage_path('framework/testing/system-ingress-'.uniqid().'.caddy');
+    File::ensureDirectoryExists(dirname($config));
+    File::put($config, $result->output());
 
-    expect($block)->toStartWith('example.test {')
-        ->and($responseHandler)->toContain('reverse_proxy 127.0.0.1:8000 {')
-        // First matching handle_response wins: the app's own error pages pass through...
-        ->and($responseHandler)->toContain('header '.ErrorPages::RENDERED_HEADER.' '.ErrorPages::RENDERED_HEADER_VALUE)
-        ->and($responseHandler)->toContain('copy_response')
+    try {
+        $server = collect(adaptStaticErrorPagesCaddyfile($config, needsFrankenPhp: false)['apps']['http']['servers'])->sole();
+    } finally {
+        File::delete($config);
+    }
+
+    $siteRoute = collect($server['routes'])->sole();
+    $proxy = collect(staticErrorPagesHandlers([$siteRoute]))->sole(fn (array $handler): bool => $handler['handler'] === 'reverse_proxy');
+    [$renderedByApp, $unbranded] = $proxy['handle_response'];
+
+    expect($siteRoute['match'])->toBe([['host' => ['example.test']]])
+        ->and($proxy['upstreams'])->toBe([['dial' => '127.0.0.1:8000']])
+        ->and($proxy['handle_response'])->toHaveCount(2)
+        // First matching handle_response wins: the app's own error pages pass through
+        // with their status, body, and headers (Content-Type, Retry-After, CSP)...
+        ->and($renderedByApp['match'])->toBe(['headers' => [ErrorPages::RENDERED_HEADER => [ErrorPages::RENDERED_HEADER_VALUE]]])
+        ->and(array_column(staticErrorPagesHandlers($renderedByApp['routes']), 'handler'))->toBe(['copy_response_headers', 'copy_response'])
         // ...before any other 5xx is swapped for the static page, keeping its status.
-        ->and(strpos($responseHandler, 'copy_response'))->toBeLessThan((int) strpos($responseHandler, 'status 5xx'))
-        ->and($responseHandler)->toContain('root * /etc/caddy/blb/errors')
-        ->and($responseHandler)->toContain('status {rp.status_code}')
-        ->and($errorHandler)->toContain('root * /etc/caddy/blb/errors')
-        ->and($errorHandler)->toContain('rewrite * /'.ErrorPages::STATIC_PAGE)
-        ->and($errorHandler)->toContain('status {err.status_code}');
+        ->and($unbranded['match'])->toBe(['status_code' => [5]])
+        ->and(staticErrorPagesFallback(staticErrorPagesHandlers($unbranded['routes'])))->toBe([
+            ['vars', '/etc/caddy/blb/errors'],
+            ['rewrite', '/'.ErrorPages::STATIC_PAGE],
+            ['file_server', '{http.reverse_proxy.status_code}'],
+        ])
+        ->and(staticErrorPagesFallback(staticErrorPagesHandlers($server['errors']['routes'])))->toBe([
+            ['vars', '/etc/caddy/blb/errors'],
+            ['rewrite', '/'.ErrorPages::STATIC_PAGE],
+            ['file_server', '{http.error.status_code}'],
+        ]);
 });

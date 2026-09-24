@@ -91,6 +91,7 @@ caddy_render_system_site_block() {
     reverse_proxy 127.0.0.1:${app_port} {
         @rendered_by_app header X-Belimbing-Error-Page app
         handle_response @rendered_by_app {
+            copy_response_headers
             copy_response
         }
         @unbranded_5xx status 5xx
