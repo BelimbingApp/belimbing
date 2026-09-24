@@ -99,3 +99,21 @@ it('does not throw when the framework log itself cannot be written', function ()
 
     expect(glob($directory.'/perf-*.jsonl'))->toBeEmpty();
 });
+
+it('drops the entry and warns once when the perf settings cannot be read', function (): void {
+    $settings = Mockery::mock(SettingsService::class);
+    $settings->shouldReceive('getMany')->andThrow(new RuntimeException('settings database connection lost'));
+    app()->instance(SettingsService::class, $settings);
+    app()->forgetInstance(PerfRuntimeSettings::class);
+    app()->forgetInstance(PerfLog::class);
+
+    Log::shouldReceive('warning')
+        ->once()
+        ->withArgs(fn (string $message, array $context): bool => $context['path'] === null
+            && $context['error'] === 'settings database connection lost');
+
+    $log = app(PerfLog::class);
+
+    $log->write(['type' => 'command', 'path' => 'about']);
+    $log->write(['type' => 'command', 'path' => 'about']);
+});

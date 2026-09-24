@@ -40,10 +40,11 @@ final class PerfLog
      */
     public function write(array $entry): void
     {
-        $directory = $this->directory();
-        $path = $directory.DIRECTORY_SEPARATOR.'perf-'.now()->format('Y-m-d').'.jsonl';
+        $path = null;
 
         try {
+            $directory = $this->directory();
+            $path = $directory.DIRECTORY_SEPARATOR.'perf-'.now()->format('Y-m-d').'.jsonl';
             $this->append($directory, $path, json_encode($entry, JSON_UNESCAPED_SLASHES).PHP_EOL);
         } catch (Throwable $exception) {
             $this->reportWriteFailure($path, $exception);
@@ -66,7 +67,7 @@ final class PerfLog
         }
     }
 
-    private function reportWriteFailure(string $path, Throwable $exception): void
+    private function reportWriteFailure(?string $path, Throwable $exception): void
     {
         if ($this->writeFailureReported) {
             return;
