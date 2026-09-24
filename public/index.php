@@ -6,14 +6,19 @@ define('LARAVEL_START', microtime(true));
 // reach the browser as a blank 500. Answer with the branded static fallback
 // instead; the message itself belongs in the PHP error log, not on screen.
 // When display_errors is on, PHP has already printed the error and sent
-// headers, so this handler stays out of the way.
+// headers, so this handler stays out of the way. X-Powered-By (expose_php=On,
+// PHP's default) is set before any script runs, so it does not count.
 register_shutdown_function(function (): void {
     $err = error_get_last();
-    if ($err === null || headers_sent() || headers_list() !== []) {
+    if ($err === null || headers_sent()) {
         return;
     }
     $fatals = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR];
     if (! in_array($err['type'], $fatals, true)) {
+        return;
+    }
+    header_remove('X-Powered-By');
+    if (headers_list() !== []) {
         return;
     }
     http_response_code(500);

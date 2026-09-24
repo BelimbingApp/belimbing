@@ -167,7 +167,7 @@ it('renders a system ingress block that keeps app-rendered errors and brands raw
         // First matching handle_response wins: the app's own error pages pass through
         // with their status, body, and headers (Content-Type, Retry-After, CSP)...
         ->and($renderedByApp['match'])->toBe(['headers' => [ErrorPages::RENDERED_HEADER => [ErrorPages::RENDERED_HEADER_VALUE]]])
-        ->and(array_column(staticErrorPagesHandlers($renderedByApp['routes']), 'handler'))->toBe(['copy_response_headers', 'copy_response'])
+        ->and(array_column(staticErrorPagesHandlers($renderedByApp['routes']), 'handler'))->toBe(['copy_response'])
         // ...before any other 5xx is swapped for the static page, keeping its status.
         ->and($unbranded['match'])->toBe(['status_code' => [5]])
         ->and(staticErrorPagesFallback(staticErrorPagesHandlers($unbranded['routes'])))->toBe([

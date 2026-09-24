@@ -75,6 +75,8 @@ caddy_render_tls_directive() {
 #   - handle_response: the instance answered with a raw 5xx (a PHP fatal with
 #     no body). Error pages the app rendered itself carry X-Belimbing-Error-Page
 #     and pass through untouched, so maintenance and 500 copy stay intact.
+#     Caddy has already applied the upstream headers by then; adding
+#     copy_response_headers would send every header twice.
 #   - handle_errors: the instance is unreachable (restarting, updating, crashed).
 caddy_render_system_site_block() {
     local frontend_domain=$1
@@ -91,7 +93,6 @@ caddy_render_system_site_block() {
     reverse_proxy 127.0.0.1:${app_port} {
         @rendered_by_app header X-Belimbing-Error-Page app
         handle_response @rendered_by_app {
-            copy_response_headers
             copy_response
         }
         @unbranded_5xx status 5xx
