@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Core\AI\Http\Controllers;
 
+use App\Core\AI\Services\ControlPlane\RunDiagnosticService;
 use App\Core\AI\Services\ControlPlane\WireLogger;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -8,6 +10,10 @@ class WireLogEntryController
 {
     public function __invoke(string $runId, int $entryNumber): StreamedResponse
     {
+        if (app(RunDiagnosticService::class)->inspectRun($runId) === null) {
+            abort(404);
+        }
+
         $wireLogger = app(WireLogger::class);
 
         if (! is_file($wireLogger->path($runId)) || ! $wireLogger->hasEntry($runId, $entryNumber)) {

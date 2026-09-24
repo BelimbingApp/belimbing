@@ -1,6 +1,13 @@
 <?php
+
 namespace App\Core\AI\Services\ControlPlane;
 
+use App\Base\Authz\Contracts\AuthorizationService;
+use App\Base\Authz\DTO\Actor;
+use App\Base\Authz\DTO\AuthorizationDecision;
+use App\Base\Authz\Enums\AuthorizationReasonCode;
+use App\Base\Authz\Exceptions\AuthorizationDeniedException;
+use App\Base\Tenancy\Services\PlatformOperatorTenantAccess;
 use App\Core\AI\DTO\ControlPlane\LifecyclePreview;
 use App\Core\AI\DTO\ControlPlane\LifecycleRequest as LifecycleRequestDTO;
 use App\Core\AI\DTO\ControlPlane\TelemetryRecordRequest;
@@ -14,7 +21,9 @@ use App\Core\AI\Services\Memory\MemoryCompactor;
 use App\Core\AI\Services\OperationsDispatchService;
 use App\Core\AI\Services\Pricing\RefreshPricingSnapshot;
 use App\Core\AI\Services\SessionManager;
+use App\Core\User\Models\User;
 use Illuminate\Support\Str;
+use LogicException;
 
 /**
  * Manages lifecycle control operations: preview, execute, and audit.
@@ -37,6 +46,8 @@ class LifecycleControlService
         private readonly OperationalTelemetryService $telemetry,
         private readonly WireLogger $wireLogger,
         private readonly RefreshPricingSnapshot $pricingSnapshotRefresher,
+        private readonly AuthorizationService $authorization,
+        private readonly PlatformOperatorTenantAccess $platformOperatorAccess,
     ) {}
 
     /**
@@ -45,7 +56,33 @@ class LifecycleControlService
      * @param  LifecycleAction  $action  The action to preview
      * @param  array<string, mixed>  $scope  Action-specific parameters
      */
-    public function preview(LifecycleAction $action, array $scope = []): LifecyclePreview
+    public function previewForUser(LifecycleAction $action, array $scope, User $user): LifecyclePreview
+    {
+        $this->authorization->authorize(
+            Actor::forUser($user),
+            'admin.ai.control-plane.view',
+        );
+        $this->assertPlatformOperatorTenant($user);
+
+        return $this->previewAuthorized($action, $scope);
+    }
+
+    /**
+     * Preview from the trusted Artisan command boundary.
+     *
+     * @param  array<string, mixed>  $scope
+     */
+    public function previewFromConsole(LifecycleAction $action, array $scope = []): LifecyclePreview
+    {
+        $this->assertConsoleBoundary();
+
+        return $this->previewAuthorized($action, $scope);
+    }
+
+    /**
+     * @param  array<string, mixed>  $scope
+     */
+    private function previewAuthorized(LifecycleAction $action, array $scope = []): LifecyclePreview
     {
         return match ($action) {
             LifecycleAction::CompactMemory => $this->previewCompactMemory($scope),
@@ -59,19 +96,48 @@ class LifecycleControlService
     }
 
     /**
+     * Execute a lifecycle action requested by an authenticated user.
+     *
+     * Authorization happens before previewing the action or creating an
+     * audit-ledger row, so denied callers cannot trigger any lifecycle work.
+     *
+     * @param  array<string, mixed>  $scope
+     */
+    public function executeForUser(LifecycleAction $action, array $scope, User $user): LifecycleRequestDTO
+    {
+        $this->authorization->authorize(
+            Actor::forUser($user),
+            'admin.ai.control-plane.manage',
+        );
+        $this->assertPlatformOperatorTenant($user);
+
+        return $this->executeAuthorized($action, $scope, (int) $user->getKey());
+    }
+
+    /**
+     * Execute from the trusted Artisan command boundary.
+     *
+     * @param  array<string, mixed>  $scope
+     */
+    public function executeFromConsole(LifecycleAction $action, array $scope = []): LifecycleRequestDTO
+    {
+        $this->assertConsoleBoundary();
+
+        return $this->executeAuthorized($action, $scope, null);
+    }
+
+    /**
      * Execute a lifecycle action with preview, audit, and status tracking.
      *
-     * Creates a lifecycle request record, executes the action, and records
-     * the outcome. Returns the completed request as a DTO.
-     *
-     * @param  LifecycleAction  $action  The action to execute
-     * @param  array<string, mixed>  $scope  Action-specific parameters
-     * @param  int|null  $requestedBy  User ID who initiated the request
+     * @param  array<string, mixed>  $scope
      */
-    public function execute(LifecycleAction $action, array $scope = [], ?int $requestedBy = null): LifecycleRequestDTO
-    {
+    private function executeAuthorized(
+        LifecycleAction $action,
+        array $scope,
+        ?int $requestedBy,
+    ): LifecycleRequestDTO {
         $requestId = LifecycleRequest::ID_PREFIX.Str::ulid()->toBase32();
-        $preview = $this->preview($action, $scope);
+        $preview = $this->previewAuthorized($action, $scope);
 
         // Create the request record
         $request = LifecycleRequest::query()->create([
@@ -132,7 +198,33 @@ class LifecycleControlService
      * @param  int  $limit  Maximum results
      * @return list<LifecycleRequestDTO>
      */
-    public function recent(int $limit = 25): array
+    public function recentForUser(User $user, int $limit = 25): array
+    {
+        $this->authorization->authorize(
+            Actor::forUser($user),
+            'admin.ai.control-plane.view',
+        );
+        $this->assertPlatformOperatorTenant($user);
+
+        return $this->recentAuthorized($limit);
+    }
+
+    /**
+     * Get recent lifecycle requests from the trusted Artisan boundary.
+     *
+     * @return list<LifecycleRequestDTO>
+     */
+    public function recentFromConsole(int $limit = 25): array
+    {
+        $this->assertConsoleBoundary();
+
+        return $this->recentAuthorized($limit);
+    }
+
+    /**
+     * @return list<LifecycleRequestDTO>
+     */
+    private function recentAuthorized(int $limit): array
     {
         $requests = LifecycleRequest::query()
             ->orderByDesc('created_at')
@@ -141,6 +233,30 @@ class LifecycleControlService
             ->get();
 
         return $requests->map(fn (LifecycleRequest $r): LifecycleRequestDTO => $this->toDTO($r))->values()->all();
+    }
+
+    private function assertPlatformOperatorTenant(User $user): void
+    {
+        if ($this->platformOperatorAccess->allows()) {
+            return;
+        }
+
+        throw new AuthorizationDeniedException(AuthorizationDecision::deny(
+            AuthorizationReasonCode::DENIED_TENANT_SCOPE,
+            ['platform_operator_tenant_required'],
+            [
+                'user_id' => $user->getKey(),
+                'tenant_id' => $user->tenant_id,
+                'surface' => 'ai_lifecycle_controls',
+            ],
+        ));
+    }
+
+    private function assertConsoleBoundary(): void
+    {
+        if (! app()->runningInConsole()) {
+            throw new LogicException('Console lifecycle access is only available from a console process.');
+        }
     }
 
     // -- Preview implementations --

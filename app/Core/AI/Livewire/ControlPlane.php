@@ -10,6 +10,8 @@ use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Settings\Contracts\SettingsService;
+use App\Base\Tenancy\Contracts\TenantContext;
+use App\Base\Tenancy\Services\PlatformOperatorTenantAccess;
 use App\Core\AI\DTO\ControlPlane\HealthSnapshot;
 use App\Core\AI\DTO\ControlPlane\LifecycleRequest as LifecycleRequestDTO;
 use App\Core\AI\Enums\LifecycleAction;
@@ -22,6 +24,7 @@ use App\Core\AI\Services\ControlPlane\LifecycleControlService;
 use App\Core\AI\Services\ControlPlane\RunDiagnosticService;
 use App\Core\AI\Services\ControlPlane\WireLogger;
 use App\Core\Employee\Models\Employee;
+use App\Core\User\Models\User;
 use Illuminate\Contracts\View\View;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -90,6 +93,9 @@ class ControlPlane extends Component
     public function mount(AiRuntimeSettings $runtimeSettings): void
     {
         $this->activeTab = $this->resolveTab((string) request()->query('tab', 'inspector'));
+        if ($this->activeTab === 'lifecycle' && ! $this->canViewPlatformLifecycle()) {
+            $this->activeTab = 'inspector';
+        }
         $this->inspectRunId = (string) (request()->query('runId') ?? request()->query('inspectRunId') ?? '');
 
         $this->lifecycleRetentionDays = app(WireLogger::class)->retentionDays();
@@ -100,7 +106,9 @@ class ControlPlane extends Component
         $this->loadAgentOptions();
         $this->refreshInspectorLists();
         $this->refreshHealthSnapshots();
-        $this->loadRecentLifecycleRequests();
+        if ($this->canViewPlatformLifecycle()) {
+            $this->loadRecentLifecycleRequests();
+        }
 
         if ($this->inspectRunId !== '') {
             $this->resetWireLogWindow();
@@ -110,7 +118,10 @@ class ControlPlane extends Component
 
     public function setActiveTab(string $tab): void
     {
-        $this->activeTab = $this->resolveTab($tab);
+        $resolved = $this->resolveTab($tab);
+        $this->activeTab = $resolved === 'lifecycle' && ! $this->canViewPlatformLifecycle()
+            ? 'inspector'
+            : $resolved;
     }
 
     public function inspectRun(): void
@@ -176,7 +187,9 @@ class ControlPlane extends Component
     public function loadProviderSnapshots(): void
     {
         $service = app(HealthAndPresenceService::class);
+        $tenantId = app(TenantContext::class)->requireTenantId();
         $providerNames = AiProvider::query()
+            ->whereHas('company', fn ($query) => $query->where('companies.tenant_id', $tenantId))
             ->llm()
             ->active()
             ->orderBy('display_name')
@@ -193,7 +206,15 @@ class ControlPlane extends Component
 
     public function loadAgentSnapshot(): void
     {
-        if ($this->healthAgentId <= 0) {
+        $tenantId = app(TenantContext::class)->requireTenantId();
+        $agentIsVisible = $this->healthAgentId > 0
+            && Employee::query()
+                ->whereKey($this->healthAgentId)
+                ->whereHas('company', fn ($query) => $query->where('companies.tenant_id', $tenantId))
+                ->agent()
+                ->exists();
+
+        if (! $agentIsVisible) {
             $this->agentSnapshot = null;
 
             return;
@@ -207,24 +228,25 @@ class ControlPlane extends Component
     public function loadRunHealthCounts(): void
     {
         $now = now();
+        $runs = AiRun::query()->forTenant(app(TenantContext::class)->requireTenantId());
 
         $this->runHealthCounts = [
-            'queued' => AiRun::query()->where('status', 'queued')->count(),
-            'booting' => AiRun::query()->where('status', 'booting')->count(),
-            'running' => AiRun::query()->where('status', 'running')->count(),
-            'stale_queued' => AiRun::query()
+            'queued' => (clone $runs)->where('status', 'queued')->count(),
+            'booting' => (clone $runs)->where('status', 'booting')->count(),
+            'running' => (clone $runs)->where('status', 'running')->count(),
+            'stale_queued' => (clone $runs)
                 ->whereIn('status', ['queued', 'booting'])
                 ->where('created_at', '<', $now->copy()->subMinutes(10))
                 ->count(),
-            'stale_running' => AiRun::query()
+            'stale_running' => (clone $runs)
                 ->where('status', 'running')
                 ->where('created_at', '<', $now->copy()->subMinutes(30))
                 ->count(),
-            'failed_last_hour' => AiRun::query()
+            'failed_last_hour' => (clone $runs)
                 ->where('status', 'failed')
                 ->where('finished_at', '>=', $now->copy()->subHour())
                 ->count(),
-            'completed_last_hour' => AiRun::query()
+            'completed_last_hour' => (clone $runs)
                 ->where('status', 'completed')
                 ->where('finished_at', '>=', $now->copy()->subHour())
                 ->count(),
@@ -245,8 +267,16 @@ class ControlPlane extends Component
             return;
         }
 
+        /** @var User|null $user */
+        $user = auth()->user();
+        abort_if($user === null, 403);
+
         $this->lifecyclePreview = $this->mapLifecyclePreview(
-            app(LifecycleControlService::class)->preview($action, $this->buildLifecycleScope($action)),
+            app(LifecycleControlService::class)->previewForUser(
+                $action,
+                $this->buildLifecycleScope($action),
+                $user,
+            ),
         );
     }
 
@@ -254,6 +284,10 @@ class ControlPlane extends Component
     {
         $this->lifecycleResult = null;
         $this->lifecycleError = '';
+
+        /** @var User|null $user */
+        $user = auth()->user();
+        abort_if($user === null, 403);
 
         $action = $this->resolveLifecycleAction();
 
@@ -264,10 +298,10 @@ class ControlPlane extends Component
         }
 
         $this->lifecycleResult = $this->mapLifecycleRequest(
-            app(LifecycleControlService::class)->execute(
+            app(LifecycleControlService::class)->executeForUser(
                 $action,
                 $this->buildLifecycleScope($action),
-                requestedBy: auth()->id(),
+                $user,
             ),
         );
 
@@ -276,9 +310,13 @@ class ControlPlane extends Component
 
     public function loadRecentLifecycleRequests(): void
     {
+        /** @var User|null $user */
+        $user = auth()->user();
+        abort_if($user === null, 403);
+
         $this->recentLifecycleRequests = array_map(
             fn (LifecycleRequestDTO $request): array => $this->mapLifecycleRequest($request),
-            app(LifecycleControlService::class)->recent(10),
+            app(LifecycleControlService::class)->recentForUser($user, 10),
         );
     }
 
@@ -286,7 +324,7 @@ class ControlPlane extends Component
         SettingsService $settings,
         AiRuntimeSettings $runtimeSettings,
     ): void {
-        $this->authorizeRuntimeGuardrailManagement();
+        $this->authorizeControlPlaneManagement();
 
         $validated = $this->validate([
             'maxToolRounds' => $runtimeSettings->maxToolRoundsRules(),
@@ -323,7 +361,7 @@ class ControlPlane extends Component
         SettingsService $settings,
         AiRuntimeSettings $runtimeSettings,
     ): void {
-        $this->authorizeRuntimeGuardrailManagement();
+        $this->authorizeControlPlaneManagement();
 
         $settings->forget(AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY);
         $settings->forget(AiRuntimeSettings::LARA_PROMPT_EXTENSION_PATH_KEY);
@@ -342,7 +380,10 @@ class ControlPlane extends Component
         $recentRuns = $diagnostics
             ->recentRunsQuery($this->recentRunsSearch)
             ->paginate(25)
-            ->through(fn ($run): array => $diagnostics->mapRecentRun($run));
+            ->through(function ($run) use ($diagnostics): array {
+                /** @var AiRun $run */
+                return $diagnostics->mapRecentRun($run);
+            });
 
         $runView = $this->inspectRunId !== ''
             ? $diagnostics->buildRunView(
@@ -354,7 +395,9 @@ class ControlPlane extends Component
 
         return view('livewire.admin.ai.control-plane', [
             'activeTab' => $this->activeTab,
-            'canManageRuntimeGuardrails' => $this->canManageRuntimeGuardrails(),
+            'canManageControlPlane' => $this->canManageControlPlane(),
+            'canViewPlatformLifecycle' => $this->canViewPlatformLifecycle(),
+            'canManagePlatformLifecycle' => $this->canManagePlatformLifecycle(),
             'recentRuns' => $recentRuns,
             'runView' => $this->mapRunView($runView),
             'maxToolRoundsDefinition' => $maxToolRoundsDefinition,
@@ -368,7 +411,7 @@ class ControlPlane extends Component
         ]);
     }
 
-    private function canManageRuntimeGuardrails(): bool
+    private function canManageControlPlane(): bool
     {
         $user = auth()->user();
 
@@ -377,7 +420,29 @@ class ControlPlane extends Component
             ->allowed;
     }
 
-    private function authorizeRuntimeGuardrailManagement(): void
+    private function canViewPlatformLifecycle(): bool
+    {
+        $user = auth()->user();
+
+        return $user !== null
+            && app(PlatformOperatorTenantAccess::class)->allows()
+            && app(AuthorizationService::class)
+                ->can(Actor::forUser($user), 'admin.ai.control-plane.view')
+                ->allowed;
+    }
+
+    private function canManagePlatformLifecycle(): bool
+    {
+        $user = auth()->user();
+
+        return $user !== null
+            && app(PlatformOperatorTenantAccess::class)->allows()
+            && app(AuthorizationService::class)
+                ->can(Actor::forUser($user), 'admin.ai.control-plane.manage')
+                ->allowed;
+    }
+
+    private function authorizeControlPlaneManagement(): void
     {
         $user = auth()->user();
 
@@ -391,7 +456,9 @@ class ControlPlane extends Component
 
     private function loadAgentOptions(): void
     {
+        $tenantId = app(TenantContext::class)->requireTenantId();
         $this->agentOptions = Employee::query()
+            ->whereHas('company', fn ($query) => $query->where('companies.tenant_id', $tenantId))
             ->agent()
             ->orderBy('short_name')
             ->orderBy('full_name')
@@ -402,6 +469,10 @@ class ControlPlane extends Component
             ])
             ->values()
             ->all();
+
+        if (! in_array($this->healthAgentId, array_column($this->agentOptions, 'id'), true)) {
+            $this->healthAgentId = $this->agentOptions[0]['id'] ?? 0;
+        }
     }
 
     private function resolveLifecycleAction(): ?LifecycleAction

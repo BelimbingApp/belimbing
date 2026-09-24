@@ -51,8 +51,7 @@ trait HandlesAttachments
     private function processAttachments(string $sessionId): array
     {
         $sessionManager = app(SessionManager::class);
-        $basePath = $sessionManager->sessionsPath($this->employeeId);
-        $attachDir = $basePath.'/attachments/'.$sessionId;
+        $attachDir = $sessionManager->attachmentsPath($this->employeeId, $sessionId);
         BlbFile::ensureDirectory($attachDir);
 
         $processed = [];

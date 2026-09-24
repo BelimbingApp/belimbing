@@ -5,6 +5,10 @@ namespace App\Core\AI\Services;
 use App\Base\Support\File as BlbFile;
 use App\Base\Support\Json as BlbJson;
 use App\Core\AI\DTO\Session;
+use App\Core\AI\Exceptions\InvalidSessionIdException;
+use App\Core\AI\Exceptions\SessionPathContainmentException;
+use App\Core\AI\Values\SessionId;
+use App\Core\AI\Values\SessionPath;
 use App\Core\Employee\Models\Employee;
 use App\Core\User\Models\User;
 use DateTimeImmutable;
@@ -74,11 +78,24 @@ class SessionManager
         $sessions = [];
 
         foreach ($metaFiles as $file) {
-            $content = file_get_contents($file);
+            $fileName = basename($file);
+            $sessionId = substr($fileName, 0, -strlen('.meta.json'));
+
+            try {
+                $safePath = $this->metaPath($employeeId, $sessionId);
+            } catch (InvalidSessionIdException|SessionPathContainmentException) {
+                continue;
+            }
+
+            $content = file_get_contents($safePath);
             $data = $content === false ? null : BlbJson::decodeArray($content);
 
             if ($data !== null) {
-                $sessions[] = Session::fromMeta($data);
+                $session = Session::fromMeta($data);
+
+                if ($session->id === $sessionId && $session->employeeId === $employeeId) {
+                    $sessions[] = $session;
+                }
             }
         }
 
@@ -91,7 +108,7 @@ class SessionManager
      * Get a single session by ID.
      *
      * @param  int  $employeeId  Agent employee ID
-     * @param  string  $sessionId  Session UUID
+     * @param  string  $sessionId  Session ID
      */
     public function get(int $employeeId, string $sessionId): ?Session
     {
@@ -104,14 +121,22 @@ class SessionManager
         $content = file_get_contents($path);
         $data = $content === false ? null : BlbJson::decodeArray($content);
 
-        return $data !== null ? Session::fromMeta($data) : null;
+        if ($data === null) {
+            return null;
+        }
+
+        $session = Session::fromMeta($data);
+
+        return $session->id === $sessionId && $session->employeeId === $employeeId
+            ? $session
+            : null;
     }
 
     /**
      * Update the last_activity_at timestamp on a session.
      *
      * @param  int  $employeeId  Agent employee ID
-     * @param  string  $sessionId  Session UUID
+     * @param  string  $sessionId  Session ID
      */
     public function touch(int $employeeId, string $sessionId): void
     {
@@ -142,7 +167,7 @@ class SessionManager
      * Update the session title.
      *
      * @param  int  $employeeId  Agent employee ID
-     * @param  string  $sessionId  Session UUID
+     * @param  string  $sessionId  Session ID
      * @param  string  $title  New title
      */
     public function updateTitle(int $employeeId, string $sessionId, string $title): void
@@ -259,7 +284,7 @@ class SessionManager
      * Delete a session and its transcript.
      *
      * @param  int  $employeeId  Agent employee ID
-     * @param  string  $sessionId  Session UUID
+     * @param  string  $sessionId  Session ID
      */
     public function delete(int $employeeId, string $sessionId): void
     {
@@ -299,7 +324,10 @@ class SessionManager
      */
     public function metaPath(int $employeeId, string $sessionId): string
     {
-        return $this->sessionsPath($employeeId).'/'.$sessionId.'.meta.json';
+        $root = $this->sessionsPath($employeeId);
+        $id = SessionId::fromString($sessionId);
+
+        return SessionPath::meta($root, $id);
     }
 
     /**
@@ -307,7 +335,21 @@ class SessionManager
      */
     public function transcriptPath(int $employeeId, string $sessionId): string
     {
-        return $this->sessionsPath($employeeId).'/'.$sessionId.'.jsonl';
+        $root = $this->sessionsPath($employeeId);
+        $id = SessionId::fromString($sessionId);
+
+        return SessionPath::transcript($root, $id);
+    }
+
+    /**
+     * Get the attachment directory for a session.
+     */
+    public function attachmentsPath(int $employeeId, string $sessionId): string
+    {
+        $root = $this->sessionsPath($employeeId);
+        $id = SessionId::fromString($sessionId);
+
+        return SessionPath::attachments($root, $id);
     }
 
     /**

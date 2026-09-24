@@ -1,14 +1,20 @@
 <?php
+
 namespace App\Core\AI\Services\ControlPlane;
 
 use App\Base\DateTime\Contracts\DateTimeDisplayService;
 use App\Base\Support\Json as BlbJson;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\AI\DTO\ControlPlane\RunInspection;
 use App\Core\AI\DTO\Message;
+use App\Core\AI\Exceptions\InvalidSessionIdException;
+use App\Core\AI\Exceptions\SessionPathContainmentException;
 use App\Core\AI\Models\AiRun;
 use App\Core\AI\Models\AiRunCall;
 use App\Core\AI\Services\ControlPlane\WireLog\MetaMilestoneAnnotator;
 use App\Core\AI\Values\CallUsage;
+use App\Core\AI\Values\SessionId;
+use App\Core\AI\Values\SessionPath;
 use App\Core\Employee\Models\Employee;
 use DateTimeImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -25,11 +31,13 @@ class RunDiagnosticService
         private readonly WireLogReadableFormatter $wireLogFormatter,
         private readonly MetaMilestoneAnnotator $milestoneAnnotator,
         private readonly DateTimeDisplayService $dateTimeDisplay,
+        private readonly TenantContext $tenants,
     ) {}
 
     public function inspectRun(string $runId): ?AiRun
     {
         return AiRun::query()
+            ->forTenant($this->tenants->requireTenantId())
             ->with(['employee', 'actingForUser'])
             ->find($runId);
     }
@@ -191,7 +199,10 @@ class RunDiagnosticService
         return $this->recentRunsQuery()
             ->limit($limit)
             ->get()
-            ->map(fn (AiRun $run): array => $this->mapRecentRun($run))
+            ->map(function ($run): array {
+                /** @var AiRun $run */
+                return $this->mapRecentRun($run);
+            })
             ->values()
             ->all();
     }
@@ -199,6 +210,7 @@ class RunDiagnosticService
     public function recentRunsQuery(string $search = ''): Builder
     {
         $query = AiRun::query()
+            ->forTenant($this->tenants->requireTenantId())
             ->with(['employee', 'calls'])
             ->orderByDesc('started_at')
             ->orderByDesc('created_at');
@@ -236,7 +248,10 @@ class RunDiagnosticService
 
     public function wireLogDiskUsageBytes(): int
     {
-        return $this->wireLogger->totalBytes();
+        return AiRun::query()
+            ->forTenant($this->tenants->requireTenantId())
+            ->pluck('id')
+            ->sum(fn (string $runId): int => $this->wireLogger->footprintBytes($runId));
     }
 
     /**
@@ -244,6 +259,10 @@ class RunDiagnosticService
      */
     public function runTranscript(AiRun $run): array
     {
+        if (! $this->runBelongsToCurrentTenant($run)) {
+            return [];
+        }
+
         $allMessages = $this->readTranscriptMessages($run);
 
         $entries = array_values(array_filter(
@@ -265,6 +284,10 @@ class RunDiagnosticService
 
     public function triggeringPrompt(AiRun $run): ?Message
     {
+        if (! $this->runBelongsToCurrentTenant($run)) {
+            return null;
+        }
+
         $messages = $this->readTranscriptMessages($run);
 
         if ($messages === []) {
@@ -346,17 +369,27 @@ class RunDiagnosticService
             return null;
         }
 
-        $base = rtrim((string) config('ai.workspace_path'), '/').'/'.$run->employee_id.'/sessions';
+        try {
+            $sessionId = SessionId::fromString($run->session_id);
+            $base = rtrim((string) config('ai.workspace_path'), '/\\').'/'.$run->employee_id.'/sessions';
 
-        if ($run->employee_id === Employee::LARA_ID) {
-            if (! is_int($run->acting_for_user_id)) {
-                return null;
+            if ($run->employee_id === Employee::LARA_ID) {
+                if (! is_int($run->acting_for_user_id)) {
+                    return null;
+                }
+
+                $base .= '/'.$run->acting_for_user_id;
             }
 
-            $base .= '/'.$run->acting_for_user_id;
+            return SessionPath::transcript($base, $sessionId);
+        } catch (InvalidSessionIdException|SessionPathContainmentException) {
+            return null;
         }
+    }
 
-        return $base.'/'.$run->session_id.'.jsonl';
+    private function runBelongsToCurrentTenant(AiRun $run): bool
+    {
+        return (int) $run->tenant_id === $this->tenants->requireTenantId();
     }
 
     /**

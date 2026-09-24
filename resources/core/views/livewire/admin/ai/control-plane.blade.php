@@ -9,11 +9,22 @@ use Illuminate\Support\Number;
 /** @var array<string, mixed>|null $runView */
 /** @var LifecycleAction|null $selectedLifecycleAction */
 /** @var array{label: string, url: string|null}|null $operationsBreadcrumb */
-/** @var bool $canManageRuntimeGuardrails */
+/** @var bool $canManageControlPlane */
+/** @var bool $canViewPlatformLifecycle */
+/** @var bool $canManagePlatformLifecycle */
 /** @var SettingDefinition $maxToolRoundsDefinition */
 /** @var SettingDefinition $laraPromptExtensionPathDefinition */
 /** @var SettingDefinition $bashToolEnabledDefinition */
 $controlPlaneContext = request()->only(['from', 'returnTo']);
+$controlPlaneTabs = [
+    ['id' => 'inspector', 'label' => __('Run Inspector'), 'icon' => 'heroicon-o-magnifying-glass'],
+    ['id' => 'health', 'label' => __('Health & Presence'), 'icon' => 'heroicon-o-heart'],
+    ['id' => 'runtime', 'label' => __('Runtime Guardrails'), 'icon' => 'heroicon-o-shield-check'],
+];
+
+if ($canViewPlatformLifecycle) {
+    $controlPlaneTabs[] = ['id' => 'lifecycle', 'label' => __('Lifecycle Controls'), 'icon' => 'heroicon-o-arrow-path'];
+}
 ?>
 <div>
     <x-slot name="title">{{ __('Control Plane') }}</x-slot>
@@ -47,12 +58,7 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
 
     <x-ui.tabs
         tabs-id="ai-control-plane-tabs"
-        :tabs="[
-            ['id' => 'inspector', 'label' => __('Run Inspector'), 'icon' => 'heroicon-o-magnifying-glass'],
-            ['id' => 'health', 'label' => __('Health & Presence'), 'icon' => 'heroicon-o-heart'],
-            ['id' => 'runtime', 'label' => __('Runtime Guardrails'), 'icon' => 'heroicon-o-shield-check'],
-            ['id' => 'lifecycle', 'label' => __('Lifecycle Controls'), 'icon' => 'heroicon-o-arrow-path'],
-        ]"
+        :tabs="$controlPlaneTabs"
         :default="$activeTab"
         persistence="query"
         wire-action="setActiveTab"
@@ -257,7 +263,7 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
                                 :label="__('Maximum tool rounds per turn')"
                                 :help="__('One round may contain several parallel tool calls. At 80% of the limit, the chat warns the user and asks the agent to prioritize completion. The shipped default is :default; higher limits can increase run time and provider cost when a model loops.', ['default' => number_format($maxToolRoundsDefinition->default)])"
                                 :error="$errors->first('maxToolRounds')"
-                                :disabled="! $canManageRuntimeGuardrails"
+                                :disabled="! $canManageControlPlane"
                             />
 
                             <div class="border-t border-border-default pt-4">
@@ -272,7 +278,7 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
                                 :label="__($laraPromptExtensionPathDefinition->label)"
                                 :help="__($laraPromptExtensionPathDefinition->help)"
                                 :error="$errors->first('laraPromptExtensionPath')"
-                                :disabled="! $canManageRuntimeGuardrails"
+                                :disabled="! $canManageControlPlane"
                             />
 
                             <div class="space-y-2 rounded-2xl border border-status-warning/30 bg-status-warning/5 p-card-inner">
@@ -280,7 +286,7 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
                                     id="runtime-bash-enabled"
                                     wire:model="bashToolEnabled"
                                     :label="__($bashToolEnabledDefinition->label)"
-                                    :disabled="! $canManageRuntimeGuardrails"
+                                    :disabled="! $canManageControlPlane"
                                 />
                                 <p class="text-xs leading-5 text-muted">{{ __($bashToolEnabledDefinition->help) }}</p>
                                 <p class="text-xs font-medium text-status-warning">{{ __('Enabling this gives authorized agents the application process’s shell privileges. Constrain the process with an OS-level sandbox or least-privileged account.') }}</p>
@@ -289,7 +295,7 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
                                 @enderror
                             </div>
 
-                            @if ($canManageRuntimeGuardrails)
+                            @if ($canManageControlPlane)
                                 <div class="flex flex-wrap items-center gap-3">
                                     <x-ui.button
                                         type="submit"
@@ -321,6 +327,7 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
             </div>
         </x-ui.tab>
 
+        @if ($canViewPlatformLifecycle)
         <x-ui.tab id="lifecycle">
             <div class="space-y-section-gap">
                 <x-ui.card>
@@ -380,14 +387,16 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
                             <x-ui.button wire:click="previewLifecycleAction" variant="secondary" size="sm">
                                 {{ __('Preview') }}
                             </x-ui.button>
-                            <x-ui.button
-                                wire:click="executeLifecycleAction"
-                                wire:confirm="{{ __('This will execute the selected lifecycle action. Continue?') }}"
-                                variant="primary"
-                                size="sm"
-                            >
-                                {{ __('Execute') }}
-                            </x-ui.button>
+                            @if ($canManagePlatformLifecycle)
+                                <x-ui.button
+                                    wire:click="executeLifecycleAction"
+                                    wire:confirm="{{ __('This will execute the selected lifecycle action. Continue?') }}"
+                                    variant="primary"
+                                    size="sm"
+                                >
+                                    {{ __('Execute') }}
+                                </x-ui.button>
+                            @endif
                         </div>
                     </div>
                 </x-ui.card>
@@ -480,5 +489,6 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
                 </x-ui.card>
             </div>
         </x-ui.tab>
+        @endif
     </x-ui.tabs>
 </div>

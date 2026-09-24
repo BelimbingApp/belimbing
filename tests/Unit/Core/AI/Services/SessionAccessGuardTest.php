@@ -1,6 +1,8 @@
 <?php
 
 use App\Core\AI\Enums\AiRunStatus;
+use App\Core\AI\Exceptions\InvalidSessionIdException;
+use App\Core\AI\Exceptions\SessionPathContainmentException;
 use App\Core\AI\Models\AiRun;
 use App\Core\AI\Services\MessageManager;
 use App\Core\AI\Services\SessionManager;
@@ -294,6 +296,106 @@ it('does not leak Lara sessions across users via messages', function (): void {
 
     expect($sessionManager->get(Employee::LARA_ID, $session->id))->toBeNull()
         ->and($messageManager->read(Employee::LARA_ID, $session->id))->toBeEmpty();
+});
+
+it('rejects crafted session identifiers before any session file operation', function (string $sessionId): void {
+    $fixture = createLaraFixture();
+    $this->actingAs($fixture['userA']);
+
+    $sessionManager = new SessionManager;
+    $messageManager = new MessageManager($sessionManager);
+
+    expect(fn () => $sessionManager->get(Employee::LARA_ID, $sessionId))
+        ->toThrow(InvalidSessionIdException::class)
+        ->and(fn () => $sessionManager->updateTitle(Employee::LARA_ID, $sessionId, 'Changed'))
+        ->toThrow(InvalidSessionIdException::class)
+        ->and(fn () => $sessionManager->updateModelOverride(Employee::LARA_ID, $sessionId, 'provider:::model'))
+        ->toThrow(InvalidSessionIdException::class)
+        ->and(fn () => $messageManager->read(Employee::LARA_ID, $sessionId))
+        ->toThrow(InvalidSessionIdException::class)
+        ->and(fn () => $messageManager->appendUserMessage(Employee::LARA_ID, $sessionId, 'Injected'))
+        ->toThrow(InvalidSessionIdException::class)
+        ->and(fn () => $sessionManager->delete(Employee::LARA_ID, $sessionId))
+        ->toThrow(InvalidSessionIdException::class);
+})->with([
+    'forward-slash traversal' => '../2/20260922-120000-abc123',
+    'backslash traversal' => '..\\2\\20260922-120000-abc123',
+    'URL-encoded traversal' => '%2e%2e%2f2%2f20260922-120000-abc123',
+    'absolute path' => '/tmp/20260922-120000-abc123',
+    'Windows drive path' => 'C:\\temp\\20260922-120000-abc123',
+    'null byte' => "20260922-120000-abc123\0ignored",
+    'malformed timestamp' => '20261340-996099-abc123',
+]);
+
+it('prevents known session ids from crossing Lara user roots for reads writes and deletion', function (): void {
+    $fixture = createLaraFixture();
+
+    $this->actingAs($fixture['userA']);
+    $sessionManager = new SessionManager;
+    $messageManager = new MessageManager($sessionManager);
+    $session = $sessionManager->create(Employee::LARA_ID, 'Private session');
+    $messageManager->appendUserMessage(Employee::LARA_ID, $session->id, 'Private message');
+
+    $this->actingAs($fixture['userB']);
+    $sessionManager = new SessionManager;
+    $messageManager = new MessageManager($sessionManager);
+
+    expect($sessionManager->get(Employee::LARA_ID, $session->id))->toBeNull()
+        ->and($messageManager->read(Employee::LARA_ID, $session->id))->toBeEmpty();
+
+    $sessionManager->updateTitle(Employee::LARA_ID, $session->id, 'Compromised');
+    $sessionManager->updateModelOverride(Employee::LARA_ID, $session->id, 'provider:::restricted-model');
+    $sessionManager->delete(Employee::LARA_ID, $session->id);
+
+    $this->actingAs($fixture['userA']);
+    $sessionManager = new SessionManager;
+    $messageManager = new MessageManager($sessionManager);
+    $preserved = $sessionManager->get(Employee::LARA_ID, $session->id);
+
+    expect($preserved)->not->toBeNull()
+        ->and($preserved?->title)->toBe('Private session')
+        ->and($preserved?->llm)->toBeNull()
+        ->and($messageManager->read(Employee::LARA_ID, $session->id))->toHaveCount(1)
+        ->and($messageManager->read(Employee::LARA_ID, $session->id)[0]->content)->toBe('Private message');
+});
+
+it('rejects existing symlinks that escape the authorized session root', function (): void {
+    $fixture = createLaraFixture();
+    $this->actingAs($fixture['userA']);
+
+    $sessionManager = new SessionManager;
+    $sessionRoot = $sessionManager->sessionsPath(Employee::LARA_ID);
+    $outsideRoot = config('ai.workspace_path').'-outside-'.Str::random(8);
+    $sessionId = '20260922-120000-abc123';
+
+    File::ensureDirectoryExists($sessionRoot);
+    File::ensureDirectoryExists($outsideRoot);
+    File::put($outsideRoot.'/'.$sessionId.'.meta.json', '{}');
+
+    $metaLink = $sessionRoot.'/'.$sessionId.'.meta.json';
+    $attachmentsLink = $sessionRoot.'/attachments';
+
+    try {
+        expect(symlink($outsideRoot.'/'.$sessionId.'.meta.json', $metaLink))->toBeTrue()
+            ->and(symlink($outsideRoot, $attachmentsLink))->toBeTrue();
+
+        expect(fn () => $sessionManager->get(Employee::LARA_ID, $sessionId))
+            ->toThrow(SessionPathContainmentException::class)
+            ->and(fn () => $sessionManager->attachmentsPath(Employee::LARA_ID, $sessionId))
+            ->toThrow(SessionPathContainmentException::class)
+            ->and($sessionManager->list(Employee::LARA_ID))
+            ->toBeEmpty();
+    } finally {
+        if (is_link($metaLink)) {
+            unlink($metaLink);
+        }
+
+        if (is_link($attachmentsLink)) {
+            unlink($attachmentsLink);
+        }
+
+        File::deleteDirectory($outsideRoot);
+    }
 });
 
 it('uses real ULID-shaped fixture ids for ai_runs.id', function (): void {

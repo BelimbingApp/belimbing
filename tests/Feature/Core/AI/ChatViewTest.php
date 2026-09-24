@@ -286,6 +286,38 @@ it('re-hydrates session override and active turn state when selectedSessionId is
         );
 });
 
+it('rejects a malformed session id passed through a Livewire session action', function (): void {
+    $user = createChatViewFixture();
+    test()->actingAs($user);
+
+    $session = app(SessionManager::class)->create(Employee::LARA_ID);
+
+    Livewire::test(Chat::class)
+        ->assertSet('selectedSessionId', $session->id)
+        ->call('selectSession', '../forged-session')
+        ->assertSet('selectedSessionId', $session->id)
+        ->assertDispatched('notify', variant: 'error');
+
+    expect(app(SessionManager::class)->get(Employee::LARA_ID, $session->id))->not->toBeNull();
+});
+
+it('only selects sessions enumerated for the current chat principal', function (): void {
+    $user = createChatViewFixture();
+    test()->actingAs($user);
+
+    $session = app(SessionManager::class)->create(Employee::LARA_ID);
+    $forgedSessionId = '20260922-235959-abc123';
+
+    Livewire::test(Chat::class)
+        ->assertSet('selectedSessionId', $session->id)
+        ->call('selectSession', $forgedSessionId)
+        ->assertSet('selectedSessionId', null)
+        ->call('selectSession', $session->id)
+        ->assertSet('selectedSessionId', $session->id)
+        ->set('selectedSessionId', $forgedSessionId)
+        ->assertSet('selectedSessionId', null);
+});
+
 it('records a titling run, outbound exchange, and wire logs when wire logging is enabled', function (): void {
     config()->set('ai.wire_logging.enabled', true);
 
