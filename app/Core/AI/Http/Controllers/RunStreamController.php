@@ -43,6 +43,7 @@ class RunStreamController
 
             $turn->refresh();
 
+            // @phpstan-ignore blb.growingTableUnboundedLoad (one run's events after the last streamed seq)
             foreach ($turn->eventsAfter($lastSeq)->get() as $event) {
                 $lastSeq = $event->seq;
                 echo json_encode($event->toSsePayload(), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES)."\n";

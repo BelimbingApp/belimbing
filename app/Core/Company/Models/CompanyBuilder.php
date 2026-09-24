@@ -2,6 +2,7 @@
 
 namespace App\Core\Company\Models;
 
+use App\Base\Database\Services\HydrationGuard;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 
@@ -42,12 +43,14 @@ class CompanyBuilder extends Builder
      */
     public function forceDelete(): int
     {
-        $erased = 0;
+        return app(HydrationGuard::class)->suspend(function (): int {
+            $erased = 0;
 
-        foreach ($this->withoutGlobalScope(SoftDeletingScope::class)->lazyById() as $company) {
-            $erased += $company->forceDelete() === true ? 1 : 0;
-        }
+            foreach ($this->withoutGlobalScope(SoftDeletingScope::class)->lazyById() as $company) {
+                $erased += $company->forceDelete() === true ? 1 : 0;
+            }
 
-        return $erased;
+            return $erased;
+        });
     }
 }

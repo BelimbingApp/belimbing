@@ -258,6 +258,7 @@ class ScheduleBoard
             ->selectRaw("ROW_NUMBER() OVER (PARTITION BY {$key} ORDER BY {$startedAt} DESC, {$id} DESC) AS run_rank");
 
         /** @var EloquentCollection<int, ScheduleRun> $runs */
+        // @phpstan-ignore blb.growingTableUnboundedLoad (one ranked run per requested task key)
         $runs = ScheduleRun::query()
             ->fromSub($ranked->toBase(), 'latest_schedule_runs')
             ->where('run_rank', 1)

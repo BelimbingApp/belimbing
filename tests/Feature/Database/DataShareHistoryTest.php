@@ -252,3 +252,22 @@ it('does not leave a fetch_failed row when recordFailure is not reached on succe
         ->and(DataShareEvent::query()->where('action', 'offer_fetched')->count())->toBe(1)
         ->and(DataShareReceipt::query()->count())->toBe(1);
 });
+
+it('caps the CLI history at the newest --limit events', function (): void {
+    $user = createAdminUser();
+
+    foreach (range(1, 5) as $i) {
+        DataShareEvent::query()->create([
+            'package_id' => 'pkg-limit-'.$i,
+            'action' => 'exported',
+            'actor_id' => $user->id,
+            'scope_name' => GENERIC_SHARE_SCOPE,
+            'created_at' => now('UTC')->subMinutes(10 - $i),
+        ]);
+    }
+
+    Artisan::call('blb:db:share:history', ['--json' => true, '--limit' => 2]);
+    $payload = json_decode(Artisan::output(), true, 512, JSON_THROW_ON_ERROR);
+
+    expect(array_column($payload, 'package_id'))->toBe(['pkg-limit-5', 'pkg-limit-4']);
+});

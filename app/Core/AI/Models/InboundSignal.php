@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Core\AI\Models;
 
+use App\Base\Database\Contracts\GrowingTable;
 use App\Core\AI\Enums\SignalAuthenticityStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -28,7 +30,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  * @property-read ChannelAccount|null $channelAccount
  */
-class InboundSignal extends Model
+class InboundSignal extends Model implements GrowingTable
 {
     /**
      * The table associated with the model.

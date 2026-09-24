@@ -345,7 +345,7 @@ class MessageManager
     private function batchLoadRunMeta(array $runIds): array
     {
         $runs = AiRun::query()
-            ->whereIn('id', $runIds)
+            ->whereKey($runIds)
             ->get()
             ->keyBy('id');
 
@@ -368,6 +368,7 @@ class MessageManager
      */
     public function sessionUsage(int $employeeId, string $sessionId): array
     {
+        // @phpstan-ignore blb.growingTableUnboundedLoad (one session's runs, two columns)
         $runs = AiRun::query()
             ->where('employee_id', $employeeId)
             ->where('session_id', $sessionId)

@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Core\AI\Services\Browser;
 
 use App\Core\AI\Enums\BrowserSessionStatus;
@@ -201,6 +202,7 @@ class BrowserSessionRepository
      */
     public function findStaleSessions(): Collection
     {
+        // @phpstan-ignore blb.growingTableUnboundedLoad (expired but not yet terminal; the sweep that consumes this terminates each one)
         return BrowserSession::query()->stale()->get();
     }
 
@@ -211,6 +213,7 @@ class BrowserSessionRepository
      */
     public function getActiveSessionsForCompany(int $companyId): Collection
     {
+        // @phpstan-ignore blb.growingTableUnboundedLoad (active sessions are bounded by browser runtime capacity)
         return BrowserSession::query()
             ->where('company_id', $companyId)
             ->active()

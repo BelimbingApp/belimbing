@@ -63,6 +63,7 @@ class DataSharePackageRetention
             $this->settings->integer('data_share.transfer_limits.incoming_retention_days', 14, 1, 3650),
         ));
         $prefix = $this->settings->pathPrefix('data_share.incoming_path_prefix', 'data-share/incoming');
+        // @phpstan-ignore blb.growingTableUnboundedLoad (one receipt per package file present under the incoming prefix)
         $receipts = DataShareReceipt::query()
             ->whereIn('package_path', $disk->allFiles($prefix))
             ->get()
@@ -128,6 +129,7 @@ class DataSharePackageRetention
             $this->settings->integer('data_share.transfer_limits.incoming_retention_days', 14, 1, 3650),
         ));
         $prefix = $this->settings->pathPrefix('data_share.outgoing_path_prefix', 'data-share/outgoing');
+        // @phpstan-ignore blb.growingTableUnboundedLoad (only published, unexpired offers; expiry bounds the set)
         $availablePaths = DataShareTransferOffer::query()
             ->where('status', 'published')
             ->where('expires_at', '>', CarbonImmutable::now('UTC'))

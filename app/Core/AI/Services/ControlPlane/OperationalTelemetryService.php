@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Core\AI\Services\ControlPlane;
 
 use App\Core\AI\DTO\ControlPlane\TelemetryEvent;
@@ -59,6 +60,7 @@ class OperationalTelemetryService
     public function forRun(string $runId): array
     {
         return $this->toEvents(
+            // @phpstan-ignore blb.growingTableUnboundedLoad (one run's telemetry)
             TelemetryEventModel::query()
                 ->where('run_id', $runId)
                 ->orderBy('occurred_at')
@@ -74,6 +76,7 @@ class OperationalTelemetryService
     public function forSession(string $sessionId): array
     {
         return $this->toEvents(
+            // @phpstan-ignore blb.growingTableUnboundedLoad (one session's telemetry)
             TelemetryEventModel::query()
                 ->where('session_id', $sessionId)
                 ->orderBy('occurred_at')
@@ -126,6 +129,7 @@ class OperationalTelemetryService
      */
     public function countByType(int $minutesBack = 60): array
     {
+        // @phpstan-ignore blb.growingTableUnboundedLoad (one count per event type)
         $counts = TelemetryEventModel::query()
             ->where('occurred_at', '>=', now()->subMinutes($minutesBack))
             ->selectRaw('event_type, count(*) as total')

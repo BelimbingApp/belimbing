@@ -2,6 +2,7 @@
 
 namespace App\Base\Audit\Models;
 
+use App\Base\Database\Contracts\GrowingTable;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 
@@ -25,7 +26,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property CarbonInterface|null $occurred_at
  * @property string|null $actor_name
  */
-class AuditMutation extends Model
+class AuditMutation extends Model implements GrowingTable
 {
     /**
      * @var string

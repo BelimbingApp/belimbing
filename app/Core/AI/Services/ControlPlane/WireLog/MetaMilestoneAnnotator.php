@@ -49,6 +49,7 @@ class MetaMilestoneAnnotator
      */
     public function annotate(AiRun $run): array
     {
+        // @phpstan-ignore blb.growingTableUnboundedLoad (one run's events)
         $events = AiRunEvent::query()
             ->where('run_id', $run->id)
             ->orderBy('seq')

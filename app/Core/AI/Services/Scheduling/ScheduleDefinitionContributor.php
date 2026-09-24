@@ -315,6 +315,7 @@ class ScheduleDefinitionContributor implements ScheduleContributor, ScheduleHeal
             ->select('ai_operation_dispatches.*')
             ->selectRaw("{$scheduleId} AS schedule_id_value")
             ->selectRaw("ROW_NUMBER() OVER (PARTITION BY {$scheduleId} ORDER BY COALESCE(started_at, created_at) DESC, id DESC) AS schedule_rank");
+        // @phpstan-ignore blb.growingTableUnboundedLoad (at most perSchedule ranked dispatches per schedule)
         $dispatches = OperationDispatch::query()
             ->fromSub($ranked->toBase(), 'recent_operation_dispatches')
             ->where('schedule_rank', '<=', max(1, $perSchedule))

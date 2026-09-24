@@ -2,6 +2,7 @@
 
 namespace App\Base\Audit\Models;
 
+use App\Base\Database\Contracts\GrowingTable;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\MassPrunable;
@@ -24,7 +25,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property CarbonInterface|null $occurred_at
  * @property string|null $actor_name
  */
-class AuditAction extends Model
+class AuditAction extends Model implements GrowingTable
 {
     use MassPrunable;
 

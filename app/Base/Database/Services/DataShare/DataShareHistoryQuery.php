@@ -82,16 +82,13 @@ class DataShareHistoryQuery
     }
 
     /**
+     * The newest events, newest first. The ledger only grows, so a limit is
+     * part of the contract rather than an option.
+     *
      * @return Collection<int, DataShareEvent>
      */
-    public function all(?string $actionClass = null, ?int $limit = null): Collection
+    public function recent(?string $actionClass, int $limit): Collection
     {
-        $query = $this->query($actionClass);
-
-        if ($limit !== null) {
-            $query->limit($limit);
-        }
-
-        return $query->get();
+        return $this->query($actionClass)->limit(max(1, $limit))->get();
     }
 }

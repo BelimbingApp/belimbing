@@ -153,6 +153,7 @@ trait HandlesStreaming
 
         $actingForUserId = (int) $userId;
 
+        // @phpstan-ignore blb.growingTableUnboundedLoad (one user's in-flight turns only; terminal turns are excluded)
         $activeTurns = AiRun::query()
             ->where('employee_id', $this->employeeId)
             ->where('acting_for_user_id', $actingForUserId)

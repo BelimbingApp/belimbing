@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Core\AI\Services\Orchestration;
 
 use App\Core\AI\DTO\Orchestration\SpawnEnvelope;
@@ -66,6 +67,7 @@ class SessionSpawnManager
      */
     public function childrenOf(string $parentSessionId): Collection
     {
+        // @phpstan-ignore blb.growingTableUnboundedLoad (one parent session's children)
         return OrchestrationSession::query()
             ->where('parent_session_id', $parentSessionId)
             ->orderBy('created_at')

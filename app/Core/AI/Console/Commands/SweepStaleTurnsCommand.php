@@ -87,6 +87,7 @@ class SweepStaleTurnsCommand extends Command
             $query->whereDoesntHave('events', fn ($events) => $events->where('created_at', '>=', $cutoff));
         }
 
+        // @phpstan-ignore blb.growingTableUnboundedLoad (non-terminal turns are bounded by worker concurrency, and each is swept here)
         $staleTurns = $query->get();
 
         $count = 0;

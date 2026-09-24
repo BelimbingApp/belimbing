@@ -27,6 +27,7 @@ use App\Core\AI\Services\SessionManager;
 use App\Core\Employee\Models\Employee;
 use App\Core\User\Models\User;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -577,21 +578,29 @@ class Chat extends Component
             $sessions,
         );
 
-        $latestTurns = AiRun::query()
+        // Rank turns per session in the database and read only the newest,
+        // so the sidebar costs one row per session however long each one is.
+        $ranked = AiRun::query()
             ->where('employee_id', $this->employeeId)
             ->where('acting_for_user_id', (int) $userId)
             ->where('source', 'chat')
-            ->whereIn('session_id', $sessionIds)
-            ->orderByDesc('created_at')
+            ->whereIn('session_id', $sessionIds);
+        $grammar = $ranked->getQuery()->getGrammar();
+        $ranked->select(['id', 'session_id'])->selectRaw(sprintf(
+            'ROW_NUMBER() OVER (PARTITION BY %s ORDER BY %s DESC, %s DESC) AS turn_rank',
+            $grammar->wrap('session_id'),
+            $grammar->wrap('created_at'),
+            $grammar->wrap('id'),
+        ));
+
+        $latestTurns = DB::query()
+            ->fromSub($ranked->toBase(), 'latest_chat_turns')
+            ->where('turn_rank', 1)
             ->get(['id', 'session_id']);
 
         $targets = [];
 
         foreach ($latestTurns as $turn) {
-            if (isset($targets[$turn->session_id])) {
-                continue;
-            }
-
             $activeTurnId = $activeTurnsBySession[$turn->session_id]['runId'] ?? null;
 
             $targets[$turn->session_id] = [

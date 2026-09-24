@@ -2,6 +2,7 @@
 
 namespace App\Base\Workflow\Models;
 
+use App\Base\Database\Contracts\GrowingTable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
@@ -19,7 +20,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $delivered_at
  * @property string|null $last_error
  */
-class TransitionOutboxMessage extends Model
+class TransitionOutboxMessage extends Model implements GrowingTable
 {
     protected $table = 'base_workflow_transition_outbox';
 

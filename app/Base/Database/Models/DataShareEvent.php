@@ -2,6 +2,7 @@
 
 namespace App\Base\Database\Models;
 
+use App\Base\Database\Contracts\GrowingTable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
@@ -20,7 +21,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $error_summary
  * @property Carbon $created_at
  */
-class DataShareEvent extends Model
+class DataShareEvent extends Model implements GrowingTable
 {
     public const UPDATED_AT = null;
 

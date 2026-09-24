@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Core\AI\Models;
 
+use App\Base\Database\Contracts\GrowingTable;
 use App\Core\AI\Enums\ControlPlaneTarget;
 use App\Core\AI\Enums\TelemetryEventType;
 use App\Core\Employee\Models\Employee;
@@ -29,7 +31,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  * @property-read Employee|null $employee
  */
-class TelemetryEvent extends Model
+class TelemetryEvent extends Model implements GrowingTable
 {
     /**
      * Prefix for telemetry event IDs.

@@ -2,6 +2,7 @@
 
 namespace App\Base\Workflow\Models;
 
+use App\Base\Database\Contracts\GrowingTable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
@@ -22,7 +23,7 @@ use Illuminate\Support\Carbon;
  * @property array<string, mixed>|null $result
  * @property Carbon|null $completed_at
  */
-class HumanActionRequestRecord extends Model
+class HumanActionRequestRecord extends Model implements GrowingTable
 {
     protected $table = 'base_workflow_human_action_requests';
 

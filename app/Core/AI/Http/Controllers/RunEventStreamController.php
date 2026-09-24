@@ -37,6 +37,7 @@ class RunEventStreamController
 
         $afterSeq = (int) $request->query('after_seq', '0');
 
+        // @phpstan-ignore blb.growingTableUnboundedLoad (one run's events after the client's cursor)
         $events = $turn->eventsAfter($afterSeq)
             ->get()
             ->map(fn ($event) => $event->toSsePayload())

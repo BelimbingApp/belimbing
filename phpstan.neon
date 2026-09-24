@@ -23,3 +23,12 @@ parameters:
     # Unmatched ignores are allowed so fixing debt can shrink the baseline
     # without a separate PR chore; growth is refused by the count gate.
     reportUnmatchedIgnoredErrors: false
+
+services:
+    # Also registered in phpstan-feature-flags.neon, which covers all four
+    # roots; registering it here keeps its inline exceptions under app/Base
+    # matched in this pass. See docs/architecture/query-bounds.md.
+    -
+        class: App\Base\Database\PHPStan\GrowingTableUnboundedLoadRule
+        tags:
+            - phpstan.rules.rule

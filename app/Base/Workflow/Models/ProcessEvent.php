@@ -2,6 +2,7 @@
 
 namespace App\Base\Workflow\Models;
 
+use App\Base\Database\Contracts\GrowingTable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
@@ -17,7 +18,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $idempotency_key
  * @property Carbon $occurred_at
  */
-class ProcessEvent extends Model
+class ProcessEvent extends Model implements GrowingTable
 {
     public const UPDATED_AT = null;
 
