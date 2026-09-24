@@ -237,14 +237,33 @@ class ScheduleBoard
             return collect();
         }
 
+        // Rank runs per key in the database and fetch only rank 1, so the
+        // board reads one row per scheduled task no matter how deep the
+        // retained history is. Loading the whole history and de-duplicating
+        // in PHP exhausted the worker's memory once production held ~100k
+        // rows. ROW_NUMBER() is supported by every driver the test matrix
+        // covers (PostgreSQL, SQLite >= 3.25), and the ranking order matches
+        // base_schedule_runs_task_started_index.
+        $ranked = ScheduleRun::query()
+            ->where('source', 'scheduler')
+            ->whereIn('key', array_values(array_unique($keys)));
+        $runTable = (new ScheduleRun)->getTable();
+        $grammar = $ranked->getQuery()->getGrammar();
+        $key = $grammar->wrap('key');
+        $startedAt = $grammar->wrap('started_at');
+        $id = $grammar->wrap('id');
+
+        $ranked
+            ->select($runTable.'.*')
+            ->selectRaw("ROW_NUMBER() OVER (PARTITION BY {$key} ORDER BY {$startedAt} DESC, {$id} DESC) AS run_rank");
+
         /** @var EloquentCollection<int, ScheduleRun> $runs */
         $runs = ScheduleRun::query()
-            ->where('source', 'scheduler')
-            ->whereIn('key', array_values(array_unique($keys)))
-            ->orderByDesc('started_at')
+            ->fromSub($ranked->toBase(), 'latest_schedule_runs')
+            ->where('run_rank', 1)
             ->get();
 
-        return $runs->unique('key')->keyBy('key');
+        return $runs->keyBy('key');
     }
 
     /**

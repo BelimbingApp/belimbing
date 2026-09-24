@@ -197,6 +197,77 @@ test('the board merges scheduler events with tagged contributors, soonest first'
     expect(collect($board->history($query, 25, 1)->items)->pluck('name'))->toContain(SCHEDULE_DIGEST_NAME);
 });
 
+test('the board reads one row per scheduler key regardless of retained history depth', function (): void {
+    $recorder = app(ScheduleRunRecorder::class);
+    $schedule = app(Schedule::class);
+    $now = now()->startOfSecond();
+    $keys = [];
+
+    foreach (['alpha', 'beta', 'gamma'] as $index => $name) {
+        $event = $schedule->command('inspire', ['--'.$name])->description('Deep history '.$name);
+        $key = $recorder->key($event);
+        $keys[$name] = $key;
+
+        $rows = [];
+        foreach (range(1, 400) as $offset) {
+            $rows[] = [
+                'source' => 'scheduler',
+                'key' => $key,
+                'name' => 'Deep history '.$name,
+                'status' => 'succeeded',
+                'started_at' => $now->copy()->subMinutes($offset + 1),
+                'finished_at' => $now->copy()->subMinutes($offset + 1)->addSecond(),
+                'output_excerpt' => 'older '.$name.' '.$offset,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+        ScheduleRun::query()->insert($rows);
+
+        // Newest run per key: a failed one so status and excerpt both prove
+        // the board picked this row and not an older success.
+        ScheduleRun::query()->create([
+            'source' => 'scheduler',
+            'key' => $key,
+            'name' => 'Deep history '.$name,
+            'status' => 'failed',
+            'started_at' => $now->copy()->subSeconds($index + 1),
+            'finished_at' => $now->copy()->subSeconds($index + 1)->addSecond(),
+            'output_excerpt' => 'latest '.$name,
+        ]);
+    }
+
+    expect(ScheduleRun::query()->count())->toBe(3 * 401);
+
+    $runQueries = [];
+    DB::listen(function (QueryExecuted $event) use (&$runQueries): void {
+        if (str_contains($event->sql, 'base_schedule_runs') && str_contains(strtolower($event->sql), 'select')) {
+            $runQueries[] = $event;
+        }
+    });
+
+    $tasks = collect(app(ScheduleBoard::class)->tasks())->keyBy('key');
+
+    foreach ($keys as $name => $key) {
+        expect($tasks->has($key))->toBeTrue()
+            ->and($tasks[$key]->status)->toBe('failed')
+            ->and($tasks[$key]->lastResult)->toBe('latest '.$name)
+            ->and($tasks[$key]->lastRunAt?->timestamp)->toBe($now->copy()->subSeconds(array_search($name, array_keys($keys), true) + 1)->timestamp);
+    }
+
+    // The latest-run lookup must return exactly one row per key: replaying
+    // the query the board issued proves the ranking happened in SQL, not by
+    // loading 1,203 rows and de-duplicating in PHP.
+    $latestRunQueries = collect($runQueries)->filter(fn (QueryExecuted $event): bool => str_contains($event->sql, 'run_rank'));
+
+    expect($latestRunQueries)->toHaveCount(1);
+
+    $fetched = DB::select($latestRunQueries->first()->sql, $latestRunQueries->first()->bindings);
+
+    expect($fetched)->toHaveCount(count($keys))
+        ->and(collect($fetched)->pluck('key')->sort()->values()->all())->toBe(collect($keys)->sort()->values()->all());
+});
+
 test('the board accepts scheduler timezone objects', function (): void {
     $event = scheduleTestEvent();
     $event->timezone(new DateTimeZone('Asia/Kuala_Lumpur'));
