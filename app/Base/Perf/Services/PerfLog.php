@@ -52,18 +52,31 @@ final class PerfLog
     }
 
     /**
-     * Filesystem calls are silenced so PHP warnings do not become
-     * ErrorExceptions before their return values can be checked; the false
-     * returns are turned into one exception with the actual OS reason.
+     * PHP warnings from the filesystem calls are captured by a scoped error
+     * handler (so Laravel does not turn them into ErrorExceptions, and the
+     * actual OS reason is kept even though error_get_last() is not updated
+     * while a user handler is installed); false returns become one exception.
      */
     private function append(string $directory, string $path, string $line): void
     {
-        if (! is_dir($directory) && ! @mkdir($directory, 0755, true) && ! is_dir($directory)) {
-            throw new RuntimeException("Could not create perf log directory [$directory]: ".$this->lastErrorMessage());
-        }
+        $error = null;
 
-        if (@file_put_contents($path, $line, FILE_APPEND | LOCK_EX) === false) {
-            throw new RuntimeException("Could not append to perf log [$path]: ".$this->lastErrorMessage());
+        set_error_handler(function (int $errno, string $message) use (&$error): bool {
+            $error = $message;
+
+            return true;
+        });
+
+        try {
+            if (! is_dir($directory) && ! mkdir($directory, 0755, true) && ! is_dir($directory)) {
+                throw new RuntimeException("Could not create perf log directory [$directory]: ".($error ?? 'unknown error'));
+            }
+
+            if (file_put_contents($path, $line, FILE_APPEND | LOCK_EX) === false) {
+                throw new RuntimeException("Could not append to perf log [$path]: ".($error ?? 'unknown error'));
+            }
+        } finally {
+            restore_error_handler();
         }
     }
 
@@ -84,14 +97,6 @@ final class PerfLog
             // The framework log may be on the same full disk; the measured
             // work still must not fail because of instrumentation.
         }
-    }
-
-    private function lastErrorMessage(): string
-    {
-        $error = error_get_last();
-        error_clear_last();
-
-        return $error['message'] ?? 'unknown error';
     }
 
     /**

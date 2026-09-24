@@ -54,6 +54,8 @@ it('appends one json line per entry', function (): void {
 });
 
 it('drops the entry and warns once when the log directory is not writable', function (): void {
+    @file_get_contents($this->root.'/unrelated-earlier-failure');
+
     $directory = $this->root.'/readonly';
     File::ensureDirectoryExists($directory);
     chmod($directory, 0555);
@@ -62,7 +64,7 @@ it('drops the entry and warns once when the log directory is not writable', func
         ->once()
         ->withArgs(fn (string $message, array $context): bool => str_contains($message, 'Perf log write failed')
             && str_starts_with($context['path'], $directory.'/perf-')
-            && $context['error'] !== '');
+            && str_contains($context['error'], 'Permission denied'));
 
     $log = perfLogWritingTo($directory);
 
@@ -78,7 +80,8 @@ it('drops the entry and warns once when the log directory is missing and cannot 
 
     Log::shouldReceive('warning')
         ->once()
-        ->withArgs(fn (string $message, array $context): bool => str_contains($context['error'], $this->root.'/missing'));
+        ->withArgs(fn (string $message, array $context): bool => str_contains($context['error'], $this->root.'/missing')
+            && str_contains($context['error'], 'Permission denied'));
 
     $log = perfLogWritingTo($directory);
 
