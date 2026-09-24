@@ -33,7 +33,7 @@ before operating heterogeneous hosts with incompatible local paths.
 Console recording stays off until `base_settings` exists, and migration/wipe
 commands are excluded, so first-run and database-recovery work does not depend
 on the table it may be creating or replacing.
-Recording is best-effort: when the perf file cannot be appended (full disk,
+Recording is best-effort: when the perf file cannot be resolved or appended (full disk,
 wrong directory mode, a log directory created by another user), the entry is
 dropped and one warning per process goes to the framework log. The measured
 request, job, or command keeps its own outcome and exit status.
