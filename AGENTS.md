@@ -59,9 +59,17 @@ Discovery order is a framework contract: **Base → Core → enabled Domains →
 - **The shared shell stays framework-owned.** Reusable Blade components, the application shell, and framework-wide tokens live under `resources/core`.
 - **Module assets are explicit.** If a Module genuinely needs owned CSS or JavaScript, keep source in its `Assets/` directory and wire it through an explicit reviewed Vite entry/import. Do not inject global scripts/styles.
 - **Promote deliberately.** If a Module view reveals a reusable framework component, extract it to `resources/core` and keep the Module screen in its owning Module.
+- **Error pages are one shell.** `resources/core/views/errors/layout.blade.php` is the only standalone error shell; `public/errors/*.html` are generated from it by `php artisan blb:error-pages:publish`, never hand-edited (tests fail when stale). Layers and Caddy/CDN wiring: `docs/runbooks/error-pages.md`.
 
 ## 6. Version Control & Workflow
 
 - **Where direct commits to `main` are authorized, work on `main`.** Do not keep other branches. Otherwise, follow the repo's authority and workflow.
 - **Never leave work unpushed or unmerged.**
 - **Land cross-repo changes together.** Note merge order when one repo depends on another.
+
+## Maintaining this file
+
+Keep this file for knowledge useful to almost every future agent session in this project.
+Do not repeat what the codebase already shows; point to the authoritative file or command instead.
+Prefer rewriting or pruning existing entries over appending new ones.
+When updating this file, preserve this bar for all agents and keep entries concise.

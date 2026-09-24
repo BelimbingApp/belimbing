@@ -65,6 +65,57 @@ caddy_render_tls_directive() {
     return 0
 }
 
+# Render the system Caddy site block for one BLB instance. Single source for
+# the block's shape: setup installs it, start-app prints it as guidance.
+#   $1 frontend domain   $2 tls directive (may be empty)
+#   $3 app port          $4 directory holding the published 5xx.html
+#
+# Two branded fallbacks live here, both serving the page produced by
+# `php artisan blb:error-pages:publish` (public/errors/5xx.html):
+#   - handle_response: the instance answered with a raw 5xx (a PHP fatal with
+#     no body). Error pages the app rendered itself carry X-Belimbing-Error-Page
+#     and pass through untouched, so maintenance and 500 copy stay intact.
+#     Caddy has already applied the upstream headers by then; adding
+#     copy_response_headers would send every header twice.
+#   - handle_errors: the instance is unreachable (restarting, updating, crashed).
+caddy_render_system_site_block() {
+    local frontend_domain=$1
+    local tls_directive
+    tls_directive=$(printf '%s' "$2" | sed 's/^[[:space:]]*//')
+    local app_port=$3
+    local errors_dir=$4
+
+    printf '%s {\n' "$frontend_domain"
+    if [[ -n "$tls_directive" ]]; then
+        printf '    %s\n' "$tls_directive"
+    fi
+    cat <<EOF
+    reverse_proxy 127.0.0.1:${app_port} {
+        @rendered_by_app header X-Belimbing-Error-Page app
+        handle_response @rendered_by_app {
+            copy_response
+        }
+        @unbranded_5xx status 5xx
+        handle_response @unbranded_5xx {
+            root * ${errors_dir}
+            rewrite * /5xx.html
+            file_server {
+                status {rp.status_code}
+            }
+        }
+    }
+    handle_errors {
+        root * ${errors_dir}
+        rewrite * /5xx.html
+        file_server {
+            status {err.status_code}
+        }
+    }
+}
+EOF
+    return 0
+}
+
 caddy_render_system_site_snippet() {
     local project_root=$1
     local frontend_domain=$2
@@ -73,12 +124,7 @@ caddy_render_system_site_snippet() {
     local tls_directive
     tls_directive=$(caddy_render_tls_directive "$project_root" "$frontend_domain" "$app_env")
 
-    cat <<EOF
-${frontend_domain} {
-${tls_directive}
-    reverse_proxy 127.0.0.1:${app_port}
-}
-EOF
+    caddy_render_system_site_block "$frontend_domain" "$tls_directive" "$app_port" "$project_root/public/errors"
     return 0
 }
 

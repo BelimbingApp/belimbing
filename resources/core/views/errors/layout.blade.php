@@ -1,14 +1,18 @@
 {{--
     Standalone error page shell. Deliberately self-contained: no Vite, no
-    app layout, no Livewire — an error page must render even when the asset
-    pipeline or application boot is the thing that broke. Colors mirror
-    resources/core/css/tokens.css (arid palette).
+    app layout, no Livewire, no session, no database — an error page must
+    render even when the asset pipeline or application boot is the thing
+    that broke. Colors mirror resources/core/css/tokens.css (arid palette,
+    zinc in dark mode); the logo is the favicon inlined so no request leaves
+    the page. `blb:error-pages:publish` renders this same shell into the
+    static fallback that Caddy and the CDN serve when PHP cannot answer.
 --}}
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex">
     <title>@yield('title') — {{ config('app.name', 'Belimbing') }}</title>
     @yield('head')
     <style>
@@ -20,6 +24,19 @@
             --muted: #6b6057;
             --accent: #b5622f;
             --accent-hover: #9a5226;
+            --accent-on: #ffffff;
+            color-scheme: light dark;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --surface-page: #0a0a0a;
+                --surface-card: #171717;
+                --border-default: #262626;
+                --ink: #f5f5f5;
+                --muted: #a3a3a3;
+                --accent: #c97a55;
+                --accent-hover: #b5622f;
+            }
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -39,6 +56,16 @@
             max-width: 26rem;
             width: 100%;
         }
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 0.625rem;
+            margin-bottom: 1.75rem;
+            font-weight: 600;
+            font-size: 0.9375rem;
+            letter-spacing: 0.01em;
+        }
+        .brand svg { width: 1.75rem; height: auto; flex: none; }
         .code {
             font-size: 0.75rem;
             font-weight: 600;
@@ -53,7 +80,7 @@
         a.button {
             display: inline-block;
             background: var(--accent);
-            color: #fff;
+            color: var(--accent-on);
             text-decoration: none;
             font-size: 0.875rem;
             font-weight: 500;
@@ -66,6 +93,14 @@
             color: var(--muted);
             font-size: 0.875rem;
             padding: 0.5rem 0.25rem;
+        }
+        .diagnostic {
+            margin-top: 1.5rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-default);
+            font-size: 0.75rem;
+            line-height: 1.25rem;
+            color: var(--muted);
         }
     </style>
 </head>
@@ -80,8 +115,17 @@
         $primaryIsHere = $primaryHref === $currentUrl;
         $secondaryHref = $__env->yieldContent('secondary-href', '');
         $secondaryIsHere = $secondaryHref !== '' && $secondaryHref === $currentUrl;
+
+        // The favicon is the brand mark. Inline it so the page needs nothing
+        // else from the server; an error page cannot assume static files load.
+        $logoPath = public_path('favicon.svg');
+        $logoSvg = is_file($logoPath) ? (string) file_get_contents($logoPath) : '';
     @endphp
     <main>
+        <div class="brand">
+            {!! $logoSvg !!}
+            <span>{{ config('app.name', 'Belimbing') }}</span>
+        </div>
         <p class="code">@yield('code')</p>
         <h1>@yield('title')</h1>
         <p>@yield('message')</p>
@@ -91,6 +135,9 @@
                 <a class="quiet" href="{{ $secondaryHref }}">@yield('secondary-label')</a>
             @endif
         </div>
+        @hasSection('diagnostic')
+            <div class="diagnostic">@yield('diagnostic')</div>
+        @endif
     </main>
 </body>
 </html>

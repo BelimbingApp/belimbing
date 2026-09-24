@@ -39,4 +39,14 @@
 		root * public
 		php_server
 	}
+
+	# Same fallback as the project Caddyfile: only a 5xx Caddy itself raises
+	# serves the branded static page; see the project Caddyfile for limits.
+	handle_errors 5xx {
+		root * public/errors
+		rewrite * /5xx.html
+		file_server {
+			status {err.status_code}
+		}
+	}
 }
