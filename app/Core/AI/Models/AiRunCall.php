@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Core\AI\Models;
 
+use App\Base\Database\Contracts\GrowingTable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
@@ -41,7 +43,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  * @property-read AiRun $run
  */
-class AiRunCall extends Model
+class AiRunCall extends Model implements GrowingTable
 {
     protected $table = 'ai_run_calls';
 

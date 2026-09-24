@@ -2,6 +2,7 @@
 
 namespace App\Base\Database\Models;
 
+use App\Base\Database\Contracts\GrowingTable;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -20,7 +21,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property CarbonInterface|null $created_at
  * @property CarbonInterface|null $updated_at
  */
-class DataSharePlan extends Model
+class DataSharePlan extends Model implements GrowingTable
 {
     protected $table = 'base_database_data_share_plans';
 

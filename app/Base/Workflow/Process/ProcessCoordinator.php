@@ -257,7 +257,7 @@ class ProcessCoordinator
     public function reconcile(ProcessRun|int|null $run = null): int
     {
         $ids = $run === null
-            ? ProcessRun::query()->where('status', ProcessRunStatus::RUNNING->value)->orderBy('id')->pluck('id')->all()
+            ? ProcessRun::query()->where('status', ProcessRunStatus::RUNNING->value)->select('id')->toBase()->lazyById(500, 'id')->pluck('id')
             : [$this->runId($run)];
         $reconciled = 0;
 

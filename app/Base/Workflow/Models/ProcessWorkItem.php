@@ -2,6 +2,8 @@
 
 namespace App\Base\Workflow\Models;
 
+use App\Base\Database\Attributes\PartitionedBy;
+use App\Base\Database\Contracts\GrowingTable;
 use App\Base\Workflow\Process\Enums\DependencyMode;
 use App\Base\Workflow\Process\Enums\ProcessWorkStatus;
 use Illuminate\Database\Eloquent\Model;
@@ -42,7 +44,8 @@ use Illuminate\Support\Carbon;
  * @property string|null $last_error
  * @property Carbon|null $completed_at
  */
-class ProcessWorkItem extends Model
+#[PartitionedBy('process_run_id')]
+class ProcessWorkItem extends Model implements GrowingTable
 {
     protected $table = 'base_workflow_process_work_items';
 

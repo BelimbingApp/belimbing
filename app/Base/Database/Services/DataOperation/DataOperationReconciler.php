@@ -38,6 +38,7 @@ final class DataOperationReconciler
             ?? (int) config('data_share.operation.stale_after_minutes', self::DEFAULT_STALE_AFTER_MINUTES);
         $threshold = now()->subMinutes(max(1, $minutes));
 
+        // @phpstan-ignore blb.growingTableUnboundedLoad (running operations are bounded by concurrent work, and each is finalized here)
         $staleIds = DataOperationRun::query()
             ->where('status', DataOperationStatus::Running->value)
             ->where('started_at', '<', $threshold)

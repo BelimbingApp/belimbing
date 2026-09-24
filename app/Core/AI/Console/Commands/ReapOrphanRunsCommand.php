@@ -35,6 +35,7 @@ class ReapOrphanRunsCommand extends Command
 
         $this->components->info("Reaping runs with no progress since before {$cutoff->toIso8601String()}...");
 
+        // @phpstan-ignore blb.growingTableUnboundedLoad (running runs are bounded by worker concurrency, and each is reaped here)
         $staleRuns = AiRun::query()
             ->where('status', AiRunStatus::Running)
             ->where('started_at', '<', $cutoff)

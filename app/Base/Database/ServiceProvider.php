@@ -34,6 +34,7 @@ use App\Base\Database\Contracts\DataShareMirrorProvider;
 use App\Base\Database\Contracts\DevelopmentSanitizationContributor;
 use App\Base\Database\Contracts\IncubatingSchemaInspector;
 use App\Base\Database\Contracts\SchemaDriftInspection;
+use App\Base\Database\Enums\HydrationGuardMode;
 use App\Base\Database\Postgres\GuardedPostgresConnection;
 use App\Base\Database\Services\Backup\Encryption\AppKeyEncryption;
 use App\Base\Database\Services\Backup\Encryption\EncryptionModeRegistry;
@@ -48,11 +49,15 @@ use App\Base\Database\Services\DataShare\Mirror\SupabaseMirrorProvider;
 use App\Base\Database\Services\DataShare\Mirror\SymfonyDataShareMirrorProcessRunner;
 use App\Base\Database\Services\DevelopmentInstanceGuard;
 use App\Base\Database\Services\DevelopmentSanitizer;
+use App\Base\Database\Services\HydrationGuard;
 use App\Base\Database\Services\IncubatingSchemaPreflight;
 use App\Base\Database\Services\ModuleMigrationDependencyChecker;
 use App\Base\Database\Services\SchemaDrift\SchemaDriftInspector;
 use App\Base\Database\Services\SessionStateDevelopmentSanitizer;
 use App\Base\Foundation\Contracts\DataOperationRecorder;
+use App\Base\Foundation\Exceptions\BlbConfigurationException;
+use Illuminate\Console\Events\CommandFinished;
+use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Database\Connection;
 use Illuminate\Database\Console\Migrations\FreshCommand as LaravelFreshCommand;
@@ -64,13 +69,20 @@ use Illuminate\Database\Console\Migrations\StatusCommand as LaravelStatusCommand
 use Illuminate\Database\Console\WipeCommand as LaravelWipeCommand;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Migrations\Migrator;
+use Illuminate\Queue\Events\JobExceptionOccurred;
+use Illuminate\Queue\Events\JobFailed;
+use Illuminate\Queue\Events\JobProcessed;
+use Illuminate\Queue\Events\JobProcessing;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
+use Psr\Log\LoggerInterface;
 
 class ServiceProvider extends BaseServiceProvider
 {
     public function boot(ModuleMigrationDependencyChecker $migrationChecker): void
     {
         $migrationChecker->assertUniqueTableOwnership();
+        $this->registerHydrationGuard();
     }
 
     /**
@@ -82,6 +94,13 @@ class ServiceProvider extends BaseServiceProvider
 
         $this->mergeConfigFrom(__DIR__.'/Config/backup.php', 'backup');
         $this->mergeConfigFrom(__DIR__.'/Config/data_share.php', 'data_share');
+        $this->mergeConfigFrom(__DIR__.'/Config/hydration_guard.php', 'hydration_guard');
+
+        $this->app->singleton(HydrationGuard::class, fn ($app): HydrationGuard => new HydrationGuard(
+            max(1, (int) $app['config']->get('hydration_guard.limit', 5000)),
+            $this->hydrationGuardMode($app['config']->get('hydration_guard.mode')),
+            $app->make(LoggerInterface::class),
+        ));
 
         $this->app->bind(IncubatingSchemaInspector::class, IncubatingSchemaPreflight::class);
         $this->app->bind(SchemaDriftInspection::class, SchemaDriftInspector::class);
@@ -182,6 +201,52 @@ class ServiceProvider extends BaseServiceProvider
             SchemaDriftCommand::class,
             StageBackupCommand::class,
         ]);
+    }
+
+    /**
+     * Unset: fail loudly where a developer or a test will see it, warn where
+     * a user would. Anything else is a configuration mistake worth stopping on.
+     */
+    private function hydrationGuardMode(mixed $configured): HydrationGuardMode
+    {
+        if ($configured === null || $configured === '') {
+            return $this->app->environment('local', 'testing')
+                ? HydrationGuardMode::Throw
+                : HydrationGuardMode::Log;
+        }
+
+        return HydrationGuardMode::tryFrom((string) $configured)
+            ?? throw new BlbConfigurationException(sprintf(
+                'hydration_guard.mode must be "throw" or "log"; got [%s].',
+                is_scalar($configured) ? (string) $configured : get_debug_type($configured),
+            ));
+    }
+
+    /**
+     * Count every hydrated model against the innermost unit of work: the
+     * request (opened by GuardRequestHydration), the queued job, or the
+     * console command. Listeners are permanent; the guard's hot path is one
+     * array increment, so idle overhead is a closure call per model.
+     */
+    private function registerHydrationGuard(): void
+    {
+        if (! $this->app['config']->get('hydration_guard.enabled', true)) {
+            return;
+        }
+
+        $guard = $this->app->make(HydrationGuard::class);
+
+        Event::listen('eloquent.retrieved: *', static function (string $event, array $payload) use ($guard): void {
+            $guard->recordRetrieved($payload[0]::class);
+        });
+
+        Event::listen(JobProcessing::class, static fn (JobProcessing $event) => $guard->openJob($event->job, static fn (): string => $event->job->resolveName()));
+        Event::listen(JobProcessed::class, static fn (JobProcessed $event) => $guard->closeJob($event->job));
+        Event::listen(JobExceptionOccurred::class, static fn (JobExceptionOccurred $event) => $guard->closeJob($event->job));
+        Event::listen(JobFailed::class, static fn (JobFailed $event) => $guard->closeJob($event->job));
+
+        Event::listen(CommandStarting::class, static fn (CommandStarting $event) => $guard->openCommand($event->command));
+        Event::listen(CommandFinished::class, static fn (CommandFinished $event) => $guard->closeCommand($event->command));
     }
 
     /**

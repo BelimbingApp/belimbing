@@ -2,6 +2,7 @@
 
 namespace App\Base\Database\Models;
 
+use App\Base\Database\Contracts\GrowingTable;
 use App\Base\Database\Enums\DataOperationStatus;
 use App\Base\Database\Enums\DataOperationType;
 use Carbon\CarbonInterface;
@@ -37,7 +38,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $failure_summary
  * @property CarbonInterface|null $audit_projection_attempted_at
  */
-class DataOperationRun extends Model
+class DataOperationRun extends Model implements GrowingTable
 {
     protected $table = 'base_database_data_operation_runs';
 

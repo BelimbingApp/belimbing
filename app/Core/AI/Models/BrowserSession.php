@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Core\AI\Models;
 
+use App\Base\Database\Contracts\GrowingTable;
 use App\Core\AI\Enums\BrowserSessionStatus;
 use App\Core\Company\Models\Company;
 use App\Core\Employee\Models\Employee;
@@ -40,7 +42,7 @@ use Illuminate\Support\Carbon;
  * @property-read Company $company
  * @property-read Collection<int, BrowserArtifact> $artifacts
  */
-class BrowserSession extends Model
+class BrowserSession extends Model implements GrowingTable
 {
     public $incrementing = false;
 

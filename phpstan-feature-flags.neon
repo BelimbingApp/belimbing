@@ -1,5 +1,17 @@
+includes:
+    # Larastan types Eloquent builders and relations, which the growing-table
+    # rule needs to see which model a query loads.
+    - vendor/larastan/larastan/extension.neon
+
 parameters:
     customRulesetUsed: true
+    # Same module-owned config directories as phpstan.neon.
+    configDirectories:
+        - config
+        - app/Base/*/Config
+        - app/Core/*/Config
+        - app/Domains/*/*/Config
+        - app/Extensions/*/*/Config
     paths:
         - app/Base
         - app/Core
@@ -19,6 +31,10 @@ services:
         class: App\Base\Foundation\PHPStan\DomainEloquentModelBoundaryRule
         arguments:
             projectRoot: %currentWorkingDirectory%
+        tags:
+            - phpstan.rules.rule
+    -
+        class: App\Base\Database\PHPStan\GrowingTableUnboundedLoadRule
         tags:
             - phpstan.rules.rule
     -

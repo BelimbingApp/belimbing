@@ -1,6 +1,9 @@
 <?php
+
 namespace App\Core\AI\Models;
 
+use App\Base\Database\Attributes\PartitionedBy;
+use App\Base\Database\Contracts\GrowingTable;
 use App\Core\AI\Enums\OrchestrationSessionStatus;
 use App\Core\Employee\Models\Employee;
 use Illuminate\Database\Eloquent\Model;
@@ -38,7 +41,8 @@ use Illuminate\Support\Carbon;
  * @property-read Employee|null $childEmployee
  * @property-read OrchestrationSession|null $parentSession
  */
-class OrchestrationSession extends Model
+#[PartitionedBy('parent_session_id')]
+class OrchestrationSession extends Model implements GrowingTable
 {
     /**
      * Prefix for orchestration session IDs.

@@ -145,7 +145,7 @@ php artisan blb:db:share:offer-revoke {offer-id}
 
 Revocation blocks new fetches immediately but does not delete an already verified target receipt. **History** (the Data Share **History** tab and `blb:db:share:history`) records offer publish/revoke/expiry/download, export, fetch, receipt, planning, apply, pruning, identity changes, and failures without payload values or secrets.
 
-Recorded actions: `offer_published`, `offer_revoked`, `offer_expired`, `offer_exhausted`, `offer_downloaded`, `offer_fetched`, `received`, `planned`, `applied`, `apply_failed`, `package_pruned`, `exported`, `export_failed`, `fetch_failed`, `plan_failed`, `identity_changed`. Filter the tab or pass `--action=` / `--failures` on the CLI; `--json` emits the same ids the page shows.
+Recorded actions: `offer_published`, `offer_revoked`, `offer_expired`, `offer_exhausted`, `offer_downloaded`, `offer_fetched`, `received`, `planned`, `applied`, `apply_failed`, `package_pruned`, `exported`, `export_failed`, `fetch_failed`, `plan_failed`, `identity_changed`. Filter the tab or pass `--action=` / `--failures` on the CLI; `--json` emits the same ids the page shows. The CLI prints the newest 100 events; pass `--limit=` for more or fewer, since the ledger only grows.
 
 Identity changes (`data_share.instance.id` / `data_share.instance.role`) are page-only on **Data Share Settings**. The page refuses a change while available offers or unapplied receipts remain unless the operator confirms; there is no `blb:db:share:*` command that rewrites identity.
 

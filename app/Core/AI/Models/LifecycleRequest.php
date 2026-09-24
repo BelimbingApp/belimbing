@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Core\AI\Models;
 
+use App\Base\Database\Contracts\GrowingTable;
 use App\Core\AI\Enums\LifecycleAction;
 use App\Core\AI\Enums\LifecycleActionStatus;
 use App\Core\User\Models\User;
@@ -27,7 +29,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  * @property-read User|null $requester
  */
-class LifecycleRequest extends Model
+class LifecycleRequest extends Model implements GrowingTable
 {
     /**
      * Prefix for lifecycle request IDs.

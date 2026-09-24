@@ -129,6 +129,7 @@ class DataSharePackageApplier
                             ->where('plan_id', $plan->id)
                             ->whereBetween('sequence', [$sequence, $sequence + 499])
                             ->orderBy('sequence')
+                            ->limit(500)
                             ->get()
                             ->all();
                     }

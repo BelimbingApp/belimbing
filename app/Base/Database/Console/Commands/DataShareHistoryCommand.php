@@ -14,6 +14,7 @@ class DataShareHistoryCommand extends Command
     protected $signature = 'blb:db:share:history
                             {--action= : Action class filter (offer|fetch|plan|apply|prune|export|failures)}
                             {--failures : Shorthand for --action=failures}
+                            {--limit=100 : Newest events to show}
                             {--json : Emit machine-readable JSON}';
 
     protected $description = 'List Data Share ledger events (no payload values or secrets)';
@@ -28,7 +29,7 @@ class DataShareHistoryCommand extends Command
 
         $action = $this->option('failures') ? 'failures' : trim((string) $this->option('action'));
         $action = $action === '' ? null : $action;
-        $rows = $history->all($action);
+        $rows = $history->recent($action, (int) $this->option('limit'));
         $actorNames = User::query()
             ->whereIn('id', $rows->pluck('actor_id')->filter()->unique()->all())
             ->pluck('name', 'id')

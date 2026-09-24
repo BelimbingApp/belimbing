@@ -2,6 +2,7 @@
 
 namespace App\Base\Workflow\Models;
 
+use App\Base\Database\Contracts\GrowingTable;
 use App\Base\Workflow\Process\Enums\ProcessRunStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -33,7 +34,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $pause_reason
  * @property Carbon|null $completed_at
  */
-class ProcessRun extends Model
+class ProcessRun extends Model implements GrowingTable
 {
     protected $table = 'base_workflow_process_runs';
 

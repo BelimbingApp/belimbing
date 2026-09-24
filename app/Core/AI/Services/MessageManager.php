@@ -345,7 +345,7 @@ class MessageManager
     private function batchLoadRunMeta(array $runIds): array
     {
         $runs = AiRun::query()
-            ->whereIn('id', $runIds)
+            ->whereKey($runIds)
             ->get()
             ->keyBy('id');
 

@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Core\AI\Services;
 
 use App\Core\AI\Enums\OperationStatus;
@@ -66,6 +67,7 @@ class OperationsDispatchService
     {
         $cutoff = now()->subMinutes($staleMinutes);
 
+        // @phpstan-ignore blb.growingTableUnboundedLoad (running dispatches are bounded by worker concurrency)
         return OperationDispatch::query()
             ->where('status', OperationStatus::Running)
             ->where('started_at', '<', $cutoff)

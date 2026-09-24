@@ -2,6 +2,7 @@
 
 namespace App\Core\AI\Models;
 
+use App\Base\Database\Contracts\GrowingTable;
 use App\Base\Schedule\Services\ScheduleHealthService;
 use App\Core\AI\Enums\OperationStatus;
 use App\Core\AI\Enums\OperationType;
@@ -43,7 +44,7 @@ use Illuminate\Support\Carbon;
  * @property-read User|null $actingForUser
  * @property-read Model|null $entity
  */
-class OperationDispatch extends Model
+class OperationDispatch extends Model implements GrowingTable
 {
     protected static function booted(): void
     {

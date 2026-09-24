@@ -2,6 +2,7 @@
 
 namespace App\Base\Database\Models;
 
+use App\Base\Database\Contracts\GrowingTable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -17,7 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $incoming_fingerprint
  * @property string|null $destination_fingerprint
  */
-class DataSharePlanAction extends Model
+class DataSharePlanAction extends Model implements GrowingTable
 {
     public $timestamps = false;
 

@@ -2,6 +2,7 @@
 
 namespace App\Base\Database\Models;
 
+use App\Base\Database\Contracts\GrowingTable;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 
@@ -29,7 +30,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property CarbonInterface|null $created_at
  * @property CarbonInterface|null $updated_at
  */
-class DataShareTransferOffer extends Model
+class DataShareTransferOffer extends Model implements GrowingTable
 {
     protected $table = 'base_database_data_share_transfer_offers';
 

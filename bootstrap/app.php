@@ -4,6 +4,7 @@ use App\Base\Authz\Enums\AuthzErrorCode;
 use App\Base\Authz\Middleware\AuthorizeCapability;
 use App\Base\Database\Enums\DatabaseErrorCode;
 use App\Base\Database\Middleware\DatabaseConnectionRecovery;
+use App\Base\Database\Middleware\GuardRequestHydration;
 use App\Base\Foundation\Enums\FoundationErrorCode;
 use App\Base\Foundation\Exceptions\BlbException;
 use App\Base\Foundation\Http\Middleware\SecurityHeaders;
@@ -157,6 +158,11 @@ return Application::configure(basePath: dirname(__DIR__))
             TrustProxies::class,
             TrustConfiguredProxies::class,
         );
+
+        // Hydration guard: every request is a unit of work whose Eloquent
+        // model count is bounded (docs/architecture/query-bounds.md). First in
+        // the global stack so nothing hydrates outside its window.
+        $middleware->prepend(GuardRequestHydration::class);
 
         $middleware->alias([
             'authz' => AuthorizeCapability::class,

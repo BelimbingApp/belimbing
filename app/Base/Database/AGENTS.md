@@ -18,6 +18,10 @@ For extension authoring rules, use:
 - [docs/guides/extensions/database-migrations.md](../../../docs/guides/extensions/database-migrations.md)
 - [docs/guides/extensions/backup-encryption-modes.md](../../../docs/guides/extensions/backup-encryption-modes.md)
 
+## Query Bounds
+
+Never load a whole growing table (logs, history, runs, audit) into PHP. Mark such models with `App\Base\Database\Contracts\GrowingTable`; the runtime hydration guard (`Services/HydrationGuard`, throws in local/testing, warns in production) and the PHPStan rule (`PHPStan/GrowingTableUnboundedLoadRule`) enforce it. Contract, modes, and the `suspend()`/`withLimit()` escape for deliberate bulk passes: [docs/architecture/query-bounds.md](../../../docs/architecture/query-bounds.md).
+
 ## Migration Conventions
 
 - Use `id()` or `bigIncrements('id')` for standard tables.

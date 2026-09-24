@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Core\AI\Models;
 
+use App\Base\Database\Contracts\GrowingTable;
 use App\Core\AI\Enums\MessageDirection;
 use App\Core\Company\Models\Company;
 use Illuminate\Database\Eloquent\Model;
@@ -24,7 +26,7 @@ use Illuminate\Support\Carbon;
  * @property-read Company $company
  * @property-read ChannelAccount|null $channelAccount
  */
-class ChannelConversation extends Model
+class ChannelConversation extends Model implements GrowingTable
 {
     /**
      * The table associated with the model.

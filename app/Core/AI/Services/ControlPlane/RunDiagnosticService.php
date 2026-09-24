@@ -250,8 +250,10 @@ class RunDiagnosticService
     {
         return AiRun::query()
             ->forTenant($this->tenants->requireTenantId())
-            ->pluck('id')
-            ->sum(fn (string $runId): int => $this->wireLogger->footprintBytes($runId));
+            ->select('id')
+            ->toBase()
+            ->lazyById(1000, 'id')
+            ->sum(fn (object $run): int => $this->wireLogger->footprintBytes((string) $run->id));
     }
 
     /**

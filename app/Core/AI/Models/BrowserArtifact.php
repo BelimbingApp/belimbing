@@ -1,6 +1,9 @@
 <?php
+
 namespace App\Core\AI\Models;
 
+use App\Base\Database\Attributes\PartitionedBy;
+use App\Base\Database\Contracts\GrowingTable;
 use App\Core\AI\Enums\BrowserArtifactType;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -25,7 +28,8 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  * @property-read BrowserSession $browserSession
  */
-class BrowserArtifact extends Model
+#[PartitionedBy('browser_session_id')]
+class BrowserArtifact extends Model implements GrowingTable
 {
     public $incrementing = false;
 

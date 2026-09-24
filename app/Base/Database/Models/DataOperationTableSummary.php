@@ -2,6 +2,7 @@
 
 namespace App\Base\Database\Models;
 
+use App\Base\Database\Contracts\GrowingTable;
 use App\Base\Database\Enums\DataOperationRangeKind;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
@@ -34,7 +35,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $terminal_status
  * @property CarbonInterface|null $observed_at
  */
-class DataOperationTableSummary extends Model
+class DataOperationTableSummary extends Model implements GrowingTable
 {
     protected $table = 'base_database_data_operation_tables';
 

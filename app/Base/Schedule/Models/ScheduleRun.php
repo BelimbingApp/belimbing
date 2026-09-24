@@ -2,6 +2,7 @@
 
 namespace App\Base\Schedule\Models;
 
+use App\Base\Database\Contracts\GrowingTable;
 use App\Base\Schedule\Services\ScheduleHealthService;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
@@ -29,7 +30,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property CarbonInterface|null $created_at
  * @property CarbonInterface|null $updated_at
  */
-class ScheduleRun extends Model
+class ScheduleRun extends Model implements GrowingTable
 {
     protected static function booted(): void
     {

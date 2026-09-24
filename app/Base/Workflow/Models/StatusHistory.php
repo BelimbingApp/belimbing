@@ -2,6 +2,8 @@
 
 namespace App\Base\Workflow\Models;
 
+use App\Base\Database\Attributes\PartitionedBy;
+use App\Base\Database\Contracts\GrowingTable;
 use Illuminate\Database\Eloquent\Attributes\Scope as ScopeAttribute;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -32,7 +34,8 @@ use Illuminate\Support\Carbon;
  * @property Carbon $transitioned_at
  * @property Carbon|null $created_at
  */
-class StatusHistory extends Model
+#[PartitionedBy('flow_id')]
+class StatusHistory extends Model implements GrowingTable
 {
     public const UPDATED_AT = null;
 

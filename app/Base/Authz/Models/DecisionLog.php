@@ -2,6 +2,7 @@
 
 namespace App\Base\Authz\Models;
 
+use App\Base\Database\Contracts\GrowingTable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\MassPrunable;
 use Illuminate\Database\Eloquent\Model;
@@ -9,7 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 /**
  * @property int|null $tenant_id
  */
-class DecisionLog extends Model
+class DecisionLog extends Model implements GrowingTable
 {
     use MassPrunable;
 

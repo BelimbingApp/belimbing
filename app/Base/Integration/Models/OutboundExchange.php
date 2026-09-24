@@ -3,6 +3,7 @@
 namespace App\Base\Integration\Models;
 
 use App\Base\Audit\Services\AuditTenantScope;
+use App\Base\Database\Contracts\GrowingTable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
@@ -46,7 +47,7 @@ use Illuminate\Support\Str;
  * @property Carbon|null $updated_at
  * @property Carbon|null $created_at
  */
-class OutboundExchange extends Model
+class OutboundExchange extends Model implements GrowingTable
 {
     /** @return Builder<static> */
     public static function visibleToCurrentTenant(): Builder

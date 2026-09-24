@@ -15,6 +15,7 @@ enum DatabaseErrorCode: string implements BlbErrorCode
     case DATABASE_QUERY_EXECUTION_FAILED = 'database_query_execution_failed';
     case DATABASE_DRIVER_UNSUPPORTED = 'database_driver_unsupported';
     case DATABASE_IDENTIFIER_TOO_LONG = 'database_identifier_too_long';
+    case HYDRATION_LIMIT_EXCEEDED = 'hydration_limit_exceeded';
     case BACKUP_CONFIGURATION_INVALID = 'backup_configuration_invalid';
     case BACKUP_DRIVER_UNSUPPORTED = 'backup_driver_unsupported';
     case BACKUP_TOOLING_MISSING = 'backup_tooling_missing';

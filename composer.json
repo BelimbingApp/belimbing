@@ -59,7 +59,8 @@
             "Tests\\": "tests/"
         },
         "classmap": [
-            "tests/Fixtures/domain-eloquent-boundary/app"
+            "tests/Fixtures/domain-eloquent-boundary/app",
+            "tests/Fixtures/growing-table/app"
         ]
     },
     "scripts": {
