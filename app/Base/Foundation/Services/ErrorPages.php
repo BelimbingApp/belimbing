@@ -2,6 +2,7 @@
 
 namespace App\Base\Foundation\Services;
 
+use App\Base\Foundation\Exceptions\ErrorPagePublishException;
 use Illuminate\Contracts\View\Factory as ViewFactory;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -79,13 +80,16 @@ final class ErrorPages
         $directory = self::path('');
 
         if (! is_dir($directory) && ! mkdir($directory, 0755, true) && ! is_dir($directory)) {
-            throw new \RuntimeException("Cannot create {$directory}");
+            throw new ErrorPagePublishException("Cannot create {$directory}");
         }
 
         $written = [];
 
         foreach ($this->expected() as $path => $html) {
-            file_put_contents($path, $html);
+            if (file_put_contents($path, $html) === false) {
+                throw new ErrorPagePublishException("Cannot write {$path}");
+            }
+
             $written[] = $path;
         }
 
