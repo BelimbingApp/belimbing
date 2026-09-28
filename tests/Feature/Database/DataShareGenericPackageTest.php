@@ -966,6 +966,10 @@ it('records fetch_failed when the advertised endpoint cannot be reached', functi
 });
 
 it('fetches an advertised offer into bounded target Incoming without planning', function (): void {
+    if (! defined('CURLOPT_PINNEDPUBLICKEY') || ! defined('CURLOPT_RESOLVE')) {
+        $this->markTestSkipped('cURL pinned public key and DNS resolve options are required for connection-hint fetches.');
+    }
+
     seedGenericDataShareFixture();
     ['bundle' => $bundle, 'export' => $export] = publishGenericDataShare();
     $bytes = Storage::disk('local')->get($export->path);
