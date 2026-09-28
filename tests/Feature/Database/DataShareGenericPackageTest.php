@@ -35,7 +35,9 @@ use App\Base\Database\Services\DataShare\DataShareTransferOfferManager;
 use App\Base\Database\Services\DataShare\DataShareValueNormalizer;
 use App\Base\Database\Services\HydrationGuard;
 use App\Base\Settings\Contracts\SettingsService;
+use GuzzleHttp\Psr7\Response;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -281,6 +283,15 @@ function receiveGenericDataShare(DataShareTransferOfferBundle $bundle, DataShare
         $export->path,
         DataSharePackageExpectation::fromOffer($bundle),
     );
+}
+
+/** @return array<string, mixed> */
+function genericDataShareFetcherRequestOptions(DataShareTransferOfferBundle $bundle): array
+{
+    $method = new ReflectionMethod(DataShareOfferFetcher::class, 'requestOptions');
+    $method->setAccessible(true);
+
+    return $method->invoke(app(DataShareOfferFetcher::class), $bundle, 'php://temp');
 }
 
 it('discovers a module scope and relational contract without module-specific share code', function (): void {
@@ -923,6 +934,37 @@ it('fetches a production offer into development when the operator chooses it', f
     Http::assertSentCount(1);
 });
 
+it('rejects advertised fetch streams whose headers or progress exceed the offer', function (): void {
+    seedGenericDataShareFixture();
+    ['bundle' => $bundle] = publishGenericDataShare();
+    $options = genericDataShareFetcherRequestOptions($bundle);
+
+    expect(fn () => $options['on_headers'](new Response(500, [
+        'Content-Length' => (string) $bundle->bytes,
+    ])))->toThrow(DataShareTransportException::class, 'status or declared byte count')
+        ->and(fn () => $options['on_headers'](new Response(200, [
+            'Content-Length' => (string) ($bundle->bytes + 1),
+        ])))->toThrow(DataShareTransportException::class, 'status or declared byte count')
+        ->and(fn () => $options['progress']($bundle->bytes + 1, 0))
+        ->toThrow(DataShareTransportException::class, 'exceeded its advertised package size')
+        ->and(fn () => $options['progress']($bundle->bytes, $bundle->bytes + 1))
+        ->toThrow(DataShareTransportException::class, 'exceeded its advertised package size');
+});
+
+it('records fetch_failed when the advertised endpoint cannot be reached', function (): void {
+    seedGenericDataShareFixture();
+    ['bundle' => $bundle] = publishGenericDataShare();
+    becomeGenericDataShareDestination();
+    Http::fake(fn () => throw new ConnectionException('source host unreachable'));
+
+    expect(fn () => app(DataShareOfferFetcher::class)->fetch($bundle))
+        ->toThrow(DataShareTransportException::class, 'source host unreachable');
+
+    $row = DataShareEvent::query()->where('action', 'fetch_failed')->sole();
+    expect($row->error_summary)->toContain('source host unreachable')
+        ->and($row->metadata['offer_id'] ?? null)->toBe($bundle->offerId);
+});
+
 it('fetches an advertised offer into bounded target Incoming without planning', function (): void {
     seedGenericDataShareFixture();
     ['bundle' => $bundle, 'export' => $export] = publishGenericDataShare();
@@ -973,6 +1015,28 @@ it('deletes a fetched temporary stream when response metadata is wrong', functio
         ->toThrow(DataShareTransportException::class, 'metadata');
     expect(DataShareReceipt::query()->count())->toBe(0)
         ->and(Storage::disk('local')->allFiles(GENERIC_SHARE_RECEIVING_PATH))->toBe([]);
+});
+
+it('deletes a staged fetched upload when receipt admission rejects it', function (): void {
+    seedGenericDataShareFixture();
+    ['bundle' => $bundle, 'export' => $export] = publishGenericDataShare();
+    $bytes = Storage::disk('local')->get($export->path);
+    $existing = receiveGenericDataShare($bundle, $export);
+    becomeGenericDataShareDevelopmentDestination();
+    Http::fake([
+        $bundle->endpoint => Http::response($bytes, 200, [
+            'Content-Type' => GENERIC_SHARE_NDJSON,
+            'Content-Length' => (string) strlen($bytes),
+            'X-Data-Share-Offer-Id' => $bundle->offerId,
+            'X-Data-Share-Package-Id' => $bundle->packageId,
+            'X-Data-Share-Package-Sha256' => $bundle->packageSha256,
+        ]),
+    ]);
+
+    expect(fn () => app(DataShareOfferFetcher::class)->fetch($bundle))
+        ->toThrow(DataSharePackageException::class, 'different offer, source, scope, target, or byte sequence');
+    expect(Storage::disk('local')->exists($existing->package_path))->toBeTrue()
+        ->and(Storage::disk('local')->allFiles(GENERIC_SHARE_RECEIVING_PATH.'/offer'))->toBe([]);
 });
 
 it('does not prune an available published offer and requires explicit outgoing cleanup', function (): void {

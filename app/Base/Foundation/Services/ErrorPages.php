@@ -86,7 +86,7 @@ final class ErrorPages
         $written = [];
 
         foreach ($this->expected() as $path => $html) {
-            if (file_put_contents($path, $html) === false) {
+            if (@file_put_contents($path, $html) === false) {
                 throw new ErrorPagePublishException("Cannot write {$path}");
             }
 
