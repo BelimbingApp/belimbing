@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "source": "Highest observed healthy suite wall across the five latest successful main runs sampled for #711",
+  "source": "Highest observed healthy suite wall across reviewed hosted timing artifacts; Feature-b refreshed from PR #978 after Data Share coverage expansion.",
   "tolerances": {
     "relative_percent": 25,
     "absolute_seconds": 20
@@ -15,8 +15,8 @@
       "source_run": "https://github.com/BelimbingApp/belimbing/actions/runs/34027494655"
     },
     "Feature-b": {
-      "wall_seconds": 183.928,
-      "source_run": "https://github.com/BelimbingApp/belimbing/actions/runs/34028500325"
+      "wall_seconds": 237.773,
+      "source_run": "https://github.com/BelimbingApp/belimbing/actions/runs/36373441412"
     },
     "Unit-a": {
       "wall_seconds": 160.084,

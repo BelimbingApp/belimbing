@@ -2,11 +2,11 @@
 
 namespace App\Base\Perf\Services;
 
+use App\Base\Perf\Exceptions\PerfLogWriteException;
 use Carbon\CarbonImmutable;
 use Generator;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
-use RuntimeException;
 use Throwable;
 
 /**
@@ -62,18 +62,18 @@ final class PerfLog
         $error = null;
 
         set_error_handler(function (int $errno, string $message) use (&$error): bool {
-            $error = $message;
+            $error = sprintf('%s (PHP warning %d)', $message, $errno);
 
             return true;
         });
 
         try {
             if (! is_dir($directory) && ! mkdir($directory, 0755, true) && ! is_dir($directory)) { // NOSONAR — directory is the admin-configured perf.log_path setting (or storage/logs), not request input
-                throw new RuntimeException("Could not create perf log directory [$directory]: ".($error ?? 'unknown error'));
+                throw new PerfLogWriteException("Could not create perf log directory [$directory]: ".($error ?? 'unknown error'));
             }
 
             if (file_put_contents($path, $line, FILE_APPEND | LOCK_EX) === false) { // NOSONAR — directory is the admin-configured perf.log_path setting (or storage/logs), not request input
-                throw new RuntimeException("Could not append to perf log [$path]: ".($error ?? 'unknown error'));
+                throw new PerfLogWriteException("Could not append to perf log [$path]: ".($error ?? 'unknown error'));
             }
         } finally {
             restore_error_handler();

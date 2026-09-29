@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\Foundation\Exceptions\BlbDataContractException;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -16,7 +17,7 @@ return new class extends Migration
             ->pluck('companies.tenant_id', 'ai_runs.id');
 
         if ($assignments->count() !== DB::table('ai_runs')->count() || $assignments->contains(null)) {
-            throw new RuntimeException(
+            throw new BlbDataContractException(
                 'Cannot backfill AI run tenancy because one or more runs have no employee/company tenant ownership.',
             );
         }

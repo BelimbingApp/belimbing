@@ -284,7 +284,7 @@ grep -q 'docs/ci/dependency-audit-policy.json' docs/security-advisories.md
 # copied into the workflow, so adding a file cannot silently leave it SQLite
 # only (#536).
 postgres_tests=$(python3 scripts/ci/postgres-mirror-feature-tests.py)
-test -n "$postgres_tests"
+[[ -n "$postgres_tests" ]]
 grep -qx 'tests/Feature/Database/QueryTest.php' <<< "$postgres_tests"
 grep -qx 'tests/Feature/Database/DataShareMirrorUiTest.php' <<< "$postgres_tests"
 grep -q 'postgres-mirror-feature-tests.py' .github/workflows/tests.yml

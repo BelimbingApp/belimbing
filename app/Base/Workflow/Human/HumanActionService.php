@@ -9,6 +9,7 @@ use App\Base\Tenancy\Contracts\TenantContext;
 use App\Base\Workflow\Human\Contracts\HumanActionHandler;
 use App\Base\Workflow\Human\DTO\AvailableHumanAction;
 use App\Base\Workflow\Human\DTO\HumanActionDefinition;
+use App\Base\Workflow\Human\DTO\HumanActionOutcome;
 use App\Base\Workflow\Human\DTO\HumanActionRequest;
 use App\Base\Workflow\Human\DTO\HumanActionResult;
 use App\Base\Workflow\Models\HumanActionRequestRecord;
@@ -78,70 +79,12 @@ class HumanActionService
         $intentHash = $this->intentHash($actor, $subject, $request);
 
         try {
-            return DB::transaction(function () use ($actor, $subject, $request, $tenantId, $definition, $intentHash): HumanActionResult {
-                $lockedSubject = $subject->newModelQuery()->whereKey($subject->getKey())->lockForUpdate()->firstOrFail();
-                $this->assertTenantBoundary($actor, $lockedSubject);
-                $this->authz->authorize($actor, $definition->capability, $this->resource($lockedSubject, $tenantId));
-
-                $existing = HumanActionRequestRecord::query()
-                    ->where('tenant_id', $tenantId)->where('idempotency_key', $request->idempotencyKey)
-                    ->lockForUpdate()->first();
-                if ($existing !== null) {
-                    if (! hash_equals($existing->intent_hash, $intentHash)) {
-                        throw new HumanActionConflictException('The idempotency key was already used for different intent.');
-                    }
-                    if ($existing->completed_at === null || $existing->result === null) {
-                        throw new HumanActionConflictException('The matching human action is still being processed.');
-                    }
-
-                    return HumanActionResult::fromArray($existing->result, true);
-                }
-
-                $this->assertSubjectVersion($lockedSubject, $request->expectedSubjectVersion);
-                $this->assertRequestShape($definition, $request);
-                $this->assertProcessSubject($definition, $request, $lockedSubject, $tenantId);
-
-                $record = HumanActionRequestRecord::query()->create([
-                    'tenant_id' => $tenantId, 'idempotency_key' => $request->idempotencyKey, 'intent_hash' => $intentHash,
-                    'action_key' => $definition->key, 'subject_type' => $lockedSubject::class,
-                    'subject_id' => (string) $lockedSubject->getKey(), 'process_run_id' => $request->processRunId,
-                    'work_item_id' => $request->workItemId, 'actor_type' => $actor->type->value, 'actor_id' => $actor->id,
-                ]);
-
-                $handler = $this->container->make($definition->handler);
-                if (! $handler instanceof HumanActionHandler) {
-                    throw new HumanActionException("Human action handler [{$definition->handler}] is invalid.");
-                }
-                $outcome = $handler->handle($actor, $lockedSubject, $request);
-                $workItem = null;
-                if ($definition->executorKey !== null) {
-                    $workItem = $this->processes->completeHumanWork(
-                        $tenantId, $request->processRunId, $request->workItemId, $request->expectedWorkItemVersion,
-                        $definition->executorKey, $outcome->output, $outcome->outcome, $outcome->resultRef,
-                        ['action_key' => $definition->key, 'request_id' => $record->id,
-                            'actor_type' => $actor->type->value, 'actor_id' => $actor->id],
-                    );
-                }
-
-                $result = new HumanActionResult($definition->key, $outcome->output, $outcome->outcome,
-                    $outcome->resultRef, $workItem?->id);
-                $record->forceFill(['result' => $result->toArray(), 'completed_at' => now()])->save();
-
-                return $result;
-            }, 3);
+            return DB::transaction(
+                fn (): HumanActionResult => $this->executeLocked($actor, $subject, $request, $tenantId, $definition, $intentHash),
+                3,
+            );
         } catch (QueryException $exception) {
-            // A concurrent request can win the unique tenant/key insert after
-            // our initial lookup. Its committed result is the retry response.
-            $record = HumanActionRequestRecord::query()
-                ->where('tenant_id', $tenantId)->where('idempotency_key', $request->idempotencyKey)->first();
-            if ($record === null || $record->completed_at === null || $record->result === null) {
-                throw $exception;
-            }
-            if (! hash_equals($record->intent_hash, $intentHash)) {
-                throw new HumanActionConflictException('The idempotency key was already used for different intent.', previous: $exception);
-            }
-
-            return HumanActionResult::fromArray($record->result, true);
+            return $this->recoverConcurrentRequest($tenantId, $request, $intentHash, $exception);
         }
     }
 
@@ -174,6 +117,153 @@ class HumanActionService
         if ($expected === '' || ! hash_equals($this->subjectVersion($subject), $expected)) {
             throw new HumanActionConflictException('The subject changed after the action was displayed.');
         }
+    }
+
+    private function executeLocked(
+        Actor $actor,
+        Model $subject,
+        HumanActionRequest $request,
+        int $tenantId,
+        HumanActionDefinition $definition,
+        string $intentHash,
+    ): HumanActionResult {
+        $lockedSubject = $subject->newModelQuery()->whereKey($subject->getKey())->lockForUpdate()->firstOrFail();
+        $this->assertTenantBoundary($actor, $lockedSubject);
+        $this->authz->authorize($actor, $definition->capability, $this->resource($lockedSubject, $tenantId));
+
+        $existing = HumanActionRequestRecord::query()
+            ->where('tenant_id', $tenantId)
+            ->where('idempotency_key', $request->idempotencyKey)
+            ->lockForUpdate()
+            ->first();
+
+        if ($existing !== null) {
+            return $this->replayExistingRequest($existing, $intentHash);
+        }
+
+        $this->assertSubjectVersion($lockedSubject, $request->expectedSubjectVersion);
+        $this->assertRequestShape($definition, $request);
+        $this->assertProcessSubject($definition, $request, $lockedSubject, $tenantId);
+
+        return $this->performNewRequest($actor, $lockedSubject, $request, $tenantId, $definition, $intentHash);
+    }
+
+    private function replayExistingRequest(HumanActionRequestRecord $record, string $intentHash): HumanActionResult
+    {
+        if (! hash_equals($record->intent_hash, $intentHash)) {
+            throw new HumanActionConflictException('The idempotency key was already used for different intent.');
+        }
+
+        if ($record->completed_at === null || $record->result === null) {
+            throw new HumanActionConflictException('The matching human action is still being processed.');
+        }
+
+        return HumanActionResult::fromArray($record->result, true);
+    }
+
+    private function performNewRequest(
+        Actor $actor,
+        Model $lockedSubject,
+        HumanActionRequest $request,
+        int $tenantId,
+        HumanActionDefinition $definition,
+        string $intentHash,
+    ): HumanActionResult {
+        $record = $this->createRequestRecord($actor, $lockedSubject, $request, $tenantId, $definition, $intentHash);
+        $outcome = $this->resolveHandler($definition)->handle($actor, $lockedSubject, $request);
+        $workItem = $this->completeProcessWork($actor, $request, $tenantId, $definition, $record, $outcome);
+        $result = new HumanActionResult($definition->key, $outcome->output, $outcome->outcome, $outcome->resultRef, $workItem?->id);
+
+        $record->forceFill(['result' => $result->toArray(), 'completed_at' => now()])->save();
+
+        return $result;
+    }
+
+    private function createRequestRecord(
+        Actor $actor,
+        Model $lockedSubject,
+        HumanActionRequest $request,
+        int $tenantId,
+        HumanActionDefinition $definition,
+        string $intentHash,
+    ): HumanActionRequestRecord {
+        return HumanActionRequestRecord::query()->create([
+            'tenant_id' => $tenantId,
+            'idempotency_key' => $request->idempotencyKey,
+            'intent_hash' => $intentHash,
+            'action_key' => $definition->key,
+            'subject_type' => $lockedSubject::class,
+            'subject_id' => (string) $lockedSubject->getKey(),
+            'process_run_id' => $request->processRunId,
+            'work_item_id' => $request->workItemId,
+            'actor_type' => $actor->type->value,
+            'actor_id' => $actor->id,
+        ]);
+    }
+
+    private function resolveHandler(HumanActionDefinition $definition): HumanActionHandler
+    {
+        $handler = $this->container->make($definition->handler);
+
+        if (! $handler instanceof HumanActionHandler) {
+            throw new HumanActionException("Human action handler [{$definition->handler}] is invalid.");
+        }
+
+        return $handler;
+    }
+
+    private function completeProcessWork(
+        Actor $actor,
+        HumanActionRequest $request,
+        int $tenantId,
+        HumanActionDefinition $definition,
+        HumanActionRequestRecord $record,
+        HumanActionOutcome $outcome,
+    ): ?ProcessWorkItem {
+        if ($definition->executorKey === null) {
+            return null;
+        }
+
+        return $this->processes->completeHumanWork(
+            $tenantId,
+            $request->processRunId,
+            $request->workItemId,
+            $request->expectedWorkItemVersion,
+            $definition->executorKey,
+            $outcome->output,
+            $outcome->outcome,
+            $outcome->resultRef,
+            [
+                'action_key' => $definition->key,
+                'request_id' => $record->id,
+                'actor_type' => $actor->type->value,
+                'actor_id' => $actor->id,
+            ],
+        );
+    }
+
+    private function recoverConcurrentRequest(
+        int $tenantId,
+        HumanActionRequest $request,
+        string $intentHash,
+        QueryException $exception,
+    ): HumanActionResult {
+        // A concurrent request can win the unique tenant/key insert after
+        // our initial lookup. Its committed result is the retry response.
+        $record = HumanActionRequestRecord::query()
+            ->where('tenant_id', $tenantId)
+            ->where('idempotency_key', $request->idempotencyKey)
+            ->first();
+
+        if ($record === null || $record->completed_at === null || $record->result === null) {
+            throw $exception;
+        }
+
+        if (! hash_equals($record->intent_hash, $intentHash)) {
+            throw new HumanActionConflictException('The idempotency key was already used for different intent.', previous: $exception);
+        }
+
+        return HumanActionResult::fromArray($record->result, true);
     }
 
     private function assertRequestShape(HumanActionDefinition $definition, HumanActionRequest $request): void

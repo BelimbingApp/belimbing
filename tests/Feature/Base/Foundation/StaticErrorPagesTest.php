@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\Foundation\Exceptions\ErrorPagePublishException;
 use App\Base\Foundation\Services\ErrorPages;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
@@ -57,6 +58,19 @@ it('reports stale pages from --check and repairs them by publishing', function (
         $stale = Artisan::output();
         expect($stale)->toContain(ErrorPages::STATIC_PAGE)
             ->and($stale)->not->toContain(ErrorPages::CLOUDFLARE_PAGE);
+    } finally {
+        File::deleteDirectory($publicPath);
+    }
+});
+
+it('fails loudly when a static page cannot be written', function (): void {
+    $publicPath = storage_path('framework/testing/static-error-pages-write-'.uniqid());
+    File::ensureDirectoryExists($publicPath.'/errors/'.ErrorPages::STATIC_PAGE);
+    $this->app->usePublicPath($publicPath);
+
+    try {
+        expect(fn () => app(ErrorPages::class)->publish())
+            ->toThrow(ErrorPagePublishException::class, 'Cannot write');
     } finally {
         File::deleteDirectory($publicPath);
     }
