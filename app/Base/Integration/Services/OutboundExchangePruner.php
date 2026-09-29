@@ -16,10 +16,10 @@ class OutboundExchangePruner
      */
     public function prunePayloads(?Builder $query = null): int
     {
-        $pruned = 0;
+        return app(HydrationGuard::class)->suspend(function () use ($query): int {
+            $pruned = 0;
 
-        app(HydrationGuard::class)->suspend(function () use ($query, &$pruned): bool {
-            return ($query ?? OutboundExchange::query())
+            ($query ?? OutboundExchange::query())
                 ->where(function ($query): void {
                     $query->whereNotNull('request_body')
                         ->orWhereNotNull('response_body')
@@ -55,9 +55,9 @@ class OutboundExchangePruner
                         $pruned += $updated;
                     }
                 });
-        });
 
-        return $pruned;
+            return $pruned;
+        });
     }
 
     public function retentionDays(OutboundExchange $exchange): int
