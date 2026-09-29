@@ -147,8 +147,6 @@ final class BackupService
                 summary: __('Created database backup :id', ['id' => $backupId]),
                 manifestPath: $manifestPath,
                 sha256: $sha256,
-                surface: $surface,
-                uiElement: $uiElement,
                 context: [
                     'backup_id' => $backupId,
                     'artifact_path' => $artifactPath,
@@ -156,6 +154,10 @@ final class BackupService
                     'encryption_mode' => $encryption->name(),
                     'disk' => $diskName,
                     'trigger' => $trigger,
+                ],
+                options: [
+                    'surface' => $surface,
+                    'ui_element' => $uiElement,
                 ],
             );
 
@@ -223,15 +225,17 @@ final class BackupService
                 : __('Verify failed for database backup :id', ['id' => $backupLabel]),
             manifestPath: $manifestPath,
             sha256: $expectedHash,
-            surface: $surface,
-            uiElement: $uiElement,
             context: [
                 'backup_id' => $backupId,
                 'artifact_path' => $artifactPath,
                 'size_bytes' => (int) ($manifestData['size_bytes'] ?? 0),
                 'encryption_mode' => (string) ($manifestData['encryption_mode'] ?? ''),
             ],
-            result: $ok ? 'succeeded' : 'failed',
+            options: [
+                'surface' => $surface,
+                'ui_element' => $uiElement,
+                'result' => $ok ? 'succeeded' : 'failed',
+            ],
         );
 
         return $ok;
@@ -269,8 +273,6 @@ final class BackupService
             summary: __('Deleted database backup :id', ['id' => $backupId !== '' ? $backupId : $manifestPath]),
             manifestPath: $manifestPath,
             sha256: $sha256,
-            surface: $surface,
-            uiElement: $uiElement,
             context: [
                 'backup_id' => $backupId,
                 'artifact_path' => $artifactPath,
@@ -278,6 +280,10 @@ final class BackupService
                 'size_bytes' => $sizeBytes,
                 'encryption_mode' => $encryptionMode,
                 'disk' => $diskName,
+            ],
+            options: [
+                'surface' => $surface,
+                'ui_element' => $uiElement,
             ],
         );
     }
@@ -483,8 +489,6 @@ final class BackupService
                 summary: __('Pruned expired database backup :id', ['id' => $backupId !== '' ? $backupId : $manifestPath]),
                 manifestPath: $manifestPath,
                 sha256: $sha256,
-                surface: $surface ?? self::SURFACE_CONSOLE,
-                uiElement: $uiElement ?? '--prune',
                 context: [
                     'backup_id' => $backupId,
                     'artifact_path' => $artifactPath,
@@ -495,6 +499,10 @@ final class BackupService
                     'keep_days' => $keepDays,
                     'pruned_count' => 1,
                 ],
+                options: [
+                    'surface' => $surface ?? self::SURFACE_CONSOLE,
+                    'ui_element' => $uiElement ?? '--prune',
+                ],
             );
         }
 
@@ -503,16 +511,15 @@ final class BackupService
 
     /**
      * @param  array<string, mixed>  $context
+     * @param  array{surface?: string|null, ui_element?: string|null, result?: string}  $options
      */
     private function record(
         string $event,
         string $summary,
         string $manifestPath,
         string $sha256,
-        ?string $surface,
-        ?string $uiElement,
         array $context,
-        string $result = 'succeeded',
+        array $options = [],
     ): void {
         $id = $sha256 !== '' ? substr($sha256, 0, 12) : ($context['backup_id'] ?? $manifestPath);
 
@@ -525,10 +532,10 @@ final class BackupService
                 'id' => (string) $id,
                 'identifier' => $manifestPath !== '' ? $manifestPath : null,
             ],
-            surface: $surface,
-            uiElement: $uiElement,
+            surface: $options['surface'] ?? null,
+            uiElement: $options['ui_element'] ?? null,
             context: $context,
-            result: $result,
+            result: $options['result'] ?? 'succeeded',
         );
     }
 

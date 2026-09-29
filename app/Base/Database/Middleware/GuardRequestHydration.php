@@ -30,7 +30,7 @@ final class GuardRequestHydration
         return $next($request);
     }
 
-    public function terminate(Request $request, Response $response): void
+    public function terminate(Request $_request, Response $_response): void
     {
         $this->guard->closeRequest();
     }

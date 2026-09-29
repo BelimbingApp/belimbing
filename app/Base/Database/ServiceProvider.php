@@ -223,7 +223,7 @@ class ServiceProvider extends BaseServiceProvider
     {
         $guard = $this->app->make(HydrationGuard::class);
 
-        Event::listen('eloquent.retrieved: *', static function (string $event, array $payload) use ($guard): void {
+        Event::listen('eloquent.retrieved: *', static function (string $_event, array $payload) use ($guard): void {
             $guard->recordRetrieved($payload[0]::class);
         });
 
