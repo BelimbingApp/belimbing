@@ -965,6 +965,24 @@ it('records fetch_failed when the advertised endpoint cannot be reached', functi
         ->and($row->metadata['offer_id'] ?? null)->toBe($bundle->offerId);
 });
 
+it('rejects expired advertised offers before contacting the source', function (): void {
+    seedGenericDataShareFixture();
+    ['bundle' => $bundle] = publishGenericDataShare();
+    $value = $bundle->toArray();
+    $value['expires_at'] = now('UTC')->subMinute()->toIso8601String();
+    $bundle = DataShareTransferOfferBundle::fromJson(json_encode($value, JSON_THROW_ON_ERROR));
+    becomeGenericDataShareDestination();
+    Http::fake();
+
+    expect(fn () => app(DataShareOfferFetcher::class)->fetch($bundle))
+        ->toThrow(DataShareTransportException::class, 'offer has expired');
+
+    Http::assertNothingSent();
+    $row = DataShareEvent::query()->where('action', 'fetch_failed')->sole();
+    expect($row->error_summary)->toContain('offer has expired')
+        ->and($row->metadata['offer_id'] ?? null)->toBe($bundle->offerId);
+});
+
 it('fetches an advertised offer into bounded target Incoming without planning', function (): void {
     if (! defined('CURLOPT_PINNEDPUBLICKEY') || ! defined('CURLOPT_RESOLVE')) {
         $this->markTestSkipped('cURL pinned public key and DNS resolve options are required for connection-hint fetches.');
