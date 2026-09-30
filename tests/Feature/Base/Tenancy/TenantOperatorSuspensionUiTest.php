@@ -9,7 +9,6 @@ use App\Base\Tenancy\Livewire\Admin\Tenants;
 use App\Base\Tenancy\Models\Tenant;
 use App\Core\Company\Models\Company;
 use App\Core\User\Models\User;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Defer\DeferredCallbackCollection;
 use Illuminate\Support\Facades\Route;
 use Livewire\Livewire;
@@ -177,8 +176,7 @@ it('refuses a direct suspend of the platform-operator tenant and writes no audit
 it('reports a missing tenant id rather than silently doing nothing', function (): void {
     $this->actingAs(createAdminUser());
 
-    expect(fn () => Livewire::test(Tenants::class)->call('suspendTenant', 999_999))
-        ->toThrow(ModelNotFoundException::class);
+    Livewire::test(Tenants::class)->call('suspendTenant', 999_999)->assertNotFound();
 });
 
 it('locks the suspended tenant out of the web surface on its user next request', function (): void {

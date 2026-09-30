@@ -11,7 +11,6 @@ use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
 use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\User\Models\User;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 
@@ -146,8 +145,10 @@ it('refuses retain-toggle on a foreign-tenant action id', function (): void {
         'trace_id' => 'RETAINFOREIGN1',
     ]);
 
-    expect(fn () => Livewire::actingAs($viewer)->test(Actions::class)->call('toggleRetain', $foreignId))
-        ->toThrow(ModelNotFoundException::class);
+    Livewire::actingAs($viewer)
+        ->test(Actions::class)
+        ->call('toggleRetain', $foreignId)
+        ->assertNotFound();
 
     expect(AuditAction::query()->findOrFail($foreignId)->is_retained)->toBeFalse();
 });
@@ -304,11 +305,11 @@ it('refuses retain-toggle on a foreign-tenant action when a non-operator forces 
         'trace_id' => 'RETAINFORCED01',
     ]);
 
-    expect(fn () => Livewire::actingAs($viewer)
+    Livewire::actingAs($viewer)
         ->test(Actions::class)
         ->set('allTenants', true)
-        ->call('toggleRetain', $foreignId))
-        ->toThrow(ModelNotFoundException::class);
+        ->call('toggleRetain', $foreignId)
+        ->assertNotFound();
 
     expect(AuditAction::query()->findOrFail($foreignId)->is_retained)->toBeFalse();
 });
