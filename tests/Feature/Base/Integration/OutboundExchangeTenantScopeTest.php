@@ -7,7 +7,6 @@ use App\Base\Integration\Services\IntegrationGateway;
 use App\Base\Integration\Services\IntegrationRequest;
 use App\Base\Tenancy\Contracts\TenantContext;
 use App\Base\Tenancy\Exceptions\TenantContextMissingException;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 
@@ -37,14 +36,12 @@ it('hides another tenant and legacy outbound exchanges from the index', function
 
 it('refuses to open a foreign exchange on the show page', function (): void {
     $foreign = outboundTenantExchange(null);
-    expect(fn () => Livewire::test(Show::class, ['exchange' => $foreign]))
-        ->toThrow(ModelNotFoundException::class);
+    Livewire::test(Show::class, ['exchange' => $foreign])->assertNotFound();
 });
 
 it('refuses deleteExchange for a foreign exchange and leaves the row', function (): void {
     $foreign = outboundTenantExchange(null);
-    expect(fn () => Livewire::test(Index::class)->call('deleteExchange', $foreign->id))
-        ->toThrow(ModelNotFoundException::class);
+    Livewire::test(Index::class)->call('deleteExchange', $foreign->id)->assertNotFound();
     expect($foreign->fresh())->not->toBeNull();
 });
 
