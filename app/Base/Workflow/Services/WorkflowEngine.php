@@ -241,22 +241,9 @@ class WorkflowEngine
     private function modelAuditSubject(Model $model): array
     {
         if (method_exists($model, 'getAuditSubject')) {
-            $subject = $model->getAuditSubject();
+            $payload = $this->normalizedAuditSubject($model->getAuditSubject());
 
-            if (is_array($subject)
-                && isset($subject['name'], $subject['id'])
-                && is_string($subject['name'])
-                && $subject['name'] !== ''
-                && (is_int($subject['id']) || (is_string($subject['id']) && $subject['id'] !== ''))) {
-                $payload = [
-                    'name' => $subject['name'],
-                    'id' => is_int($subject['id']) ? $subject['id'] : (string) $subject['id'],
-                ];
-
-                if (($subject['identifier'] ?? null) !== null && $subject['identifier'] !== '') {
-                    $payload['identifier'] = (string) $subject['identifier'];
-                }
-
+            if ($payload !== null) {
                 return $payload;
             }
         }
@@ -271,6 +258,39 @@ class WorkflowEngine
             'name' => Str::snake(class_basename($model)),
             'id' => is_int($id) ? $id : (string) $id,
         ];
+    }
+
+    /**
+     * @return array{name: string, id: int|string, identifier?: string}|null
+     */
+    private function normalizedAuditSubject(mixed $subject): ?array
+    {
+        if (! is_array($subject)) {
+            return null;
+        }
+
+        $name = $subject['name'] ?? null;
+        $id = $subject['id'] ?? null;
+
+        if (! is_string($name) || $name === '' || ! $this->isValidAuditSubjectId($id)) {
+            return null;
+        }
+
+        $payload = [
+            'name' => $name,
+            'id' => is_int($id) ? $id : (string) $id,
+        ];
+
+        if (($subject['identifier'] ?? null) !== null && $subject['identifier'] !== '') {
+            $payload['identifier'] = (string) $subject['identifier'];
+        }
+
+        return $payload;
+    }
+
+    private function isValidAuditSubjectId(mixed $id): bool
+    {
+        return is_int($id) || (is_string($id) && $id !== '');
     }
 
     /** @param  array{name?: string, id?: int|string, identifier?: string|null}  $subject */

@@ -158,41 +158,54 @@ class RouteDiscoveryService
                 continue;
             }
 
-            $this->fileByRouteObjectId[spl_object_id($route)] = $file;
-
-            foreach ($this->routeKeys($route) as $key) {
-                $owner = $this->fileByRouteKey[$key] ?? null;
-
-                if ($owner !== null && $owner !== $file) {
-                    throw new RouteCollisionException(sprintf(
-                        'Route %s is registered by more than one module route file: %s and %s. Laravel would keep only the last one; give each module its own URI.',
-                        $key,
-                        $owner,
-                        $file,
-                    ));
-                }
-
-                $this->fileByRouteKey[$key] = $file;
-            }
-
-            $name = $route->getName();
-            if ($name === null || $name === '') {
-                continue;
-            }
-
-            $owner = $this->fileByRouteName[$name] ?? null;
-
-            if ($owner !== null && $owner !== $file) {
-                throw new RouteCollisionException(sprintf(
-                    'Route name %s is registered by more than one module route file: %s and %s. Laravel would keep only the last one; give each module its own route name.',
-                    $name,
-                    $owner,
-                    $file,
-                ));
-            }
-
-            $this->fileByRouteName[$name] = $file;
+            $this->registerNewRoute($route, $file);
         }
+    }
+
+    private function registerNewRoute(RegisteredRoute $route, string $file): void
+    {
+        $this->fileByRouteObjectId[spl_object_id($route)] = $file;
+
+        foreach ($this->routeKeys($route) as $key) {
+            $this->recordRouteKey($key, $file);
+        }
+
+        $name = $route->getName();
+        if ($name !== null && $name !== '') {
+            $this->recordRouteName($name, $file);
+        }
+    }
+
+    private function recordRouteKey(string $key, string $file): void
+    {
+        $owner = $this->fileByRouteKey[$key] ?? null;
+
+        if ($owner !== null && $owner !== $file) {
+            throw new RouteCollisionException(sprintf(
+                'Route %s is registered by more than one module route file: %s and %s. Laravel would keep only the last one; give each module its own URI.',
+                $key,
+                $owner,
+                $file,
+            ));
+        }
+
+        $this->fileByRouteKey[$key] = $file;
+    }
+
+    private function recordRouteName(string $name, string $file): void
+    {
+        $owner = $this->fileByRouteName[$name] ?? null;
+
+        if ($owner !== null && $owner !== $file) {
+            throw new RouteCollisionException(sprintf(
+                'Route name %s is registered by more than one module route file: %s and %s. Laravel would keep only the last one; give each module its own route name.',
+                $name,
+                $owner,
+                $file,
+            ));
+        }
+
+        $this->fileByRouteName[$name] = $file;
     }
 
     /**
