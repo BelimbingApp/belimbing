@@ -33,6 +33,7 @@ use App\Base\Workflow\Process\Enums\ProcessWorkStatus;
 use App\Base\Workflow\Process\ProcessCoordinationException;
 use App\Base\Workflow\Process\ProcessCoordinator;
 use App\Base\Workflow\Process\ProcessDefinitionRegistry;
+use App\Base\Workflow\Process\ProcessStartRequest;
 use App\Base\Workflow\Services\TransitionOutboxDispatcher;
 use App\Base\Workflow\Services\WorkflowEngine;
 use App\Core\Company\Models\Company;
@@ -242,7 +243,10 @@ it('executes tenant-authorized human work atomically and replays the same reques
     app(ProcessDefinitionRegistry::class)->register(new ProcessDefinition('test.human', 1, [
         new ProcessStep('approval', 'Approval', executorKey: 'human.approve'),
     ]));
-    $run = app(ProcessCoordinator::class)->startForTenant($tenantId, 'test.human', subjectType: $subject::class, subjectId: $subject->id);
+    $run = app(ProcessCoordinator::class)->startForTenant(
+        $tenantId,
+        (new ProcessStartRequest('test.human'))->withSubject($subject::class, $subject->id),
+    );
     $item = $run->workItems()->sole();
     $service = app(HumanActionService::class);
     $request = new HumanActionRequest('approve', 'request-1', $service->subjectVersion($subject),

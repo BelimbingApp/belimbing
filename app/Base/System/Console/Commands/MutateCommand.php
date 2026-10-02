@@ -104,61 +104,14 @@ class MutateCommand extends Command
 
     private function handleBatch(string $batchJson): int
     {
-        $evidence = $this->option('evidence');
-        $evidenceRenderer = null;
-        $evidencePrefix = null;
-
-        if (is_string($evidence) && trim($evidence) !== '') {
-            if (ctype_digit($evidence) === false || (int) $evidence < 1) {
-                $this->components->error('The --evidence option must be a positive pull request number.');
-
-                return self::FAILURE;
-            }
-
-            $agent = getenv('CLAIM_AGENT');
-            if (! is_string($agent)) {
-                $agent = '';
-            }
-
-            $evidenceRenderer = app(ReviewMutationEvidence::class);
-
-            try {
-                $reviewedHead = $evidenceRenderer->verify(base_path(), (int) $evidence);
-                $evidencePrefix = $evidenceRenderer->format($reviewedHead, $agent, '');
-            } catch (GuardMutationException $exception) {
-                $this->components->error($exception->getMessage());
-
-                return self::FAILURE;
-            }
-        }
-
-        try {
-            $decoded = json_decode($batchJson, true, 512, JSON_THROW_ON_ERROR);
-        } catch (JsonException $exception) {
-            $this->components->error('Invalid --batch JSON: '.$exception->getMessage());
-
+        $evidence = $this->batchEvidence();
+        if ($evidence['ok'] === false) {
             return self::FAILURE;
         }
 
-        if (! is_array($decoded) || array_is_list($decoded) === false) {
-            $this->components->error('--batch must be a JSON array of {file, pattern, test} objects.');
-
+        $entries = $this->batchEntries($batchJson);
+        if ($entries === null) {
             return self::FAILURE;
-        }
-
-        /** @var list<mixed> $decoded */
-        $entries = [];
-        foreach ($decoded as $index => $entry) {
-            if (! is_array($entry)) {
-                $this->components->error('batch entry '.($index + 1).' must be an object.');
-
-                return self::FAILURE;
-            }
-            $entries[] = [
-                'file' => (string) ($entry['file'] ?? ''),
-                'pattern' => (string) ($entry['pattern'] ?? ''),
-                'test' => (string) ($entry['test'] ?? ''),
-            ];
         }
 
         $mutator = new GuardMutator(fn (string $testPath): array => $this->runPest($testPath));
@@ -172,19 +125,92 @@ class MutateCommand extends Command
         }
 
         $markdown = $result['markdown'];
-        if (is_string($evidencePrefix)) {
-            $markdown = $evidencePrefix.ltrim($markdown);
+        if (is_string($evidence['prefix'])) {
+            $markdown = $evidence['prefix'].ltrim($markdown);
         }
 
-        if (! $evidenceRenderer instanceof ReviewMutationEvidence) {
+        if (! $evidence['renderer'] instanceof ReviewMutationEvidence) {
             $this->newLine();
         }
         $this->line($markdown);
-        $this->components->info($evidenceRenderer instanceof ReviewMutationEvidence
+        $this->components->info($evidence['renderer'] instanceof ReviewMutationEvidence
             ? 'All sources restored; choose the verdict and paste the review block.'
             : 'All sources restored; paste the Markdown table into the PR body.');
 
         return self::SUCCESS;
+    }
+
+    /**
+     * @return array{ok: bool, renderer: ReviewMutationEvidence|null, prefix: string|null}
+     */
+    private function batchEvidence(): array
+    {
+        $evidence = $this->option('evidence');
+        if (! is_string($evidence) || trim($evidence) === '') {
+            return ['ok' => true, 'renderer' => null, 'prefix' => null];
+        }
+
+        if (ctype_digit($evidence) === false || (int) $evidence < 1) {
+            $this->components->error('The --evidence option must be a positive pull request number.');
+
+            return ['ok' => false, 'renderer' => null, 'prefix' => null];
+        }
+
+        $agent = getenv('CLAIM_AGENT');
+        if (! is_string($agent)) {
+            $agent = '';
+        }
+
+        $renderer = app(ReviewMutationEvidence::class);
+
+        try {
+            $reviewedHead = $renderer->verify(base_path(), (int) $evidence);
+            $prefix = $renderer->format($reviewedHead, $agent, '');
+        } catch (GuardMutationException $exception) {
+            $this->components->error($exception->getMessage());
+
+            return ['ok' => false, 'renderer' => null, 'prefix' => null];
+        }
+
+        return ['ok' => true, 'renderer' => $renderer, 'prefix' => $prefix];
+    }
+
+    /**
+     * @return list<array{file: string, pattern: string, test: string}>|null
+     */
+    private function batchEntries(string $batchJson): ?array
+    {
+        try {
+            $decoded = json_decode($batchJson, true, 512, JSON_THROW_ON_ERROR);
+        } catch (JsonException $exception) {
+            $this->components->error('Invalid --batch JSON: '.$exception->getMessage());
+
+            return null;
+        }
+
+        if (! is_array($decoded) || array_is_list($decoded) === false) {
+            $this->components->error('--batch must be a JSON array of {file, pattern, test} objects.');
+
+            return null;
+        }
+
+        /** @var list<mixed> $decoded */
+        $entries = [];
+        foreach ($decoded as $index => $entry) {
+            if (! is_array($entry)) {
+                $this->components->error('batch entry '.($index + 1).' must be an object.');
+
+                return null;
+            }
+
+            $entries[] = [
+                'file' => (string) ($entry['file'] ?? ''),
+                'pattern' => (string) ($entry['pattern'] ?? ''),
+                'test' => (string) ($entry['test'] ?? ''),
+            ];
+        }
+
+        return $entries;
     }
 
     private function hasEvidenceOption(): bool

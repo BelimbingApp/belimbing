@@ -15,6 +15,7 @@ use App\Base\Workflow\Human\DTO\HumanActionResult;
 use App\Base\Workflow\Models\HumanActionRequestRecord;
 use App\Base\Workflow\Models\ProcessRun;
 use App\Base\Workflow\Models\ProcessWorkItem;
+use App\Base\Workflow\Process\CompleteHumanWorkRequest;
 use App\Base\Workflow\Process\Enums\ProcessRunStatus;
 use App\Base\Workflow\Process\Enums\ProcessWorkStatus;
 use App\Base\Workflow\Process\ProcessCoordinator;
@@ -224,22 +225,20 @@ class HumanActionService
             return null;
         }
 
-        return $this->processes->completeHumanWork(
+        return $this->processes->completeHumanWork((new CompleteHumanWorkRequest(
             $tenantId,
             $request->processRunId,
             $request->workItemId,
             $request->expectedWorkItemVersion,
             $definition->executorKey,
-            $outcome->output,
-            $outcome->outcome,
-            $outcome->resultRef,
-            [
+        ))
+            ->withResult($outcome->output, $outcome->outcome, $outcome->resultRef)
+            ->withEventContext([
                 'action_key' => $definition->key,
                 'request_id' => $record->id,
                 'actor_type' => $actor->type->value,
                 'actor_id' => $actor->id,
-            ],
-        );
+            ]));
     }
 
     private function recoverConcurrentRequest(

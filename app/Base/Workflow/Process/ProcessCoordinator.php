@@ -125,60 +125,70 @@ class ProcessCoordinator
         }
     }
 
-    /** @param array<string, mixed> $input */
-    public function startForTenant(int $tenantId, string $definitionKey, array $input = [], ?string $idempotencyKey = null,
-        ?string $subjectType = null, int|string|null $subjectId = null, ?int $definitionVersion = null,
-        ?string $correlationKey = null, int $priority = 0, ?Carbon $availableAt = null): ProcessRun
+    public function startForTenant(int $tenantId, ProcessStartRequest $request): ProcessRun
     {
-        return $this->start($definitionKey, $input, $idempotencyKey, $subjectType, $subjectId, $definitionVersion,
-            $correlationKey, $priority, $availableAt, ProcessScope::tenant($tenantId));
+        return $this->start(
+            $request->definitionKey,
+            $request->input,
+            $request->idempotencyKey,
+            $request->subjectType,
+            $request->subjectId,
+            $request->definitionVersion,
+            $request->correlationKey,
+            $request->priority,
+            $request->availableAt,
+            ProcessScope::tenant($tenantId),
+        );
     }
 
-    /** @param array<string, mixed> $input */
-    public function startForSystem(string $definitionKey, array $input = [], ?string $idempotencyKey = null,
-        ?string $subjectType = null, int|string|null $subjectId = null, ?int $definitionVersion = null,
-        ?string $correlationKey = null, int $priority = 0, ?Carbon $availableAt = null): ProcessRun
+    public function startForSystem(ProcessStartRequest $request): ProcessRun
     {
-        return $this->start($definitionKey, $input, $idempotencyKey, $subjectType, $subjectId, $definitionVersion,
-            $correlationKey, $priority, $availableAt, ProcessScope::system());
+        return $this->start(
+            $request->definitionKey,
+            $request->input,
+            $request->idempotencyKey,
+            $request->subjectType,
+            $request->subjectId,
+            $request->definitionVersion,
+            $request->correlationKey,
+            $request->priority,
+            $request->availableAt,
+            ProcessScope::system(),
+        );
     }
 
     /**
      * Complete human work without issuing a browser-held worker lease.
      * The caller must already be in the business transaction.
-     *
-     * @param  array<string, mixed>  $output
      */
-    public function completeHumanWork(int $tenantId, int $runId, int $workItemId, int $expectedVersion,
-        string $executorKey, array $output = [], string $outcome = 'completed', ?string $resultRef = null,
-        array $eventContext = []): ProcessWorkItem
+    public function completeHumanWork(CompleteHumanWorkRequest $request): ProcessWorkItem
     {
         if (DB::transactionLevel() < 1) {
             throw new ProcessCoordinationException('Human process work must complete inside its business transaction.');
         }
 
-        $run = $this->lockRun($runId);
-        $item = ProcessWorkItem::query()->whereKey($workItemId)->lockForUpdate()->firstOrFail();
+        $run = $this->lockRun($request->runId);
+        $item = ProcessWorkItem::query()->whereKey($request->workItemId)->lockForUpdate()->firstOrFail();
 
-        if ($run->scope_type !== 'tenant' || (int) $run->tenant_id !== $tenantId
-            || (int) $item->tenant_id !== $tenantId || (int) $item->process_run_id !== $runId) {
+        if ($run->scope_type !== 'tenant' || (int) $run->tenant_id !== $request->tenantId
+            || (int) $item->tenant_id !== $request->tenantId || (int) $item->process_run_id !== $request->runId) {
             throw new ProcessCoordinationException('The process work is outside the current tenant boundary.');
         }
         if ($run->status !== ProcessRunStatus::RUNNING || $item->status !== ProcessWorkStatus::AVAILABLE) {
             throw new ProcessCoordinationException('The process work is no longer available.');
         }
-        if ($item->executor_key !== $executorKey) {
+        if ($item->executor_key !== $request->executorKey) {
             throw new ProcessCoordinationException('The action does not own this process work item.');
         }
-        if ((int) $item->version !== $expectedVersion) {
+        if ((int) $item->version !== $request->expectedVersion) {
             throw new ProcessCoordinationException('The process work changed after it was displayed.');
         }
 
         $now = now();
-        $this->finishWork($item, ProcessWorkStatus::COMPLETED, $outcome, $output, null, $now);
-        $item->forceFill(['result_ref' => $resultRef ?? $item->result_ref])->save();
-        $this->appendEvent($run, $item, 'work.completed', array_merge($eventContext, [
-            'outcome' => $outcome, 'output' => $output, 'result_ref' => $item->result_ref, 'source' => 'human_action',
+        $this->finishWork($item, ProcessWorkStatus::COMPLETED, $request->outcome, $request->output, null, $now);
+        $item->forceFill(['result_ref' => $request->resultRef ?? $item->result_ref])->save();
+        $this->appendEvent($run, $item, 'work.completed', array_merge($request->eventContext, [
+            'outcome' => $request->outcome, 'output' => $request->output, 'result_ref' => $item->result_ref, 'source' => 'human_action',
         ]));
         $this->reconcileLocked($run, $now);
 
