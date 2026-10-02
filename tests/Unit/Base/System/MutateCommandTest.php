@@ -121,6 +121,18 @@ it('requires a batch when review evidence is requested', function (): void {
         ->assertFailed();
 });
 
+it('requires every batch entry to be an object', function (): void {
+    Process::fake();
+
+    $this->artisan('blb:mutate', [
+        '--batch' => '[false]',
+    ])
+        ->expectsOutputToContain('batch entry 1 must be an object')
+        ->assertFailed();
+
+    Process::assertNothingRan();
+});
+
 it('requires the --test option', function (): void {
     $this->artisan('blb:mutate', [
         'file' => $this->mutateCmdSource,
@@ -221,6 +233,34 @@ it('runs a batch with restore between entries and prints a Markdown table', func
         ->and($rows[0])->toContain('1 failed, 2 passed / 7 assertions');
     expect($rows[1])->toContain('3 passed / 11 assertions')
         ->and($rows[1])->toContain('1 failed, 2 passed / 7 assertions');
+});
+
+it('fails closed when review evidence cannot render its exact-head marker', function (): void {
+    $head = str_repeat('b', 40);
+
+    Process::fake(function ($process) use ($head) {
+        $command = $process->command;
+
+        return match ($command) {
+            ['git', 'status', '--porcelain', '--untracked-files=all'] => Process::result(),
+            ['git', 'rev-parse', 'HEAD'], ['git', 'rev-parse', 'FETCH_HEAD'] => Process::result(output: $head."\n"),
+            ['git', 'fetch', '--quiet', '--no-tags', 'origin', 'refs/pull/42/head'] => Process::result(),
+            default => Process::result(exitCode: 1, errorOutput: 'unexpected command'),
+        };
+    });
+
+    $batch = json_encode([
+        ['file' => $this->mutateCmdSource, 'pattern' => 'GUARD_LINE_UNIQUE', 'test' => $this->mutateCmdTest],
+    ], JSON_THROW_ON_ERROR);
+
+    $this->artisan('blb:mutate', [
+        '--batch' => $batch,
+        '--evidence' => '42',
+    ])
+        ->expectsOutputToContain('CLAIM_AGENT must be a bare lowercase agent identity')
+        ->assertFailed();
+
+    expect(file_get_contents($this->mutateCmdSource))->toBe($this->mutateCmdOriginal);
 });
 
 it('prefixes batch output with exact-head review markers', function (): void {

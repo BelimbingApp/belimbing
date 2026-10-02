@@ -24,6 +24,7 @@ use App\Base\Workflow\Models\ProcessRun;
 use App\Base\Workflow\Models\StatusHistory;
 use App\Base\Workflow\Models\StatusTransition;
 use App\Base\Workflow\Models\TransitionOutboxMessage;
+use App\Base\Workflow\Process\CompleteHumanWorkRequest;
 use App\Base\Workflow\Process\Definitions\ProcessDefinition;
 use App\Base\Workflow\Process\Definitions\ProcessDependency;
 use App\Base\Workflow\Process\Definitions\ProcessStep;
@@ -251,6 +252,52 @@ it('starts system processes from request objects with explicit scheduling metada
         ->and($run->priority)->toBe(75)
         ->and($run->available_at->toIso8601String())->toBe($availableAt->toIso8601String())
         ->and(ProcessRun::query()->where('definition_key', 'test.request-start')->count())->toBe(1);
+});
+
+it('completes tenant human work from a request object inside the business transaction', function (): void {
+    $user = createAdminUser();
+    $actor = Actor::forUser($user);
+    $tenantId = $actor->tenantId;
+    expect($tenantId)->toBeInt();
+    app(TenantContext::class)->set($tenantId);
+
+    app(ProcessDefinitionRegistry::class)->register(new ProcessDefinition('test.direct-human', 1, [
+        new ProcessStep('approval', 'Approval', executorKey: 'human.direct'),
+    ]));
+
+    $coordinator = app(ProcessCoordinator::class);
+    $run = $coordinator->startForTenant(
+        $tenantId,
+        (new ProcessStartRequest('test.direct-human'))
+            ->withInput(['subject' => 'fixture'])
+            ->withSubject('fixture.subject', 99),
+    );
+    $item = $run->workItems()->sole();
+
+    $completed = DB::transaction(fn () => $coordinator->completeHumanWork(
+        (new CompleteHumanWorkRequest(
+            $tenantId,
+            $run->id,
+            $item->id,
+            $item->version,
+            'human.direct',
+        ))
+            ->withResult(['decision' => 'approved'], 'approved', 'approval:'.$item->id)
+            ->withEventContext(['actor_type' => $actor->type->value, 'actor_id' => $actor->id]),
+    ));
+
+    expect($completed->status)->toBe(ProcessWorkStatus::COMPLETED)
+        ->and($completed->outcome)->toBe('approved')
+        ->and($completed->output)->toBe(['decision' => 'approved'])
+        ->and($completed->result_ref)->toBe('approval:'.$item->id)
+        ->and($run->refresh()->status)->toBe(ProcessRunStatus::COMPLETED)
+        ->and($run->events()->where('type', 'work.completed')->sole()->payload)->toMatchArray([
+            'actor_type' => $actor->type->value,
+            'actor_id' => $actor->id,
+            'outcome' => 'approved',
+            'source' => 'human_action',
+            'result_ref' => 'approval:'.$item->id,
+        ]);
 });
 
 it('reports only process runs that reconciliation actually inspected', function (): void {
