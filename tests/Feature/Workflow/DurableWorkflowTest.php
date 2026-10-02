@@ -220,6 +220,39 @@ it('starts and signals a process idempotently', function (): void {
         ->and($first->events()->where('type', 'signal.ignored')->count())->toBe(1);
 });
 
+it('starts system processes from request objects with explicit scheduling metadata', function (): void {
+    $availableAt = now()->addMinutes(7);
+    app(ProcessDefinitionRegistry::class)->register(new ProcessDefinition('test.request-start', 1, [
+        new ProcessStep('review', 'Review request'),
+    ]));
+
+    $request = (new ProcessStartRequest('test.request-start'))
+        ->withInput(['kind' => 'coverage'])
+        ->withIdempotencyKey('system-request-1')
+        ->withSubject('system.fixture', 'subject-42')
+        ->withDefinitionVersion(1)
+        ->withCorrelationKey('system.fixture:subject-42')
+        ->withPriority(75)
+        ->availableAt($availableAt);
+
+    $coordinator = app(ProcessCoordinator::class);
+    $run = $coordinator->startForSystem($request);
+    $replayed = $coordinator->startForSystem($request);
+
+    expect($replayed->id)->toBe($run->id)
+        ->and($run->scope_type)->toBe('system')
+        ->and($run->tenant_id)->toBeNull()
+        ->and($run->definition_key)->toBe('test.request-start')
+        ->and($run->definition_version)->toBe(1)
+        ->and($run->input)->toBe(['kind' => 'coverage'])
+        ->and($run->subject_type)->toBe('system.fixture')
+        ->and($run->subject_id)->toBe('subject-42')
+        ->and($run->correlation_key)->toBe('system.fixture:subject-42')
+        ->and($run->priority)->toBe(75)
+        ->and($run->available_at->toIso8601String())->toBe($availableAt->toIso8601String())
+        ->and(ProcessRun::query()->where('definition_key', 'test.request-start')->count())->toBe(1);
+});
+
 it('reports only process runs that reconciliation actually inspected', function (): void {
     $coordinator = app(ProcessCoordinator::class);
 
