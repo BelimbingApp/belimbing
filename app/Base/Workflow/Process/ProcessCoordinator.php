@@ -35,28 +35,16 @@ class ProcessCoordinator
 
     /**
      * Start a process once. Reusing an idempotency key returns the original run.
-     *
-     * @param  array<string, mixed>  $input
      */
-    public function start(
-        string $definitionKey,
-        array $input = [],
-        ?string $idempotencyKey = null,
-        ?string $subjectType = null,
-        int|string|null $subjectId = null,
-        ?int $definitionVersion = null,
-        ?string $correlationKey = null,
-        int $priority = 0,
-        ?Carbon $availableAt = null,
-        ?ProcessScope $scope = null,
-    ): ProcessRun {
-        $scope ??= $this->defaultScope($subjectType);
-        $definition = $this->definitions->get($definitionKey, $definitionVersion);
+    public function start(ProcessStartRequest $request, ?ProcessScope $scope = null): ProcessRun
+    {
+        $scope ??= $this->defaultScope($request->subjectType);
+        $definition = $this->definitions->get($request->definitionKey, $request->definitionVersion);
         $definitionFingerprint = $definition->fingerprint();
         $this->assertDefinitionVersionIsImmutable($definition, $definitionFingerprint);
-        $scopedKey = $idempotencyKey === null
+        $scopedKey = $request->idempotencyKey === null
             ? null
-            : $this->idempotencyKey('start', $scope->type, (string) ($scope->tenantId ?? '-'), $definition->key, $idempotencyKey);
+            : $this->idempotencyKey('start', $scope->type, (string) ($scope->tenantId ?? '-'), $definition->key, $request->idempotencyKey);
 
         if ($scopedKey !== null) {
             $existing = ProcessRun::query()->where('idempotency_key', $scopedKey)->first();
@@ -69,7 +57,7 @@ class ProcessCoordinator
         }
 
         try {
-            return DB::transaction(function () use ($definition, $definitionFingerprint, $input, $scopedKey, $subjectType, $subjectId, $correlationKey, $priority, $availableAt, $scope): ProcessRun {
+            return DB::transaction(function () use ($definition, $definitionFingerprint, $request, $scopedKey, $scope): ProcessRun {
                 if ($scopedKey !== null) {
                     $existing = ProcessRun::query()
                         ->where('idempotency_key', $scopedKey)
@@ -89,25 +77,25 @@ class ProcessCoordinator
                     'definition_version' => $definition->version,
                     'definition_fingerprint' => $definitionFingerprint,
                     'status' => ProcessRunStatus::RUNNING,
-                    'priority' => $priority,
-                    'subject_type' => $subjectType,
-                    'subject_id' => $subjectId === null ? null : (string) $subjectId,
-                    'correlation_key' => $correlationKey,
-                    'input' => $input,
+                    'priority' => $request->priority,
+                    'subject_type' => $request->subjectType,
+                    'subject_id' => $request->subjectId === null ? null : (string) $request->subjectId,
+                    'correlation_key' => $request->correlationKey,
+                    'input' => $request->input,
                     'idempotency_key' => $scopedKey,
                     'started_at' => $now,
-                    'available_at' => $availableAt ?? $now,
+                    'available_at' => $request->availableAt ?? $now,
                     'heartbeat_at' => $now,
                 ]);
 
                 $this->appendEvent($run, null, 'process.started', [
                     'definition_key' => $definition->key,
                     'definition_version' => $definition->version,
-                    'subject_type' => $subjectType,
-                    'subject_id' => $subjectId,
-                    'correlation_key' => $correlationKey,
-                    'priority' => $priority,
-                    'available_at' => ($availableAt ?? $now)->toIso8601String(),
+                    'subject_type' => $request->subjectType,
+                    'subject_id' => $request->subjectId,
+                    'correlation_key' => $request->correlationKey,
+                    'priority' => $request->priority,
+                    'available_at' => ($request->availableAt ?? $now)->toIso8601String(),
                 ]);
                 $this->materializeDefinitionLocked($run, $definition);
                 $this->reconcileLocked($run, $now);
@@ -127,34 +115,12 @@ class ProcessCoordinator
 
     public function startForTenant(int $tenantId, ProcessStartRequest $request): ProcessRun
     {
-        return $this->start(
-            $request->definitionKey,
-            $request->input,
-            $request->idempotencyKey,
-            $request->subjectType,
-            $request->subjectId,
-            $request->definitionVersion,
-            $request->correlationKey,
-            $request->priority,
-            $request->availableAt,
-            ProcessScope::tenant($tenantId),
-        );
+        return $this->start($request, ProcessScope::tenant($tenantId));
     }
 
     public function startForSystem(ProcessStartRequest $request): ProcessRun
     {
-        return $this->start(
-            $request->definitionKey,
-            $request->input,
-            $request->idempotencyKey,
-            $request->subjectType,
-            $request->subjectId,
-            $request->definitionVersion,
-            $request->correlationKey,
-            $request->priority,
-            $request->availableAt,
-            ProcessScope::system(),
-        );
+        return $this->start($request, ProcessScope::system());
     }
 
     /**
