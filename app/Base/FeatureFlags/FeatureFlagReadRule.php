@@ -71,8 +71,11 @@ final class FeatureFlagReadRule implements Rule
 
     private function owner(string $file): ?ModuleManifest
     {
+        $file = $this->normalizePath($file);
+        $projectRoot = $this->normalizePath($this->projectRoot);
+
         foreach (ApplicationTopology::relativeRoots() as $root) {
-            $prefix = $this->projectRoot.'/'.$root.'/';
+            $prefix = $projectRoot.'/'.$root.'/';
             if (! str_starts_with($file, $prefix)) {
                 continue;
             }
@@ -80,13 +83,18 @@ final class FeatureFlagReadRule implements Rule
             $depth = in_array($root, [ApplicationTopology::BASE, ApplicationTopology::CORE], true) ? 1 : 2;
             $directory = $prefix.implode('/', array_slice($parts, 0, $depth));
             foreach ($this->manifests() as $manifest) {
-                if ($manifest->path === $directory) {
+                if ($this->normalizePath($manifest->path) === $directory) {
                     return $manifest;
                 }
             }
         }
 
         return null;
+    }
+
+    private function normalizePath(string $path): string
+    {
+        return rtrim(str_replace('\\', '/', $path), '/');
     }
 
     /** @return list<ModuleManifest> */

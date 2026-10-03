@@ -147,9 +147,10 @@ final class DomainEloquentModelBoundaryRule implements Rule
      */
     private function domainOwner(string $file): ?array
     {
-        $normalized = str_replace('\\', '/', $file);
-        $domainsRoot = $this->projectRoot.'/'.ApplicationTopology::DOMAINS.'/';
-        $extensionsRoot = $this->projectRoot.'/'.ApplicationTopology::EXTENSIONS.'/';
+        $normalized = $this->normalizePath($file);
+        $projectRoot = $this->normalizePath($this->projectRoot);
+        $domainsRoot = $projectRoot.'/'.ApplicationTopology::DOMAINS.'/';
+        $extensionsRoot = $projectRoot.'/'.ApplicationTopology::EXTENSIONS.'/';
 
         if (str_starts_with($normalized, $extensionsRoot)) {
             return null;
@@ -169,7 +170,7 @@ final class DomainEloquentModelBoundaryRule implements Rule
         $moduleDirectory = $domainsRoot.$parts[0].'/'.$parts[1];
 
         foreach ($this->manifests() as $manifest) {
-            if ($manifest->path === $moduleDirectory) {
+            if ($this->normalizePath($manifest->path) === $moduleDirectory) {
                 return ['domain' => $domain, 'module' => $manifest->module];
             }
         }
@@ -178,6 +179,11 @@ final class DomainEloquentModelBoundaryRule implements Rule
             'domain' => $domain,
             'module' => strtolower($parts[0]).'/'.strtolower($parts[1]),
         ];
+    }
+
+    private function normalizePath(string $path): string
+    {
+        return rtrim(str_replace('\\', '/', $path), '/');
     }
 
     /** @return list<ModuleManifest> */
