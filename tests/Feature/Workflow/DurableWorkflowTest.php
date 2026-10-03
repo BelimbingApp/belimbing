@@ -24,6 +24,7 @@ use App\Base\Workflow\Models\ProcessRun;
 use App\Base\Workflow\Models\StatusHistory;
 use App\Base\Workflow\Models\StatusTransition;
 use App\Base\Workflow\Models\TransitionOutboxMessage;
+use App\Base\Workflow\Process\CompleteHumanWorkRequest;
 use App\Base\Workflow\Process\Definitions\ProcessDefinition;
 use App\Base\Workflow\Process\Definitions\ProcessDependency;
 use App\Base\Workflow\Process\Definitions\ProcessStep;
@@ -33,6 +34,7 @@ use App\Base\Workflow\Process\Enums\ProcessWorkStatus;
 use App\Base\Workflow\Process\ProcessCoordinationException;
 use App\Base\Workflow\Process\ProcessCoordinator;
 use App\Base\Workflow\Process\ProcessDefinitionRegistry;
+use App\Base\Workflow\Process\ProcessStartRequest;
 use App\Base\Workflow\Services\TransitionOutboxDispatcher;
 use App\Base\Workflow\Services\WorkflowEngine;
 use App\Core\Company\Models\Company;
@@ -219,6 +221,85 @@ it('starts and signals a process idempotently', function (): void {
         ->and($first->events()->where('type', 'signal.ignored')->count())->toBe(1);
 });
 
+it('starts system processes from request objects with explicit scheduling metadata', function (): void {
+    $availableAt = now()->addMinutes(7);
+    app(ProcessDefinitionRegistry::class)->register(new ProcessDefinition('test.request-start', 1, [
+        new ProcessStep('review', 'Review request'),
+    ]));
+
+    $request = (new ProcessStartRequest('test.request-start'))
+        ->withInput(['kind' => 'coverage'])
+        ->withIdempotencyKey('system-request-1')
+        ->withSubject('system.fixture', 'subject-42')
+        ->withDefinitionVersion(1)
+        ->withCorrelationKey('system.fixture:subject-42')
+        ->withPriority(75)
+        ->availableAt($availableAt);
+
+    $coordinator = app(ProcessCoordinator::class);
+    $run = $coordinator->startForSystem($request);
+    $replayed = $coordinator->startForSystem($request);
+
+    expect($replayed->id)->toBe($run->id)
+        ->and($run->scope_type)->toBe('system')
+        ->and($run->tenant_id)->toBeNull()
+        ->and($run->definition_key)->toBe('test.request-start')
+        ->and($run->definition_version)->toBe(1)
+        ->and($run->input)->toBe(['kind' => 'coverage'])
+        ->and($run->subject_type)->toBe('system.fixture')
+        ->and($run->subject_id)->toBe('subject-42')
+        ->and($run->correlation_key)->toBe('system.fixture:subject-42')
+        ->and($run->priority)->toBe(75)
+        ->and($run->available_at->toIso8601String())->toBe($availableAt->toIso8601String())
+        ->and(ProcessRun::query()->where('definition_key', 'test.request-start')->count())->toBe(1);
+});
+
+it('completes tenant human work from a request object inside the business transaction', function (): void {
+    $user = createAdminUser();
+    $actor = Actor::forUser($user);
+    $tenantId = $actor->tenantId;
+    expect($tenantId)->toBeInt();
+    app(TenantContext::class)->set($tenantId);
+
+    app(ProcessDefinitionRegistry::class)->register(new ProcessDefinition('test.direct-human', 1, [
+        new ProcessStep('approval', 'Approval', executorKey: 'human.direct'),
+    ]));
+
+    $coordinator = app(ProcessCoordinator::class);
+    $run = $coordinator->startForTenant(
+        $tenantId,
+        (new ProcessStartRequest('test.direct-human'))
+            ->withInput(['subject' => 'fixture'])
+            ->withSubject('fixture.subject', 99),
+    );
+    $item = $run->workItems()->sole();
+
+    $completed = DB::transaction(fn () => $coordinator->completeHumanWork(
+        (new CompleteHumanWorkRequest(
+            $tenantId,
+            $run->id,
+            $item->id,
+            $item->version,
+            'human.direct',
+        ))
+            ->withResult(['decision' => 'approved'], 'approved', 'approval:'.$item->id)
+            ->withEventContext(['actor_type' => $actor->type->value, 'actor_id' => $actor->id]),
+    ));
+
+    expect($completed->status)->toBe(ProcessWorkStatus::COMPLETED)
+        ->and($completed->outcome)->toBe('approved')
+        ->and($completed->output)->toBe(['decision' => 'approved'])
+        ->and($completed->result_ref)->toBe('approval:'.$item->id)
+        ->and($run->refresh()->status)->toBe(ProcessRunStatus::COMPLETED)
+        ->and($run->events()->where('type', 'work.completed')->sole()->payload)->toMatchArray([
+            'actor_type' => $actor->type->value,
+            'actor_id' => $actor->id,
+            'outcome' => 'approved',
+            'source' => 'human_action',
+            'result_ref' => 'approval:'.$item->id,
+        ]);
+});
+
 it('reports only process runs that reconciliation actually inspected', function (): void {
     $coordinator = app(ProcessCoordinator::class);
 
@@ -242,7 +323,10 @@ it('executes tenant-authorized human work atomically and replays the same reques
     app(ProcessDefinitionRegistry::class)->register(new ProcessDefinition('test.human', 1, [
         new ProcessStep('approval', 'Approval', executorKey: 'human.approve'),
     ]));
-    $run = app(ProcessCoordinator::class)->startForTenant($tenantId, 'test.human', subjectType: $subject::class, subjectId: $subject->id);
+    $run = app(ProcessCoordinator::class)->startForTenant(
+        $tenantId,
+        (new ProcessStartRequest('test.human'))->withSubject($subject::class, $subject->id),
+    );
     $item = $run->workItems()->sole();
     $service = app(HumanActionService::class);
     $request = new HumanActionRequest('approve', 'request-1', $service->subjectVersion($subject),

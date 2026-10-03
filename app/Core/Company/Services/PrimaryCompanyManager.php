@@ -106,14 +106,7 @@ class PrimaryCompanyManager
     private function writeAssignment(Tenant $tenant, Company $company, bool $allowTransfer): void
     {
         DB::transaction(function () use ($tenant, $company, $allowTransfer): void {
-            $lockedTenant = Tenant::query()->whereKey($tenant->id)->lockForUpdate()->first();
-
-            if ($lockedTenant === null) {
-                throw new PrimaryCompanyAssignmentException(
-                    'The tenant does not exist or is soft-deleted.',
-                    ['tenant_id' => (int) $tenant->id],
-                );
-            }
+            $lockedTenant = $this->lockTenantForAssignment($tenant);
 
             $assignment = TenantPrimaryCompany::query()
                 ->whereKey($lockedTenant->id)
@@ -124,42 +117,7 @@ class PrimaryCompanyManager
                 ->lockForUpdate()
                 ->first();
 
-            if ($lockedCompany === null) {
-                throw new PrimaryCompanyAssignmentException(
-                    'The selected primary company does not exist.',
-                    ['tenant_id' => (int) $lockedTenant->id, 'company_id' => (int) $company->id],
-                );
-            }
-
-            if ($lockedCompany->trashed()) {
-                throw new PrimaryCompanyAssignmentException(
-                    'A soft-deleted company cannot be assigned as a tenant primary company.',
-                    ['tenant_id' => (int) $lockedTenant->id, 'company_id' => (int) $lockedCompany->id],
-                );
-            }
-
-            if ((int) $lockedCompany->tenant_id !== (int) $lockedTenant->id) {
-                throw new PrimaryCompanyAssignmentException(
-                    'A company cannot be assigned as the primary company of a different tenant.',
-                    [
-                        'tenant_id' => (int) $lockedTenant->id,
-                        'company_id' => (int) $lockedCompany->id,
-                        'company_tenant_id' => (int) $lockedCompany->tenant_id,
-                    ],
-                );
-            }
-
-            $otherAssignment = TenantPrimaryCompany::query()
-                ->where('company_id', $lockedCompany->id)
-                ->where('tenant_id', '!=', $lockedTenant->id)
-                ->first();
-
-            if ($otherAssignment !== null) {
-                throw new PrimaryCompanyAssignmentException(
-                    'A company cannot be primary for more than one tenant.',
-                    ['company_id' => (int) $lockedCompany->id, 'tenant_id' => (int) $otherAssignment->tenant_id],
-                );
-            }
+            $this->assertCompanyCanServeAsTenantPrimary($lockedTenant, $lockedCompany, (int) $company->id);
 
             if ($assignment === null) {
                 TenantPrimaryCompany::query()->create([
@@ -187,6 +145,65 @@ class PrimaryCompanyManager
             $assignment->company_id = $lockedCompany->id;
             $assignment->save();
         });
+    }
+
+    private function lockTenantForAssignment(Tenant $tenant): Tenant
+    {
+        $lockedTenant = Tenant::query()->whereKey($tenant->id)->lockForUpdate()->first();
+
+        if ($lockedTenant === null) {
+            throw new PrimaryCompanyAssignmentException(
+                'The tenant does not exist or is soft-deleted.',
+                ['tenant_id' => (int) $tenant->id],
+            );
+        }
+
+        return $lockedTenant;
+    }
+
+    private function assertCompanyCanServeAsTenantPrimary(Tenant $tenant, ?Company $company, int $requestedCompanyId): void
+    {
+        if ($company === null) {
+            throw new PrimaryCompanyAssignmentException(
+                'The selected primary company does not exist.',
+                ['tenant_id' => (int) $tenant->id, 'company_id' => $requestedCompanyId],
+            );
+        }
+
+        if ($company->trashed()) {
+            throw new PrimaryCompanyAssignmentException(
+                'A soft-deleted company cannot be assigned as a tenant primary company.',
+                ['tenant_id' => (int) $tenant->id, 'company_id' => (int) $company->id],
+            );
+        }
+
+        if ((int) $company->tenant_id !== (int) $tenant->id) {
+            throw new PrimaryCompanyAssignmentException(
+                'A company cannot be assigned as the primary company of a different tenant.',
+                [
+                    'tenant_id' => (int) $tenant->id,
+                    'company_id' => (int) $company->id,
+                    'company_tenant_id' => (int) $company->tenant_id,
+                ],
+            );
+        }
+
+        $this->assertCompanyIsNotPrimaryForAnotherTenant($tenant, $company);
+    }
+
+    private function assertCompanyIsNotPrimaryForAnotherTenant(Tenant $tenant, Company $company): void
+    {
+        $otherAssignment = TenantPrimaryCompany::query()
+            ->where('company_id', $company->id)
+            ->where('tenant_id', '!=', $tenant->id)
+            ->first();
+
+        if ($otherAssignment !== null) {
+            throw new PrimaryCompanyAssignmentException(
+                'A company cannot be primary for more than one tenant.',
+                ['company_id' => (int) $company->id, 'tenant_id' => (int) $otherAssignment->tenant_id],
+            );
+        }
     }
 
     private function resolveTenant(Tenant|int $tenant): Tenant
