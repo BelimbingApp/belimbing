@@ -61,6 +61,11 @@ use Illuminate\Support\Facades\Event;
 // travel() alone.
 beforeEach(fn () => $this->freezeTime());
 
+function workflowProcessStart(string $definitionKey): ProcessStartRequest
+{
+    return new ProcessStartRequest($definitionKey);
+}
+
 it('treats durable process coordination as stable schema', function (): void {
     $preflight = app(IncubatingSchemaPreflight::class);
 
@@ -198,8 +203,8 @@ it('starts and signals a process idempotently', function (): void {
     app(ProcessDefinitionRegistry::class)->register($definition);
     $coordinator = app(ProcessCoordinator::class);
 
-    $first = $coordinator->start('test.signal', ['filing' => 42], 'filing-42');
-    $second = $coordinator->start('test.signal', ['filing' => 999], 'filing-42');
+    $first = $coordinator->start(workflowProcessStart('test.signal')->withInput(['filing' => 42])->withIdempotencyKey('filing-42'));
+    $second = $coordinator->start(workflowProcessStart('test.signal')->withInput(['filing' => 999])->withIdempotencyKey('filing-42'));
 
     expect($second->id)->toBe($first->id)
         ->and(ProcessRun::query()->where('definition_key', 'test.signal')->count())->toBe(1)
@@ -381,7 +386,7 @@ it('coordinates fan out and all or any fan in with explicit acceptable outcomes'
     ]);
     app(ProcessDefinitionRegistry::class)->register($definition);
     $coordinator = app(ProcessCoordinator::class);
-    $run = $coordinator->start('test.fan-in', idempotencyKey: 'one');
+    $run = $coordinator->start(workflowProcessStart('test.fan-in')->withIdempotencyKey('one'));
 
     $source = $coordinator->claim('worker');
     expect($source?->workItem->step_key)->toBe('source');
@@ -416,7 +421,7 @@ it('uses heartbeats to extend a lease and reconciliation to repair an expired le
         new ProcessStep('work', 'Recoverable work', maxAttempts: 2),
     ]));
     $coordinator = app(ProcessCoordinator::class);
-    $run = $coordinator->start('test.lease');
+    $run = $coordinator->start(workflowProcessStart('test.lease'));
     $firstClaim = $coordinator->claim('worker-a', leaseSeconds: 5);
 
     $this->travel(4)->seconds();
@@ -450,7 +455,7 @@ it('atomically supersedes idle work without revoking a live lease', function ():
         new ProcessStep('decide', 'Decide', [new ProcessDependency('gather')], maxAttempts: 2),
     ]));
     $coordinator = app(ProcessCoordinator::class);
-    $run = $coordinator->start('test.supersede');
+    $run = $coordinator->start(workflowProcessStart('test.supersede'));
     $gather = $coordinator->claim('worker-a');
     $coordinator->complete($gather, ['fact_id' => 77]);
     $decide = $coordinator->claim('worker-b', leaseSeconds: 5);
@@ -480,7 +485,7 @@ it('blocks downstream work when a final failure makes its dependency impossible'
         new ProcessStep('dependent', 'Dependent', [new ProcessDependency('attempt')]),
     ]));
     $coordinator = app(ProcessCoordinator::class);
-    $run = $coordinator->start('test.failure');
+    $run = $coordinator->start(workflowProcessStart('test.failure'));
     $claim = $coordinator->claim('worker');
 
     $coordinator->fail($claim, 'Evidence source is unavailable.');
@@ -495,7 +500,7 @@ it('terminates a non-retryable failure immediately with its typed disposition', 
         new ProcessStep('attempt', 'Attempt', maxAttempts: 3),
     ]));
     $coordinator = app(ProcessCoordinator::class);
-    $run = $coordinator->start('test.non-retryable-failure');
+    $run = $coordinator->start(workflowProcessStart('test.non-retryable-failure'));
     $claim = $coordinator->claim('worker');
 
     $failed = $coordinator->fail(
@@ -528,7 +533,7 @@ it('blocks a leased claim without discarding its typed diagnostic output', funct
         new ProcessStep('research', 'Research'),
     ]));
     $coordinator = app(ProcessCoordinator::class);
-    $run = $coordinator->start('test.claim-blocker');
+    $run = $coordinator->start(workflowProcessStart('test.claim-blocker'));
     $claim = $coordinator->claim('worker');
 
     $item = $coordinator->blockClaim(
@@ -559,7 +564,7 @@ it('pauses future claims without discarding completed facts', function (): void 
         new ProcessStep('review', 'Review', [new ProcessDependency('gather')]),
     ]));
     $coordinator = app(ProcessCoordinator::class);
-    $run = $coordinator->start('test.pause');
+    $run = $coordinator->start(workflowProcessStart('test.pause'));
     $gather = $coordinator->claim('worker');
     $coordinator->complete($gather, ['fact_id' => 77], resultRef: 'fact:77');
 
@@ -595,10 +600,9 @@ it('reconciliation idempotently restores missing code-defined work topology', fu
     ]));
     $coordinator = app(ProcessCoordinator::class);
     $run = $coordinator->start(
-        'test.materialize',
-        subjectType: Company::class,
-        subjectId: $company->id,
-        correlationKey: 'company:'.$company->id.':cycle:1',
+        workflowProcessStart('test.materialize')
+            ->withSubject(Company::class, $company->id)
+            ->withCorrelationKey('company:'.$company->id.':cycle:1'),
     );
     $analysis = $run->workItems()->where('step_key', 'analysis')->sole();
     $analysis->delete();
@@ -622,8 +626,8 @@ it('claims only supported executors and orders work by dynamic process priority'
         new ProcessStep('research', 'Research', executorKey: 'investment.research'),
     ]));
     $coordinator = app(ProcessCoordinator::class);
-    $low = $coordinator->start('test.routing', priority: 10);
-    $high = $coordinator->start('test.routing', priority: 90);
+    $low = $coordinator->start(workflowProcessStart('test.routing')->withPriority(10));
+    $high = $coordinator->start(workflowProcessStart('test.routing')->withPriority(90));
 
     expect($coordinator->claim('valuation-worker', executorKeys: ['investment.valuation']))->toBeNull();
 
@@ -639,9 +643,9 @@ it('retries contended claims with canonical locks and fresh eligibility checks',
         new ProcessStep('research', 'Research', executorKey: 'investment.research'),
     ]));
     $coordinator = app(ProcessCoordinator::class);
-    $low = $coordinator->start('test.claim-contention', priority: 10);
-    $middle = $coordinator->start('test.claim-contention', priority: 20);
-    $high = $coordinator->start('test.claim-contention', priority: 30);
+    $low = $coordinator->start(workflowProcessStart('test.claim-contention')->withPriority(10));
+    $middle = $coordinator->start(workflowProcessStart('test.claim-contention')->withPriority(20));
+    $high = $coordinator->start(workflowProcessStart('test.claim-contention')->withPriority(30));
     $middleWorkItem = $middle->workItems()->sole();
     $candidateQueries = 0;
     $queries = [];
@@ -710,8 +714,8 @@ it('limits claims and reconciliation to an explicitly assigned set of process ru
         new ProcessStep('research', 'Research', executorKey: 'investment.research'),
     ]));
     $coordinator = app(ProcessCoordinator::class);
-    $assigned = $coordinator->start('test.scoped-claim', priority: 10);
-    $unassigned = $coordinator->start('test.scoped-claim', priority: 90);
+    $assigned = $coordinator->start(workflowProcessStart('test.scoped-claim')->withPriority(10));
+    $unassigned = $coordinator->start(workflowProcessStart('test.scoped-claim')->withPriority(90));
 
     expect($coordinator->claim('research-worker', processRunIds: []))->toBeNull();
 
@@ -733,7 +737,7 @@ it('rejects changing a process definition without publishing a new version', fun
         new ProcessStep('research', 'Research', executorKey: 'research.v1'),
     ]));
     $original = new ProcessCoordinator($originalRegistry);
-    $run = $original->start('test.immutable');
+    $run = $original->start(workflowProcessStart('test.immutable'));
 
     $changedRegistry = new ProcessDefinitionRegistry;
     $changedRegistry->register(new ProcessDefinition('test.immutable', 1, [
@@ -741,7 +745,7 @@ it('rejects changing a process definition without publishing a new version', fun
     ]));
     $changed = new ProcessCoordinator($changedRegistry);
 
-    expect(fn () => $changed->start('test.immutable'))
+    expect(fn () => $changed->start(workflowProcessStart('test.immutable')))
         ->toThrow(ProcessCoordinationException::class, 'publish a new version')
         ->and($run->refresh()->definition_fingerprint)->toHaveLength(64);
 });
