@@ -192,7 +192,7 @@ class DependencyClosureResolver
     public function primaryKeyColumn(string $table): ?string
     {
         foreach (Schema::getIndexes($table) as $index) {
-            if (($index['primary'] ?? false) && count($index['columns']) === 1) {
+            if ($index['primary'] && count($index['columns']) === 1) {
                 return $index['columns'][0];
             }
         }
@@ -209,9 +209,9 @@ class DependencyClosureResolver
 
         foreach (Schema::getForeignKeys($table) as $fk) {
             $foreignKeys[] = [
-                'columns' => array_values($fk['columns']),
+                'columns' => $fk['columns'],
                 'foreign_table' => $fk['foreign_table'],
-                'foreign_columns' => array_values($fk['foreign_columns']),
+                'foreign_columns' => $fk['foreign_columns'],
             ];
         }
 

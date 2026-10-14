@@ -346,8 +346,8 @@ trait ValidatesDiagnosticPackages
     private function primaryKeys(string $table): array
     {
         foreach (Schema::getIndexes($table) as $index) {
-            if (($index['primary'] ?? false) && ($index['columns'] ?? []) !== []) {
-                return array_values($index['columns']);
+            if ($index['primary'] && $index['columns'] !== []) {
+                return $index['columns'];
             }
         }
 

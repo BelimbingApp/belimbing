@@ -33,28 +33,16 @@ final class DomainCommandInventory
         $rows = [];
 
         foreach (Artisan::all() as $name => $command) {
-            if (! is_string($name) || $name === '' || ! $command instanceof SymfonyCommand) {
+            if (! is_string($name)) {
                 continue;
             }
 
-            $class = $command::class;
-
-            if (! str_starts_with($class, 'App\\Domains\\')) {
+            $row = $this->rowForCommand($name, $command);
+            if ($row === null) {
                 continue;
             }
 
-            $owner = $this->ownerFromClass($class);
-            if ($owner === null) {
-                continue;
-            }
-
-            $rows[] = [
-                'domain' => $owner['domain'],
-                'module' => $owner['module'],
-                'name' => $name,
-                'class' => $class,
-                'tenant_scoped' => is_a($command, TenantScopedCommand::class),
-            ];
+            $rows[] = $row;
         }
 
         usort(
@@ -73,6 +61,41 @@ final class DomainCommandInventory
         );
 
         return $rows;
+    }
+
+    /**
+     * @return array{
+     *     domain: string,
+     *     module: string,
+     *     name: string,
+     *     class: class-string,
+     *     tenant_scoped: bool
+     * }|null
+     */
+    private function rowForCommand(string $name, SymfonyCommand $command): ?array
+    {
+        if ($name === '') {
+            return null;
+        }
+
+        $class = $command::class;
+
+        if (! str_starts_with($class, 'App\\Domains\\')) {
+            return null;
+        }
+
+        $owner = $this->ownerFromClass($class);
+        if ($owner === null) {
+            return null;
+        }
+
+        return [
+            'domain' => $owner['domain'],
+            'module' => $owner['module'],
+            'name' => $name,
+            'class' => $class,
+            'tenant_scoped' => is_a($command, TenantScopedCommand::class),
+        ];
     }
 
     /**

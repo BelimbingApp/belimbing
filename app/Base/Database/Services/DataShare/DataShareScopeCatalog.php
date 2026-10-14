@@ -143,15 +143,15 @@ class DataShareScopeCatalog
         // flag meant and how to re-derive it from Schema::getColumns().
         $references = array_map(function (array $foreignKey): DataShareReferenceDefinition {
             return new DataShareReferenceDefinition(
-                localColumns: array_values($foreignKey['columns']),
+                localColumns: $foreignKey['columns'],
                 targetTable: (string) $foreignKey['foreign_table'],
-                targetColumns: array_values($foreignKey['foreign_columns']),
+                targetColumns: $foreignKey['foreign_columns'],
             );
         }, Schema::getForeignKeys($table));
 
         return new DataShareTableDefinition(
             table: $table,
-            primaryKeyColumns: array_values($primary['columns'] ?? []),
+            primaryKeyColumns: $primary === null ? [] : $primary['columns'],
             references: $references,
         );
     }

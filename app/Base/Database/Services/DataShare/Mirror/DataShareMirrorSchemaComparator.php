@@ -22,7 +22,7 @@ class DataShareMirrorSchemaComparator
         ], $schema->getColumns($table));
         usort($columns, fn (array $left, array $right): int => strcmp($left['name'], $right['name']));
         $indexes = array_map(fn (array $index): array => [
-            'columns' => array_values($index['columns']),
+            'columns' => $index['columns'],
             'unique' => (bool) ($index['unique'] ?? false),
             'primary' => (bool) ($index['primary'] ?? false),
         ], array_filter(
@@ -30,9 +30,9 @@ class DataShareMirrorSchemaComparator
             fn (array $index): bool => (bool) ($index['unique'] ?? false) || (bool) ($index['primary'] ?? false),
         ));
         $foreignKeys = array_map(fn (array $foreignKey): array => [
-            'columns' => array_values($foreignKey['columns']),
+            'columns' => $foreignKey['columns'],
             'foreign_table' => (string) $foreignKey['foreign_table'],
-            'foreign_columns' => array_values($foreignKey['foreign_columns']),
+            'foreign_columns' => $foreignKey['foreign_columns'],
         ], $schema->getForeignKeys($table));
         usort($indexes, fn (array $left, array $right): int => strcmp(CanonicalJson::encode($left), CanonicalJson::encode($right)));
         usort($foreignKeys, fn (array $left, array $right): int => strcmp(CanonicalJson::encode($left), CanonicalJson::encode($right)));
@@ -64,8 +64,8 @@ class DataShareMirrorSchemaComparator
     public function primaryKey(Connection $connection, string $table): array
     {
         foreach ($connection->getSchemaBuilder()->getIndexes($table) as $index) {
-            if ((bool) ($index['primary'] ?? false)) {
-                return array_values($index['columns']);
+            if ((bool) $index['primary']) {
+                return $index['columns'];
             }
         }
 

@@ -185,7 +185,7 @@ final class SchemaDriftComparator
 
         foreach ($schema->getIndexes($table) as $index) {
             $columns = array_values(array_filter(
-                $index['columns'] ?? [],
+                $index['columns'],
                 fn (mixed $column): bool => is_string($column) && $column !== '',
             ));
             if ($columns === []) {
@@ -193,8 +193,8 @@ final class SchemaDriftComparator
             }
 
             $type = match (true) {
-                (bool) ($index['primary'] ?? false) => DeclaredIndexType::PRIMARY,
-                (bool) ($index['unique'] ?? false) => DeclaredIndexType::UNIQUE,
+                (bool) $index['primary'] => DeclaredIndexType::PRIMARY,
+                (bool) $index['unique'] => DeclaredIndexType::UNIQUE,
                 default => DeclaredIndexType::INDEX,
             };
             $declared = new DeclaredIndex($columns, $type, isset($index['name']) ? (string) $index['name'] : null);

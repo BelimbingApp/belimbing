@@ -30,7 +30,7 @@ trait TestsAndPreparesMirrorConnection
 
             if (! ($result['reachable'] ?? false)) {
                 $errorKey = $passwordWasEntered ? 'supabaseManualDatabasePassword' : $key;
-                $this->failProperty($errorKey, (string) ($result['message'] ?? __('The mirror connection is unavailable.')));
+                $this->failProperty($errorKey, $result['message']);
             }
 
             $settings->set('data_share.mirror.provider', $provider);
@@ -127,7 +127,7 @@ trait TestsAndPreparesMirrorConnection
         $message = match (true) {
             (bool) ($result['available'] ?? false) => __('Connection successful and saved.'),
             (bool) ($result['initializable'] ?? false) => __('Connection successful and saved. Initialize the mirror before transferring data.'),
-            default => (string) ($result['message'] ?? __('Connection successful and saved, but the database is not ready to use.')),
+            default => $result['message'],
         };
 
         $this->notify($message, ($result['available'] ?? false) ? 'success' : 'warning');
@@ -152,7 +152,7 @@ trait TestsAndPreparesMirrorConnection
         }
 
         if (! ($status['reachable'] ?? false)) {
-            $this->fail($key, (string) ($status['message'] ?? __('The mirror connection is unavailable.')));
+            $this->fail($key, $status['message']);
         }
     }
 
