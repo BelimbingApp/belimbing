@@ -13,22 +13,12 @@ return [
         //
         // People (#833 / blb-people#347) no longer needs entries — every
         // Domain command extends TenantScopedCommand. Connector entries stay
-        // as dated rollout exemptions until they expire; the composed-smoke
-        // audit (#912) is not proof that this allowlist is correct — see
+        // as dated rollout exemptions only while the owning repository still
+        // needs an upstream migration; the composed-smoke audit (#912) is not
+        // proof that this allowlist is correct — see
         // DomainCommandTenantAudit::isAllowlisted().
         'allowlist' => [
-            'connector:capability:verify' => ['reason' => 'Rollout exemption: migrated onto TenantScopedCommand in blb-people-connector#249.', 'expires' => '2026-10-07'],
-            'connector:doctor' => ['reason' => 'Rollout exemption: migrated onto TenantScopedCommand in blb-people-connector#249.', 'expires' => '2026-10-07'],
-            'connector:health:check' => ['reason' => 'Rollout exemption: migrated onto TenantScopedCommand in blb-people-connector#249.', 'expires' => '2026-10-07'],
-            'connector:identity-import' => ['reason' => 'Rollout exemption: migrated onto TenantScopedCommand in blb-people-connector#249.', 'expires' => '2026-10-07'],
-            'connector:identity:audit-trail' => ['reason' => 'Rollout exemption: migrated onto TenantScopedCommand in blb-people-connector#249.', 'expires' => '2026-10-07'],
-            'connector:webhook:dead-letters' => ['reason' => 'Rollout exemption: migrated onto TenantScopedCommand in blb-people-connector#249.', 'expires' => '2026-10-07'],
-            'connector:webhook:replay' => ['reason' => 'Rollout exemption: migrated onto TenantScopedCommand in blb-people-connector#249.', 'expires' => '2026-10-07'],
-            'people-connector:cutover-rehearsal' => ['reason' => 'Rollout exemption: migrated onto TenantScopedCommand in blb-people-connector#249.', 'expires' => '2026-10-07'],
-            'people-connector:retention-purge' => ['reason' => 'Rollout exemption: migrated onto TenantScopedCommand in blb-people-connector#249.', 'expires' => '2026-10-07'],
-            'people-connector:retention-report' => ['reason' => 'Rollout exemption: migrated onto TenantScopedCommand in blb-people-connector#249.', 'expires' => '2026-10-07'],
-            'people-connector:subject-export' => ['reason' => 'Rollout exemption: migrated onto TenantScopedCommand in blb-people-connector#249.', 'expires' => '2026-10-07'],
-            'people-connector:sync' => ['reason' => 'Rollout exemption: migrated onto TenantScopedCommand in blb-people-connector#249.', 'expires' => '2026-10-07'],
+            'people-connector:sync' => ['reason' => 'Temporary upstream gap: SyncWorkforceCommand still needs TenantScopedCommand in blb-people-connector; tracked in docs/plans/tenancy-people-connector-sync-command.md.', 'expires' => '2026-11-15'],
         ],
     ],
 ];
