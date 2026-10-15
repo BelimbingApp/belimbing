@@ -88,57 +88,73 @@ class ComponentDiscoveryService
 
         /** @var SplFileInfo $file */
         foreach ($iterator as $file) {
-            if ($file->getExtension() !== 'php') {
-                continue;
+            $component = $this->discoveredComponent($file, $prefixViewNamespace);
+
+            if ($component !== null) {
+                $components[$component['name']] = $component['class'];
+            }
+        }
+    }
+
+    /**
+     * @return array{name: string, class: class-string<Component>}|null
+     */
+    private function discoveredComponent(SplFileInfo $file, bool $prefixViewNamespace): ?array
+    {
+        $class = $this->discoverableComponentClass($file);
+
+        if ($class === null || ! $this->isMountableComponent($class)) {
+            return null;
+        }
+
+        // Page components may inherit render() from a shared base component.
+        // Their concrete class still needs an explicit registry entry because
+        // Livewire routes receive the class name and resolve it through the
+        // component registry.
+        return [
+            'name' => $this->resolveComponentName($file->getPathname(), $prefixViewNamespace)
+                ?? $this->fallbackComponentName($class),
+            'class' => $class,
+        ];
+    }
+
+    /**
+     * Return the class represented by a file that discovery may inspect.
+     */
+    private function discoverableComponentClass(SplFileInfo $file): ?string
+    {
+        if ($file->getExtension() !== 'php'
+            || str_contains($file->getPathname(), DIRECTORY_SEPARATOR.'Concerns'.DIRECTORY_SEPARATOR)) {
+            return null;
+        }
+
+        return $this->classFromPath($file->getPathname());
+    }
+
+    /**
+     * Determine whether a component can be loaded and mounted safely.
+     *
+     * Loading a class can fatal beyond discovery's control — e.g. it links
+     * against an interface a partially-updated sibling repository does not
+     * ship yet. Skip it and report it (deduplicated because discovery runs on
+     * every request), so the failure reaches status-bar diagnostics instead
+     * of remaining log-file-only.
+     */
+    private function isMountableComponent(string $class): bool
+    {
+        try {
+            if (! class_exists($class) || ! is_subclass_of($class, Component::class)) {
+                return false;
             }
 
-            // Skip trait files in Concerns/ directories
-            if (str_contains($file->getPathname(), DIRECTORY_SEPARATOR.'Concerns'.DIRECTORY_SEPARATOR)) {
-                continue;
-            }
+            // An abstract base (SettingsForm, SearchablePaginatedList) carries
+            // the family's view() call but can never be mounted. Registering it
+            // hands Livewire a name that fatals when anything renders it.
+            return ! (new ReflectionClass($class))->isAbstract();
+        } catch (\Throwable $exception) {
+            $this->reportBrokenClass($class, $exception);
 
-            $class = $this->classFromPath($file->getPathname());
-
-            if (! $class) {
-                continue;
-            }
-
-            // Loading a class can fatal beyond our control — e.g. it links
-            // against an interface a partially-updated sibling repo doesn't
-            // ship yet. One broken module class must not take down every
-            // request, so skip it and report it (deduplicated — discovery
-            // runs on every request) so it reaches the status-bar
-            // diagnostics instead of staying log-file-only.
-            try {
-                if (! class_exists($class) || ! is_subclass_of($class, Component::class)) {
-                    continue;
-                }
-
-                // An abstract base (SettingsForm, SearchablePaginatedList)
-                // carries the family's view() call but can never be mounted.
-                // Registering it hands Livewire a name that fatals with
-                // "cannot instantiate abstract class" the moment anything
-                // renders it.
-                if ((new ReflectionClass($class))->isAbstract()) {
-                    continue;
-                }
-            } catch (\Throwable $exception) {
-                $this->reportBrokenClass($class, $exception);
-
-                continue;
-            }
-
-            $name = $this->resolveComponentName($file->getPathname(), $prefixViewNamespace);
-
-            if ($name !== null) {
-                $components[$name] = $class;
-            } else {
-                // Page components may inherit render() from a shared base
-                // component. Their concrete class still needs an explicit
-                // registry entry because Livewire routes receive the class
-                // name and resolve it through the component registry.
-                $components[$this->fallbackComponentName($class)] = $class;
-            }
+            return false;
         }
     }
 
