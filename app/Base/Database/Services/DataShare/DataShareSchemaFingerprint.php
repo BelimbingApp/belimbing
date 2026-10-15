@@ -16,16 +16,16 @@ class DataShareSchemaFingerprint
             'nullable' => (bool) $column['nullable'],
         ], Schema::getColumns($definition->table));
         $uniqueIndexes = array_values(array_map(fn (array $index): array => [
-            'columns' => array_values($index['columns']),
+            'columns' => $index['columns'],
             'unique' => true,
         ], array_filter(
             Schema::getIndexes($definition->table),
             fn (array $index): bool => (bool) $index['unique'] && ! (bool) $index['primary'],
         )));
         $foreignKeys = array_map(fn (array $foreignKey): array => [
-            'columns' => array_values($foreignKey['columns']),
+            'columns' => $foreignKey['columns'],
             'foreign_table' => $foreignKey['foreign_table'],
-            'foreign_columns' => array_values($foreignKey['foreign_columns']),
+            'foreign_columns' => $foreignKey['foreign_columns'],
         ], Schema::getForeignKeys($definition->table));
         usort($uniqueIndexes, fn (array $a, array $b): int => strcmp(CanonicalJson::encode($a), CanonicalJson::encode($b)));
         usort($foreignKeys, fn (array $a, array $b): int => strcmp(CanonicalJson::encode($a), CanonicalJson::encode($b)));
