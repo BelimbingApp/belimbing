@@ -114,36 +114,13 @@ final class ActionInventory
      */
     public function compareToBaseline(array $baseline, ?string $domain = null, bool $strictNames = false): array
     {
-        if (! array_key_exists('module_owned_unreferenced', $baseline)
-            || ! is_int($baseline['module_owned_unreferenced'])
-            || $baseline['module_owned_unreferenced'] < 0) {
-            throw new ActionInventoryException('Baseline must include a non-negative integer module_owned_unreferenced.');
-        }
-
-        $expectedDomain = $baseline['domain'] ?? null;
-        if (is_string($expectedDomain) && $expectedDomain !== '' && $domain !== null && $expectedDomain !== $domain) {
-            throw new ActionInventoryException(
-                'Baseline domain '.$expectedDomain.' does not match requested Domain '.$domain.'.'
-            );
-        }
+        $this->validateBaseline($baseline, $domain);
 
         $actions = $this->moduleOwnedUnreferencedActions($domain);
         $current = count($actions);
         $limit = $baseline['module_owned_unreferenced'];
         $strictNames = $strictNames || ($baseline['strict'] ?? false) === true;
-        if ($strictNames && ! array_key_exists('actions', $baseline)) {
-            throw new ActionInventoryException('Strict names require an action list; run --write-baseline first.');
-        }
-        $newActions = null;
-        $namesChanged = false;
-        if (array_key_exists('actions', $baseline)) {
-            if (! is_array($baseline['actions']) || ! array_is_list($baseline['actions'])
-                || count(array_filter($baseline['actions'], is_string(...))) !== count($baseline['actions'])) {
-                throw new ActionInventoryException('Baseline actions must be a list of component::method strings.');
-            }
-            $newActions = array_values(array_diff($actions, $baseline['actions']));
-            $namesChanged = $newActions !== [] || array_diff($baseline['actions'], $actions) !== [];
-        }
+        [$newActions, $namesChanged] = $this->actionNameChanges($baseline, $actions, $strictNames);
 
         if ($current > $limit || ($strictNames && $namesChanged)) {
             return [
@@ -176,6 +153,48 @@ final class ActionInventory
                     : '',
             ),
         ];
+    }
+
+    /** @param array{domain?: string|null, module_owned_unreferenced?: mixed} $baseline */
+    private function validateBaseline(array $baseline, ?string $domain): void
+    {
+        if (! array_key_exists('module_owned_unreferenced', $baseline)
+            || ! is_int($baseline['module_owned_unreferenced'])
+            || $baseline['module_owned_unreferenced'] < 0) {
+            throw new ActionInventoryException('Baseline must include a non-negative integer module_owned_unreferenced.');
+        }
+
+        $expectedDomain = $baseline['domain'] ?? null;
+        if (is_string($expectedDomain) && $expectedDomain !== '' && $domain !== null && $expectedDomain !== $domain) {
+            throw new ActionInventoryException(
+                'Baseline domain '.$expectedDomain.' does not match requested Domain '.$domain.'.'
+            );
+        }
+    }
+
+    /**
+     * @param  array{actions?: mixed}  $baseline
+     * @param  list<string>  $actions
+     * @return array{0: list<string>|null, 1: bool}
+     */
+    private function actionNameChanges(array $baseline, array $actions, bool $strictNames): array
+    {
+        if ($strictNames && ! array_key_exists('actions', $baseline)) {
+            throw new ActionInventoryException('Strict names require an action list; run --write-baseline first.');
+        }
+
+        if (! array_key_exists('actions', $baseline)) {
+            return [null, false];
+        }
+
+        if (! is_array($baseline['actions']) || ! array_is_list($baseline['actions'])
+            || count(array_filter($baseline['actions'], is_string(...))) !== count($baseline['actions'])) {
+            throw new ActionInventoryException('Baseline actions must be a list of component::method strings.');
+        }
+
+        $newActions = array_values(array_diff($actions, $baseline['actions']));
+
+        return [$newActions, $newActions !== [] || array_diff($baseline['actions'], $actions) !== []];
     }
 
     /** @return list<string> */
