@@ -26,7 +26,7 @@
                     {{ __('Finish the browser sign-in. Belimbing is listening for the callback and will connect automatically.') }}
                 </x-ui.alert>
                 <div class="flex items-center gap-2 text-sm text-muted">
-                    <svg class="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <svg aria-hidden="true" class="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                     </svg>
@@ -48,7 +48,7 @@
                     x-on:click="open = !open"
                     class="flex items-center gap-1 text-sm font-medium text-accent hover:underline"
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 transition-transform" :class="open && 'rotate-90'" viewBox="0 0 20 20" fill="currentColor">
+                    <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 transition-transform" :class="open && 'rotate-90'" viewBox="0 0 20 20" fill="currentColor">
                         <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
                     </svg>
                     {{ __('Paste callback URL manually') }}

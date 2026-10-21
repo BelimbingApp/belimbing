@@ -2,7 +2,7 @@
     'id' => uniqid(),
 ])
 
-<svg {{ $attributes }} fill="none">
+<svg aria-hidden="true" {{ $attributes }} fill="none">
     <defs>
         <pattern id="pattern-{{ $id }}" x="0" y="0" width="8" height="8" patternUnits="userSpaceOnUse">
             <path d="M-1 5L5 -1M3 9L8.5 3.5" stroke-width="0.5"></path>

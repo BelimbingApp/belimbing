@@ -2,7 +2,7 @@
 
 Status: In progress
 
-Last Updated: 2026-10-20
+Last Updated: 2026-10-21
 
 Sources: SonarCloud project `BelimbingApp_lara`, branch `main`; current open findings retrieved 2026-10-20
 
@@ -44,7 +44,9 @@ Evidence: `tests/Unit/Base/Livewire/SubjectIdRequestScanTest.php` passes; Pint p
 
 ### Phase 2 — Cognitive-complexity services
 
-- [ ] Decompose the backup workflow in `App\Base\Database\Services\Backup\BackupService` into named validation and execution steps.
+- [x] Decompose expired-backup pruning in `App\Base\Database\Services\Backup\BackupService` into manifest-metadata recovery and storage deletion responsibilities while preserving audit payloads and deletion order. `{root}/gpt-5`
+
+Evidence: `tests/Feature/Database/BackupsIndexTest.php` covers valid, malformed, and unavailable manifests while confirming artifact-first pruning and stable audit metadata.
 - [ ] Decompose `App\Base\Database\Services\SchemaDrift\SchemaCallProcessor` raw-SQL processing without weakening supported-statement classification.
 - [ ] Decompose catalog discovery in `App\Base\Foundation\Services\DomainCatalog` without changing discovery order.
 - [ ] Decompose the three flagged checks in `App\Base\Foundation\Services\ModuleCheck` while retaining complete diagnostic output.
