@@ -9,6 +9,7 @@ use App\Base\Software\Services\DeploymentRunHistory;
 use App\Base\Software\Services\DeploymentService;
 use App\Base\Software\Services\SoftwareUpdateLauncher;
 use Illuminate\Console\Command;
+use Illuminate\Contracts\Cache\Lock;
 use Throwable;
 
 final class SoftwareUpdateCommand extends Command
@@ -25,34 +26,8 @@ final class SoftwareUpdateCommand extends Command
         DeploymentMaintenanceGuard $maintenance,
     ): int {
         $runId = (string) $this->option('run-id');
-        $lock = cache()->restoreLock(SoftwareUpdateLauncher::LOCK_KEY, $runId);
-
-        if ($runId === '' || ! $lock->isOwnedByCurrentProcess()) {
-            $failure = (string) __('FAILED: detached update run :run could not restore its active reservation.', [
-                'run' => $runId !== '' ? $runId : __('unknown'),
-            ]);
-
-            if ($runId !== '') {
-                $history->interruptDeploymentRun($runId, $failure);
-            }
-
-            $this->error($failure);
-
-            return self::FAILURE;
-        }
-
-        if (! $history->acknowledgeDeploymentRunStart($runId)) {
-            // Lock owner tokens are transferable, so a duplicate child carrying
-            // this run id can also restore the first child's live reservation.
-            // Losing the durable scheduled -> starting transition proves only
-            // that this child must stop; it does not prove the shared fence is
-            // stale or safe for this child to release.
-            if ($history->deploymentRunReservationIsObsolete($runId)) {
-                $lock->release();
-            }
-
-            $this->error('This software update no longer owns an active scheduled run.');
-
+        $lock = $this->restoreAndAcknowledgeRun($history, $runId);
+        if (! $lock instanceof Lock) {
             return self::FAILURE;
         }
 
@@ -156,5 +131,41 @@ final class SoftwareUpdateCommand extends Command
         if (($reloadAttempted && ! $reloadOk) || $maintenance->leave($runId)) {
             $maintenance->disarm($runId);
         }
+    }
+
+    private function restoreAndAcknowledgeRun(DeploymentRunHistory $history, string $runId): ?Lock
+    {
+        $lock = cache()->restoreLock(SoftwareUpdateLauncher::LOCK_KEY, $runId);
+
+        if ($runId === '' || ! $lock->isOwnedByCurrentProcess()) {
+            $failure = (string) __('FAILED: detached update run :run could not restore its active reservation.', [
+                'run' => $runId !== '' ? $runId : __('unknown'),
+            ]);
+
+            if ($runId !== '') {
+                $history->interruptDeploymentRun($runId, $failure);
+            }
+
+            $this->error($failure);
+
+            return null;
+        }
+
+        if ($history->acknowledgeDeploymentRunStart($runId)) {
+            return $lock;
+        }
+
+        // Lock owner tokens are transferable, so a duplicate child carrying
+        // this run id can also restore the first child's live reservation.
+        // Losing the durable scheduled -> starting transition proves only
+        // that this child must stop; it does not prove the shared fence is
+        // stale or safe for this child to release.
+        if ($history->deploymentRunReservationIsObsolete($runId)) {
+            $lock->release();
+        }
+
+        $this->error('This software update no longer owns an active scheduled run.');
+
+        return null;
     }
 }

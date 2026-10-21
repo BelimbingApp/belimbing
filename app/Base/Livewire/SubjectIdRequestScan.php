@@ -119,31 +119,50 @@ final class SubjectIdRequestScan
     {
         foreach (self::SUBJECT_PARAM_NAMES as $name) {
             foreach (["'".$name."'", '"'.$name.'"'] as $literal) {
-                // Laravel's request() helper also accepts the key as its first
-                // argument: request('employee_id') never touches ->input().
-                $directHelper = 'request('.$literal;
-                if (str_contains($contents, $directHelper)) {
-                    return $directHelper;
-                }
-
-                foreach (self::REQUEST_READERS as $reader) {
-                    $needle = '->'.$reader.'('.$literal;
-                    if (str_contains($contents, 'request()') && str_contains($contents, $needle)) {
-                        return 'request()'.$needle;
-                    }
-                    if (str_contains($contents, '$request') && str_contains($contents, $needle)) {
-                        return '$request'.$needle;
-                    }
-                }
-
-                $parameterNeedle = '->parameter('.$literal;
-                if (str_contains($contents, '->route()') && str_contains($contents, $parameterNeedle)) {
-                    return '->route()'.$parameterNeedle;
+                $evidence = $this->requestReadEvidenceForLiteral($contents, $literal);
+                if ($evidence !== null) {
+                    return $evidence;
                 }
             }
         }
 
         return $this->mountSubjectParamEvidence($contents);
+    }
+
+    private function requestReadEvidenceForLiteral(string $contents, string $literal): ?string
+    {
+        // Laravel's request() helper also accepts the key as its first
+        // argument: request('employee_id') never touches ->input().
+        $directHelper = 'request('.$literal;
+        if (str_contains($contents, $directHelper)) {
+            return $directHelper;
+        }
+
+        $readerEvidence = $this->requestReaderEvidence($contents, $literal);
+        if ($readerEvidence !== null) {
+            return $readerEvidence;
+        }
+
+        $parameterNeedle = '->parameter('.$literal;
+
+        return str_contains($contents, '->route()') && str_contains($contents, $parameterNeedle)
+            ? '->route()'.$parameterNeedle
+            : null;
+    }
+
+    private function requestReaderEvidence(string $contents, string $literal): ?string
+    {
+        foreach (self::REQUEST_READERS as $reader) {
+            $needle = '->'.$reader.'('.$literal;
+            if (str_contains($contents, 'request()') && str_contains($contents, $needle)) {
+                return 'request()'.$needle;
+            }
+            if (str_contains($contents, '$request') && str_contains($contents, $needle)) {
+                return '$request'.$needle;
+            }
+        }
+
+        return null;
     }
 
     /**
