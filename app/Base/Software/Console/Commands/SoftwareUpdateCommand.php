@@ -8,8 +8,8 @@ use App\Base\Software\Services\DeploymentMaintenanceGuard;
 use App\Base\Software\Services\DeploymentRunHistory;
 use App\Base\Software\Services\DeploymentService;
 use App\Base\Software\Services\SoftwareUpdateLauncher;
-use Illuminate\Cache\Lock;
 use Illuminate\Console\Command;
+use Illuminate\Contracts\Cache\Lock;
 use Throwable;
 
 final class SoftwareUpdateCommand extends Command
