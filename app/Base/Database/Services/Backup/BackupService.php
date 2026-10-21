@@ -469,32 +469,21 @@ final class BackupService
         foreach ($entries as $entry) {
             $manifestPath = (string) $entry['manifest_path'];
             $artifactPath = (string) $entry['artifact_path'];
-            $manifestData = ($manifestPath !== '' && $disk->exists($manifestPath))
-                ? json_decode((string) $disk->get($manifestPath), true)
-                : null;
-            $backupId = is_array($manifestData) ? (string) ($manifestData['backup_id'] ?? '') : '';
-            $sha256 = is_array($manifestData) ? (string) ($manifestData['sha256'] ?? '') : '';
-            $sizeBytes = is_array($manifestData) ? (int) ($manifestData['size_bytes'] ?? 0) : 0;
-            $encryptionMode = is_array($manifestData) ? (string) ($manifestData['encryption_mode'] ?? '') : '';
+            $metadata = $this->pruningMetadata($disk, $manifestPath);
 
-            foreach ([$artifactPath, $manifestPath] as $path) {
-                if ($path !== '' && $disk->exists($path)) {
-                    $disk->delete($path);
-                    $removed[] = $path;
-                }
-            }
+            $removed = [...$removed, ...$this->deleteExistingPaths($disk, $artifactPath, $manifestPath)];
 
             $this->record(
                 event: self::EVENT_PRUNED,
-                summary: __('Pruned expired database backup :id', ['id' => $backupId !== '' ? $backupId : $manifestPath]),
+                summary: __('Pruned expired database backup :id', ['id' => $metadata['backup_id'] !== '' ? $metadata['backup_id'] : $manifestPath]),
                 manifestPath: $manifestPath,
-                sha256: $sha256,
+                sha256: $metadata['sha256'],
                 context: [
-                    'backup_id' => $backupId,
+                    'backup_id' => $metadata['backup_id'],
                     'artifact_path' => $artifactPath,
                     'manifest_path' => $manifestPath,
-                    'size_bytes' => $sizeBytes,
-                    'encryption_mode' => $encryptionMode,
+                    'size_bytes' => $metadata['size_bytes'],
+                    'encryption_mode' => $metadata['encryption_mode'],
                     'disk' => $diskName,
                     'keep_days' => $keepDays,
                     'pruned_count' => 1,
@@ -504,6 +493,55 @@ final class BackupService
                     'ui_element' => $uiElement ?? '--prune',
                 ],
             );
+        }
+
+        return $removed;
+    }
+
+    /**
+     * @return array{backup_id: string, sha256: string, size_bytes: int, encryption_mode: string}
+     */
+    private function pruningMetadata(Filesystem $disk, string $manifestPath): array
+    {
+        if ($manifestPath === '' || ! $disk->exists($manifestPath)) {
+            return [
+                'backup_id' => '',
+                'sha256' => '',
+                'size_bytes' => 0,
+                'encryption_mode' => '',
+            ];
+        }
+
+        $manifestData = json_decode((string) $disk->get($manifestPath), true);
+        if (! is_array($manifestData)) {
+            return [
+                'backup_id' => '',
+                'sha256' => '',
+                'size_bytes' => 0,
+                'encryption_mode' => '',
+            ];
+        }
+
+        return [
+            'backup_id' => (string) ($manifestData['backup_id'] ?? ''),
+            'sha256' => (string) ($manifestData['sha256'] ?? ''),
+            'size_bytes' => (int) ($manifestData['size_bytes'] ?? 0),
+            'encryption_mode' => (string) ($manifestData['encryption_mode'] ?? ''),
+        ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function deleteExistingPaths(Filesystem $disk, string ...$paths): array
+    {
+        $removed = [];
+
+        foreach ($paths as $path) {
+            if ($path !== '' && $disk->exists($path)) {
+                $disk->delete($path);
+                $removed[] = $path;
+            }
         }
 
         return $removed;
