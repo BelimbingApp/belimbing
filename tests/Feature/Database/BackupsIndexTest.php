@@ -480,3 +480,48 @@ it('records one database.backup.pruned row per expired artifact from blb:db:back
         ->and($rowPayload['context']['keep_days'] ?? null)->toBe(1)
         ->and($disk->exists($manifestPath))->toBeFalse();
 });
+
+it('prunes expired backups with unavailable manifest metadata while preserving the audit shape', function (): void {
+    $this->actingAs(createAdminUser());
+
+    $disk = Storage::disk(BACKUPS_TEST_DISK);
+    $invalidArtifactPath = BACKUPS_TEST_PREFIX.'/expired-invalid.bak';
+    $invalidManifestPath = BACKUPS_TEST_PREFIX.'/expired-invalid'.BACKUPS_TEST_MANIFEST_SUFFIX;
+    $missingArtifactPath = BACKUPS_TEST_PREFIX.'/expired-missing.bak';
+    $missingManifestPath = BACKUPS_TEST_PREFIX.'/expired-missing'.BACKUPS_TEST_MANIFEST_SUFFIX;
+    $disk->put($invalidArtifactPath, 'invalid-bytes');
+    $disk->put($invalidManifestPath, 'not-json');
+    $disk->put($missingArtifactPath, 'missing-bytes');
+
+    app(BackupService::class)->deleteEntries(
+        diskName: BACKUPS_TEST_DISK,
+        entries: [
+            [
+                'manifest_path' => $invalidManifestPath,
+                'artifact_path' => $invalidArtifactPath,
+                'finished_at_unix' => now()->subDays(10)->timestamp,
+            ],
+            [
+                'manifest_path' => $missingManifestPath,
+                'artifact_path' => $missingArtifactPath,
+                'finished_at_unix' => now()->subDays(10)->timestamp,
+            ],
+        ],
+        keepDays: 1,
+    );
+
+    expect($disk->exists($invalidArtifactPath))->toBeFalse()
+        ->and($disk->exists($invalidManifestPath))->toBeFalse()
+        ->and($disk->exists($missingArtifactPath))->toBeFalse();
+
+    $rows = backupsAuditEvents('database.backup.pruned');
+    expect($rows)->toHaveCount(2);
+
+    foreach ($rows as $row) {
+        $payload = json_decode((string) $row->payload, true);
+        expect($payload['context']['backup_id'] ?? null)->toBe('')
+            ->and($payload['context']['size_bytes'] ?? null)->toBe(0)
+            ->and($payload['context']['encryption_mode'] ?? null)->toBe('')
+            ->and($payload['context']['keep_days'] ?? null)->toBe(1);
+    }
+});
