@@ -202,7 +202,6 @@ final class SchemaCallProcessor
 
         while ($i < $length) {
             $char = $sql[$i];
-            $next = $i + 1 < $length ? $sql[$i + 1] : '';
 
             if ($char === ';') {
                 $statements[] = $current;
@@ -212,27 +211,9 @@ final class SchemaCallProcessor
                 continue;
             }
 
-            if ($char === '-' && $next === '-') {
-                $i = self::copyLineComment($sql, $i, $length, $current);
-
-                continue;
-            }
-
-            if ($char === '/' && $next === '*') {
-                $i = self::copyBlockComment($sql, $i, $length, $current);
-
-                continue;
-            }
-
-            if ($char === "'" || $char === '"') {
-                $i = self::copyQuoted($sql, $i, $length, $current);
-
-                continue;
-            }
-
-            $dollarEnd = $char === '$' ? self::copyDollarQuoted($sql, $i, $length, $current) : null;
-            if ($dollarEnd !== null) {
-                $i = $dollarEnd;
+            $protectedTokenEnd = self::copyProtectedToken($sql, $i, $length, $current);
+            if ($protectedTokenEnd !== null) {
+                $i = $protectedTokenEnd;
 
                 continue;
             }
@@ -244,6 +225,23 @@ final class SchemaCallProcessor
         $statements[] = $current;
 
         return self::significantStatements($statements);
+    }
+
+    /**
+     * Copy a token whose semicolons are data rather than statement separators.
+     */
+    private static function copyProtectedToken(string $sql, int $i, int $length, string &$current): ?int
+    {
+        $char = $sql[$i];
+        $next = $i + 1 < $length ? $sql[$i + 1] : '';
+
+        return match (true) {
+            $char === '-' && $next === '-' => self::copyLineComment($sql, $i, $length, $current),
+            $char === '/' && $next === '*' => self::copyBlockComment($sql, $i, $length, $current),
+            $char === "'" || $char === '"' => self::copyQuoted($sql, $i, $length, $current),
+            $char === '$' => self::copyDollarQuoted($sql, $i, $length, $current),
+            default => null,
+        };
     }
 
     /** Line comment: a semicolon on this line is comment text, not a separator. */

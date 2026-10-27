@@ -2,15 +2,15 @@
 
 Status: In progress
 
-Last Updated: 2026-10-21
+Last Updated: 2026-10-27
 
-Sources: SonarCloud project `BelimbingApp_lara`, branch `main`; current open findings retrieved 2026-10-20
+Sources: SonarCloud project `BelimbingApp_lara`, branch `main`; current open findings retrieved 2026-10-27
 
 Agents: `{root}/gpt-5`
 
 ## Problem Essence
 
-SonarCloud reports 25 legacy code smells on `main`: 13 methods above the cognitive-complexity threshold and 12 classes above the method-count threshold. The quality gate is green and has no new-code duplication, but these findings make several framework services harder to change safely.
+SonarCloud reports 22 legacy code smells on `main`: 10 methods above the cognitive-complexity threshold and 12 classes above the method-count threshold. The quality gate is green and has no new-code duplication, but these findings make several framework services harder to change safely.
 
 ## Desired Outcome
 
@@ -47,7 +47,9 @@ Evidence: `tests/Unit/Base/Livewire/SubjectIdRequestScanTest.php` passes; Pint p
 - [x] Decompose expired-backup pruning in `App\Base\Database\Services\Backup\BackupService` into manifest-metadata recovery and storage deletion responsibilities while preserving audit payloads and deletion order. `{root}/gpt-5`
 
 Evidence: `tests/Feature/Database/BackupsIndexTest.php` covers valid, malformed, and unavailable manifests while confirming artifact-first pruning and stable audit metadata.
-- [ ] Decompose `App\Base\Database\Services\SchemaDrift\SchemaCallProcessor` raw-SQL processing without weakening supported-statement classification.
+- [x] Decompose `App\Base\Database\Services\SchemaDrift\SchemaCallProcessor` raw-SQL processing without weakening supported-statement classification. `{root}/gpt-5`
+
+Evidence: protected SQL token copying is separated from statement-boundary scanning; `MigrationSourceParserTest` covers quoted, comment, and dollar-quoted semicolon handling.
 - [ ] Decompose catalog discovery in `App\Base\Foundation\Services\DomainCatalog` without changing discovery order.
 - [ ] Decompose the three flagged checks in `App\Base\Foundation\Services\ModuleCheck` while retaining complete diagnostic output.
 - [ ] Decompose source installation and migration rollback paths in `App\Base\Foundation\Services\SourceRepositoryInstaller` without broadening installation authority.
