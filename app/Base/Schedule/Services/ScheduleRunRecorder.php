@@ -182,13 +182,7 @@ class ScheduleRunRecorder
                 ->orderByDesc('started_at')
                 ->first();
 
-            if ($active instanceof ScheduleRun && $active->status === 'queued' && $this->isStale($active)) {
-                $this->terminalizeOpenRow($active, 'failed', __(
-                    'This run was queued but no worker picked it up within :minutes minutes — the queue connection or a worker may be down. Check queue health, then try again.',
-                    ['minutes' => self::QUEUE_PICKUP_STALE_AFTER_MINUTES],
-                ));
-                $active = null;
-            }
+            $active = $this->reconcileStaleQueuedRun($active);
 
             if ($active instanceof ScheduleRun) {
                 if (! $force || ! $this->isStale($active)) {
@@ -309,6 +303,20 @@ class ScheduleRunRecorder
     {
         return $run->started_at !== null
             && $run->started_at->lt(now()->subMinutes(self::QUEUE_PICKUP_STALE_AFTER_MINUTES));
+    }
+
+    private function reconcileStaleQueuedRun(?ScheduleRun $run): ?ScheduleRun
+    {
+        if (! $run instanceof ScheduleRun || $run->status !== 'queued' || ! $this->isStale($run)) {
+            return $run;
+        }
+
+        $this->terminalizeOpenRow($run, 'failed', __(
+            'This run was queued but no worker picked it up within :minutes minutes — the queue connection or a worker may be down. Check queue health, then try again.',
+            ['minutes' => self::QUEUE_PICKUP_STALE_AFTER_MINUTES],
+        ));
+
+        return null;
     }
 
     private function activeRunRow(string $key): ?ScheduleRun
