@@ -83,7 +83,7 @@ final class MutationDetector
         // cannot hide behind an exempt opener or a leading comment.
         foreach (SchemaCallProcessor::splitStatements($sql) as $statement) {
             if (preg_match('/^(CREATE|ALTER|DROP)\s/i', $statement) === 1
-                && ! SchemaCallProcessor::isRawSchemaOutsideComparison($statement)) {
+                && ! RawSchemaStatementClassifier::isOutsideComparison($statement)) {
                 return true;
             }
         }
