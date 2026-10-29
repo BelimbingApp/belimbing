@@ -148,37 +148,13 @@ final class SchemaCallProcessor
             return;
         }
 
-        if (self::isRawSchemaOutsideComparison($normalized)) {
+        if (RawSchemaStatementClassifier::isOutsideComparison($normalized)) {
             return;
         }
 
         if (preg_match('/^(CREATE|ALTER|DROP)\s/i', $normalized) === 1) {
             $this->context->reportUnreadable($call, 'Raw schema statement is outside the supported CREATE/DROP INDEX forms.');
         }
-    }
-
-    public static function isRawSchemaOutsideComparison(string $sql): bool
-    {
-        return preg_match('/^\s*ALTER\s+TABLE\s+\S+\s+ADD\s+CONSTRAINT\s+\S+\s+CHECK\b/i', $sql) === 1
-            // Triggers and the functions they call are outside the compared
-            // schema in exactly the same way: the comparator knows tables,
-            // columns and indexes, and neither of these is one of them.
-            //
-            // Create and drop are covered together deliberately. Exempting
-            // CREATE TRIGGER alone meant portable guard code was readable on
-            // SQLite and unreadable on PostgreSQL, which is where the trigger
-            // does the work. Leaving the DROP forms out would have reproduced
-            // that asymmetry one revision later: replacing a trigger is
-            // ordinarily written DROP TRIGGER then CREATE TRIGGER, and only
-            // the first statement of a string is inspected, so statement order
-            // would have decided whether migrate came back clean.
-            //
-            // TRIGGER and FUNCTION share one alternation rather than sitting
-            // on separate lines so that each flag is pinned by a test on every
-            // form it governs. Split across two arms, a test could pin /i on
-            // one and \b on the other and leave the remaining pair free.
-            || preg_match('/^\s*CREATE\s+(?:OR\s+REPLACE\s+)?(?:TRIGGER|FUNCTION)\b/i', $sql) === 1
-            || preg_match('/^\s*DROP\s+(?:TRIGGER|FUNCTION)\b/i', $sql) === 1;
     }
 
     /**
@@ -202,7 +178,6 @@ final class SchemaCallProcessor
 
         while ($i < $length) {
             $char = $sql[$i];
-            $next = $i + 1 < $length ? $sql[$i + 1] : '';
 
             if ($char === ';') {
                 $statements[] = $current;
@@ -212,27 +187,9 @@ final class SchemaCallProcessor
                 continue;
             }
 
-            if ($char === '-' && $next === '-') {
-                $i = self::copyLineComment($sql, $i, $length, $current);
-
-                continue;
-            }
-
-            if ($char === '/' && $next === '*') {
-                $i = self::copyBlockComment($sql, $i, $length, $current);
-
-                continue;
-            }
-
-            if ($char === "'" || $char === '"') {
-                $i = self::copyQuoted($sql, $i, $length, $current);
-
-                continue;
-            }
-
-            $dollarEnd = $char === '$' ? self::copyDollarQuoted($sql, $i, $length, $current) : null;
-            if ($dollarEnd !== null) {
-                $i = $dollarEnd;
+            $protectedTokenEnd = self::copyProtectedToken($sql, $i, $length, $current);
+            if ($protectedTokenEnd !== null) {
+                $i = $protectedTokenEnd;
 
                 continue;
             }
@@ -244,6 +201,23 @@ final class SchemaCallProcessor
         $statements[] = $current;
 
         return self::significantStatements($statements);
+    }
+
+    /**
+     * Copy a token whose semicolons are data rather than statement separators.
+     */
+    private static function copyProtectedToken(string $sql, int $i, int $length, string &$current): ?int
+    {
+        $char = $sql[$i];
+        $next = $i + 1 < $length ? $sql[$i + 1] : '';
+
+        return match (true) {
+            $char === '-' && $next === '-' => self::copyLineComment($sql, $i, $length, $current),
+            $char === '/' && $next === '*' => self::copyBlockComment($sql, $i, $length, $current),
+            $char === "'" || $char === '"' => self::copyQuoted($sql, $i, $length, $current),
+            $char === '$' => self::copyDollarQuoted($sql, $i, $length, $current),
+            default => null,
+        };
     }
 
     /** Line comment: a semicolon on this line is comment text, not a separator. */

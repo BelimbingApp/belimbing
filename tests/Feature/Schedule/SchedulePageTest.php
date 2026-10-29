@@ -386,6 +386,28 @@ test('reserveManualRun refuses a second sequential reservation for the same key'
         ->and(ScheduleRun::query()->where('key', $key)->sole()->id)->toBe($first->run->id);
 });
 
+test('reserveManualRun replaces a stale queued reservation with a fresh row', function (): void {
+    $recorder = app(ScheduleRunRecorder::class);
+    $key = scheduleTestEventKey();
+
+    $stale = ScheduleRun::query()->create([
+        'source' => 'scheduler',
+        'trigger' => 'manual',
+        'key' => $key,
+        'name' => 'inspire',
+        'status' => 'queued',
+        'started_at' => now()->subMinutes(ScheduleRunRecorder::QUEUE_PICKUP_STALE_AFTER_MINUTES + 1),
+    ]);
+
+    $reservation = $recorder->reserveManualRun($key, 'inspire', null, 1, 'Ops Operator', false);
+
+    $stale->refresh();
+    expect($reservation->created)->toBeTrue()
+        ->and($reservation->run)->not->toBeNull()
+        ->and($stale->status)->toBe('failed')
+        ->and($stale->output_excerpt)->toContain('no worker picked it up');
+});
+
 test('a queued row a worker never picked up is reconciled to failed instead of locking the control forever', function (): void {
     Queue::fake();
     $this->actingAs(createAdminUser());

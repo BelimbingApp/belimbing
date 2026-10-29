@@ -249,17 +249,12 @@ class DomainCatalog
         $page = 0;
 
         while ($page < self::MAX_PAGES) {
-            try {
-                $response = $this->http
-                    ->withHeaders(['Accept' => 'application/vnd.github+json'])
-                    // Pass no query array on later pages: an empty one replaces
-                    // the page marker the Link header put in the URL.
-                    ->get($url, $page === 0 ? ['per_page' => self::PER_PAGE, 'type' => 'public'] : null);
-            } catch (Throwable $exception) {
-                return ['status' => 'failed', 'repos' => [], 'problem' => $owner.': '.$exception->getMessage()];
-            }
+            $result = $this->fetchRepositoryPage($owner, $url, $page === 0);
+            if ($result['status'] === 'retry-user') {
+                if ($triedUsers) {
+                    return ['status' => 'missing', 'repos' => [], 'problem' => $owner.': no such GitHub organisation or user'];
+                }
 
-            if ($response->status() === 404 && ! $triedUsers) {
                 // Not an organisation; a personal account lists elsewhere.
                 $triedUsers = true;
                 $url = 'https://api.github.com/users/'.rawurlencode($owner).'/repos';
@@ -268,36 +263,58 @@ class DomainCatalog
                 continue;
             }
 
-            if ($response->status() === 404) {
-                return ['status' => 'missing', 'repos' => [], 'problem' => $owner.': no such GitHub organisation or user'];
+            if ($result['status'] !== 'ok') {
+                return $result;
             }
 
-            if (! $response->successful()) {
-                return ['status' => 'failed', 'repos' => [], 'problem' => $owner.': GitHub answered HTTP '.$response->status()];
-            }
-
-            $body = $response->json();
-            if (! is_array($body)) {
-                return ['status' => 'failed', 'repos' => [], 'problem' => $owner.': GitHub did not return a repository list'];
-            }
-
-            foreach ($body as $repo) {
-                if (is_array($repo)) {
-                    $repos[] = $repo;
-                }
-            }
-
-            $next = self::nextPageUrl((string) $response->header('Link'));
-            if ($next === null) {
+            array_push($repos, ...$result['repos']);
+            if ($result['next'] === null) {
                 return ['status' => 'ok', 'repos' => $repos, 'problem' => ''];
             }
 
-            $url = $next;
+            $url = $result['next'];
             $page++;
         }
 
         // Refuse a truncated inventory rather than cache it as the whole thing.
         return ['status' => 'failed', 'repos' => [], 'problem' => $owner.': more than '.self::MAX_PAGES.' pages of repositories; refusing a partial list'];
+    }
+
+    /**
+     * Fetch and classify a single GitHub repository-list page.
+     *
+     * @return array{status: 'ok'|'retry-user'|'missing'|'failed', repos: list<array<string, mixed>>, next: ?string, problem: string}
+     */
+    private function fetchRepositoryPage(string $owner, string $url, bool $firstPage): array
+    {
+        try {
+            $response = $this->http
+                ->withHeaders(['Accept' => 'application/vnd.github+json'])
+                // Pass no query array on later pages: an empty one replaces
+                // the page marker the Link header put in the URL.
+                ->get($url, $firstPage ? ['per_page' => self::PER_PAGE, 'type' => 'public'] : null);
+        } catch (Throwable $exception) {
+            return ['status' => 'failed', 'repos' => [], 'next' => null, 'problem' => $owner.': '.$exception->getMessage()];
+        }
+
+        if ($response->status() === 404) {
+            return ['status' => 'retry-user', 'repos' => [], 'next' => null, 'problem' => ''];
+        }
+        if (! $response->successful()) {
+            return ['status' => 'failed', 'repos' => [], 'next' => null, 'problem' => $owner.': GitHub answered HTTP '.$response->status()];
+        }
+
+        $body = $response->json();
+        if (! is_array($body)) {
+            return ['status' => 'failed', 'repos' => [], 'next' => null, 'problem' => $owner.': GitHub did not return a repository list'];
+        }
+
+        return [
+            'status' => 'ok',
+            'repos' => array_values(array_filter($body, 'is_array')),
+            'next' => self::nextPageUrl((string) $response->header('Link')),
+            'problem' => '',
+        ];
     }
 
     /**
