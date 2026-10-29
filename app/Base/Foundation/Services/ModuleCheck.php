@@ -161,54 +161,18 @@ final class ModuleCheck
      */
     public function render(array $report): string
     {
-        $lines = [
-            'module: '.$report['module'],
-            'composition:',
-        ];
-
-        if ($report['composition'] === []) {
-            $lines[] = self::EMPTY_REPORT_LINE;
-        } else {
-            foreach ($report['composition'] as $id) {
-                $lines[] = '  - '.$id;
-            }
-        }
-
-        $lines[] = 'refusals:';
-        if ($report['refusals'] === []) {
-            $lines[] = self::EMPTY_REPORT_LINE;
-        } else {
-            foreach ($report['refusals'] as $refusal) {
-                $lines[] = '  - '.$refusal;
-            }
-        }
-
-        $lines[] = 'routes:';
-        if ($report['routes'] === []) {
-            $lines[] = self::EMPTY_REPORT_LINE;
-        } else {
-            foreach ($report['routes'] as $route) {
-                $lines[] = '  - '.$route;
-            }
-        }
-
-        $lines[] = 'tables:';
-        if ($report['tables'] === []) {
-            $lines[] = self::EMPTY_REPORT_LINE;
-        } else {
-            foreach ($report['tables'] as $table) {
-                $lines[] = '  - '.$table;
-            }
-        }
-
-        $lines[] = 'bindings:';
-        if ($report['bindings'] === []) {
-            $lines[] = self::EMPTY_REPORT_LINE;
-        } else {
-            foreach ($report['bindings'] as $binding) {
-                $lines[] = '  - '.$binding['abstract'].' ['.($binding['resolved'] ? 'resolved' : 'missing').']';
-            }
-        }
+        $lines = ['module: '.$report['module']];
+        $lines = [...$lines, ...$this->reportSection('composition:', $report['composition'])];
+        $lines = [...$lines, ...$this->reportSection('refusals:', $report['refusals'])];
+        $lines = [...$lines, ...$this->reportSection('routes:', $report['routes'])];
+        $lines = [...$lines, ...$this->reportSection('tables:', $report['tables'])];
+        $lines = [...$lines, ...$this->reportSection(
+            'bindings:',
+            array_map(
+                static fn (array $binding): string => $binding['abstract'].' ['.($binding['resolved'] ? 'resolved' : 'missing').']',
+                $report['bindings'],
+            ),
+        )];
 
         if ($report['capabilities']['accepted'] !== [] || $report['capabilities']['rejected'] !== []) {
             $lines[] = 'Capabilities:';
@@ -222,6 +186,19 @@ final class ModuleCheck
         $lines[] = 'status: '.($report['ok'] ? 'ok' : 'refused');
 
         return implode("\n", $lines)."\n";
+    }
+
+    /**
+     * @param  list<string>  $entries
+     * @return list<string>
+     */
+    private function reportSection(string $heading, array $entries): array
+    {
+        if ($entries === []) {
+            return [$heading, self::EMPTY_REPORT_LINE];
+        }
+
+        return [$heading, ...array_map(static fn (string $entry): string => '  - '.$entry, $entries)];
     }
 
     /**
@@ -346,6 +323,30 @@ final class ModuleCheck
      */
     private function graphRefusals(array $manifests, array $roots): array
     {
+        [$remaining, $refusals] = $this->dependencyGraph($manifests, $roots);
+
+        while ($remaining !== []) {
+            $ready = $this->readyModule($remaining);
+
+            if ($ready === null) {
+                $refusals[] = 'dependency: module dependency cycle: '.$this->cycle($remaining);
+
+                break;
+            }
+
+            unset($remaining[$ready]);
+        }
+
+        return $refusals;
+    }
+
+    /**
+     * @param  list<ModuleManifest>  $manifests
+     * @param  array<string, string>  $roots
+     * @return array{0: array<string, list<string>>, 1: list<string>}
+     */
+    private function dependencyGraph(array $manifests, array $roots): array
+    {
         $refusals = [];
         $rootRanks = array_flip(ApplicationTopology::relativeRoots());
         $remaining = [];
@@ -378,25 +379,19 @@ final class ModuleCheck
             }
         }
 
-        while ($remaining !== []) {
-            $ready = null;
-            foreach ($remaining as $module => $requires) {
-                if (array_intersect($requires, array_keys($remaining)) === []) {
-                    $ready = $module;
-                    break;
-                }
+        return [$remaining, $refusals];
+    }
+
+    /** @param array<string, list<string>> $remaining */
+    private function readyModule(array $remaining): ?string
+    {
+        foreach ($remaining as $module => $requires) {
+            if (array_intersect($requires, array_keys($remaining)) === []) {
+                return $module;
             }
-
-            if ($ready === null) {
-                $refusals[] = 'dependency: module dependency cycle: '.$this->cycle($remaining);
-
-                break;
-            }
-
-            unset($remaining[$ready]);
         }
 
-        return $refusals;
+        return null;
     }
 
     /**
@@ -526,39 +521,62 @@ final class ModuleCheck
                 continue;
             }
 
-            foreach (['web', 'api'] as $type) {
-                $file = $path.DIRECTORY_SEPARATOR.'Routes'.DIRECTORY_SEPARATOR.$type.'.php';
-                if (! is_file($file)) {
-                    continue;
-                }
+            $declared = [...$declared, ...$this->routeDeclarationsForModule($module, $path)];
+        }
 
-                $contents = (string) file_get_contents($file);
-                if (! preg_match_all(
-                    '/Route::(get|post|put|patch|delete|options|any)\(\s*[\'"]([^\'"]+)[\'"]([^;]*);/i',
-                    $contents,
-                    $matches,
-                    PREG_SET_ORDER,
-                )) {
-                    continue;
-                }
+        return $declared;
+    }
 
-                foreach ($matches as $match) {
-                    $method = strtoupper($match[1]);
-                    $uri = ($type === 'api' ? 'api/' : '').ltrim($match[2], '/');
-                    $name = '';
-                    if (preg_match('/->name\(\s*[\'"]([^\'"]+)[\'"]\s*\)/', $match[3], $nameMatch) === 1) {
-                        $name = $nameMatch[1];
-                    }
-                    $declared[] = [
-                        'module' => $module,
-                        'key' => $method.' /'.$uri,
-                        'name' => $name,
-                    ];
-                }
+    /**
+     * @return list<array{module: string, key: string, name: string}>
+     */
+    private function routeDeclarationsForModule(string $module, string $path): array
+    {
+        $declared = [];
+
+        foreach (['web', 'api'] as $type) {
+            $file = $path.DIRECTORY_SEPARATOR.'Routes'.DIRECTORY_SEPARATOR.$type.'.php';
+            if (is_file($file)) {
+                $declared = [...$declared, ...$this->parseRouteDeclarations($module, $type, (string) file_get_contents($file))];
             }
         }
 
         return $declared;
+    }
+
+    /**
+     * @return list<array{module: string, key: string, name: string}>
+     */
+    private function parseRouteDeclarations(string $module, string $type, string $contents): array
+    {
+        if (! preg_match_all(
+            '/Route::(get|post|put|patch|delete|options|any)\(\s*[\'"]([^\'"]+)[\'"]([^;]*);/i',
+            $contents,
+            $matches,
+            PREG_SET_ORDER,
+        )) {
+            return [];
+        }
+
+        return array_map(
+            fn (array $match): array => $this->routeDeclaration($module, $type, $match),
+            $matches,
+        );
+    }
+
+    /**
+     * @param  array{0: string, 1: string, 2: string, 3: string}  $match
+     * @return array{module: string, key: string, name: string}
+     */
+    private function routeDeclaration(string $module, string $type, array $match): array
+    {
+        preg_match('/->name\(\s*[\'"]([^\'"]+)[\'"]\s*\)/', $match[3], $nameMatch);
+
+        return [
+            'module' => $module,
+            'key' => strtoupper($match[1]).' /'.($type === 'api' ? 'api/' : '').ltrim($match[2], '/'),
+            'name' => $nameMatch[1] ?? '',
+        ];
     }
 
     /**

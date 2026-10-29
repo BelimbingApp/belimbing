@@ -50,8 +50,8 @@ Evidence: `tests/Feature/Database/BackupsIndexTest.php` covers valid, malformed,
 - [x] Decompose `App\Base\Database\Services\SchemaDrift\SchemaCallProcessor` raw-SQL processing without weakening supported-statement classification. `{root}/gpt-5`
 
 Evidence: protected SQL token copying is separated from statement-boundary scanning; `MigrationSourceParserTest` covers quoted, comment, and dollar-quoted semicolon handling.
-- [ ] Decompose catalog discovery in `App\Base\Foundation\Services\DomainCatalog` without changing discovery order.
-- [ ] Decompose the three flagged checks in `App\Base\Foundation\Services\ModuleCheck` while retaining complete diagnostic output.
+- [x] Decompose catalog discovery in `App\Base\Foundation\Services\DomainCatalog` without changing discovery order. `{root}/gpt-5`
+- [x] Decompose the three flagged checks in `App\Base\Foundation\Services\ModuleCheck` while retaining complete diagnostic output. `{root}/gpt-5`
 - [ ] Decompose source installation and migration rollback paths in `App\Base\Foundation\Services\SourceRepositoryInstaller` without broadening installation authority.
 - [ ] Decompose scheduler-index filtering in `App\Base\Schedule\Livewire\Index` while preserving pagination and operator actions.
 - [ ] Decompose `App\Base\Schedule\Services\ScheduleRunRecorder` reservation flow without altering concurrency or ledger honesty guarantees.
