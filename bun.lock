@@ -5,7 +5,7 @@
     "": {
       "dependencies": {
         "@tailwindcss/vite": "^4.3.3",
-        "alpinejs": "^3.17.4",
+        "alpinejs": "^3.17.5",
         "autoprefixer": "^10.6.1",
         "concurrently": "^10.0.6",
         "laravel-vite-plugin": "^3.2.0",
@@ -106,7 +106,7 @@
 
     "@vue/shared": ["@vue/shared@3.5.41", "", {}, "sha512-IOnwSCma8j+9xJT6b8H0dEYidC80NsYmNMlZxRsukYcSoGaDBohog5hDxzeUXdFeGWFA++vWvxqOmrr96VlqMA=="],
 
-    "alpinejs": ["alpinejs@3.17.4", "", { "dependencies": { "@vue/reactivity": "~3.5.40" } }, "sha512-N2gsr+58XVUt7OAPKnUGiKPDtkd+xbSGTae8C8IJxeRdkkhBJPIautkJ+qcwb7lcjJ/QK3/CPVIbN20JPvtK7A=="],
+    "alpinejs": ["alpinejs@3.17.5", "", { "dependencies": { "@vue/reactivity": "~3.5.40" } }, "sha512-XewMqRC6zjy8iaUPn86dxjvooAsNai3hUtQbdn0A5H2w7Jt10xHGZ1SczN5+Dvp3UKkuSEt9moy/UaUWOwKdnQ=="],
 
     "ansi-regex": ["ansi-regex@6.2.2", "", {}, "sha512-Bq3SmSpyFHaWjPk8If9yc6svM8c56dB5BAtW4Qbw5jHTwwXXcTLoRMkpDJp6VL0XzlWaCHTXrkFURMYmD0sLqg=="],
 
