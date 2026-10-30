@@ -2,15 +2,15 @@
 
 Status: In progress
 
-Last Updated: 2026-10-27
+Last Updated: 2026-10-30
 
-Sources: SonarCloud project `BelimbingApp_lara`, branch `main`; current open findings retrieved 2026-10-27
+Sources: SonarCloud project `BelimbingApp_lara`, branch `main`; current open findings retrieved 2026-10-30; SonarCloud PR #1010 analysis
 
 Agents: `{root}/gpt-5`
 
 ## Problem Essence
 
-SonarCloud reports 22 legacy code smells on `main`: 10 methods above the cognitive-complexity threshold and 12 classes above the method-count threshold. The quality gate is green and has no new-code duplication, but these findings make several framework services harder to change safely.
+SonarCloud reports 19 legacy code smells on `main`: 7 methods above the cognitive-complexity threshold and 12 classes above the method-count threshold. The quality gate is green and has no new-code duplication, but these findings make several framework services harder to change safely.
 
 ## Desired Outcome
 
@@ -59,6 +59,9 @@ Evidence: protected SQL token copying is separated from statement-boundary scann
 
 ### Phase 3 — Method-count boundaries
 
+- [x] Move ModuleCheck's stable command-report formatting into `App\Base\Foundation\Services\ModuleCheckReportRenderer`, retaining both command outputs while keeping inspection and ownership analysis in `ModuleCheck`. `{root}/gpt-5`
+
+Evidence: `ModuleCheckCommandTest` and `ModuleOwnershipCommandTest` preserve text and JSON command contracts.
 - [ ] Extract independently meaningful collaborators or concerns from the flagged `ModuleManifestReader`, `Schedule\Livewire\Index`, `ScheduleRunRecorder`, and `DatabaseSettingsService` classes.
 - [ ] Extract independently meaningful collaborators or concerns from the flagged deployment `Index`, `SoftwareSourceRepository`, and `GitRepository` classes.
 - [ ] Extract independently meaningful collaborators or concerns from the flagged AI `Chat` and `LifecycleControlService` classes.
