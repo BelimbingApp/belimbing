@@ -22,11 +22,10 @@ use Illuminate\Contracts\Foundation\Application;
  */
 final class ModuleCheck
 {
-    private const EMPTY_REPORT_LINE = '  (none)';
-
     public function __construct(
         private readonly Application $app,
         private readonly ModuleTableOwnershipScanner $tableOwnership,
+        private readonly ModuleRouteScanner $routeScanner,
         private readonly CapabilityInventory $capabilityInventory,
     ) {}
 
@@ -85,7 +84,7 @@ final class ModuleCheck
 
         $refusals = [...$refusals, ...$this->graphRefusals($scopedManifests, $roots)];
         $refusals = [...$refusals, ...$this->tableCollisions($composition, $roots)];
-        $refusals = [...$refusals, ...$this->routeCollisions($composition, $roots)];
+        $refusals = [...$refusals, ...$this->routeScanner->collisions($composition, $roots)];
         $capabilities = $this->capabilitiesFor($roots[$moduleId]);
         foreach ($capabilities['rejected'] as $capability => $reason) {
             $refusals[] = sprintf('capability: %s (%s)', $capability, $reason);
@@ -133,7 +132,7 @@ final class ModuleCheck
 
         $refusals = [
             ...$this->tableCollisions($modules, $roots),
-            ...$this->routeCollisions($modules, $roots),
+            ...$this->routeScanner->collisions($modules, $roots),
         ];
         $refusals = array_values(array_unique($refusals));
         sort($refusals);
@@ -143,116 +142,6 @@ final class ModuleCheck
             'refusals' => $refusals,
             'ok' => $refusals === [],
         ];
-    }
-
-    /**
-     * Stable plain-text report for humans and snapshot tests.
-     *
-     * @param  array{
-     *     module: string,
-     *     composition: list<string>,
-     *     refusals: list<string>,
-     *     routes: list<string>,
-     *     tables: list<string>,
-     *     bindings: list<array{abstract: string, resolved: bool}>,
-     *     capabilities: array{accepted: list<string>, rejected: array<string, string>},
-     *     ok: bool
-     * }  $report
-     */
-    public function render(array $report): string
-    {
-        $lines = [
-            'module: '.$report['module'],
-            'composition:',
-        ];
-
-        if ($report['composition'] === []) {
-            $lines[] = self::EMPTY_REPORT_LINE;
-        } else {
-            foreach ($report['composition'] as $id) {
-                $lines[] = '  - '.$id;
-            }
-        }
-
-        $lines[] = 'refusals:';
-        if ($report['refusals'] === []) {
-            $lines[] = self::EMPTY_REPORT_LINE;
-        } else {
-            foreach ($report['refusals'] as $refusal) {
-                $lines[] = '  - '.$refusal;
-            }
-        }
-
-        $lines[] = 'routes:';
-        if ($report['routes'] === []) {
-            $lines[] = self::EMPTY_REPORT_LINE;
-        } else {
-            foreach ($report['routes'] as $route) {
-                $lines[] = '  - '.$route;
-            }
-        }
-
-        $lines[] = 'tables:';
-        if ($report['tables'] === []) {
-            $lines[] = self::EMPTY_REPORT_LINE;
-        } else {
-            foreach ($report['tables'] as $table) {
-                $lines[] = '  - '.$table;
-            }
-        }
-
-        $lines[] = 'bindings:';
-        if ($report['bindings'] === []) {
-            $lines[] = self::EMPTY_REPORT_LINE;
-        } else {
-            foreach ($report['bindings'] as $binding) {
-                $lines[] = '  - '.$binding['abstract'].' ['.($binding['resolved'] ? 'resolved' : 'missing').']';
-            }
-        }
-
-        if ($report['capabilities']['accepted'] !== [] || $report['capabilities']['rejected'] !== []) {
-            $lines[] = 'Capabilities:';
-            $lines[] = '  accepted: '.count($report['capabilities']['accepted']);
-            $lines[] = '  rejected: '.count($report['capabilities']['rejected']);
-            foreach ($report['capabilities']['rejected'] as $capability => $reason) {
-                $lines[] = '  - '.$capability.': '.$reason;
-            }
-        }
-
-        $lines[] = 'status: '.($report['ok'] ? 'ok' : 'refused');
-
-        return implode("\n", $lines)."\n";
-    }
-
-    /**
-     * Stable plain-text ownership report for humans and CI logs.
-     *
-     * @param  array{modules: list<string>, refusals: list<string>, ok: bool}  $report
-     */
-    public function renderDomainOwnership(array $report): string
-    {
-        $lines = ['domain modules:'];
-
-        if ($report['modules'] === []) {
-            $lines[] = self::EMPTY_REPORT_LINE;
-        } else {
-            foreach ($report['modules'] as $module) {
-                $lines[] = '  - '.$module;
-            }
-        }
-
-        $lines[] = 'refusals:';
-        if ($report['refusals'] === []) {
-            $lines[] = self::EMPTY_REPORT_LINE;
-        } else {
-            foreach ($report['refusals'] as $refusal) {
-                $lines[] = '  - '.$refusal;
-            }
-        }
-
-        $lines[] = 'status: '.($report['ok'] ? 'ok' : 'refused');
-
-        return implode("\n", $lines)."\n";
     }
 
     private function reader(): ModuleManifestReader
@@ -346,6 +235,30 @@ final class ModuleCheck
      */
     private function graphRefusals(array $manifests, array $roots): array
     {
+        [$remaining, $refusals] = $this->dependencyGraph($manifests, $roots);
+
+        while ($remaining !== []) {
+            $ready = $this->readyModule($remaining);
+
+            if ($ready === null) {
+                $refusals[] = 'dependency: module dependency cycle: '.$this->cycle($remaining);
+
+                break;
+            }
+
+            unset($remaining[$ready]);
+        }
+
+        return $refusals;
+    }
+
+    /**
+     * @param  list<ModuleManifest>  $manifests
+     * @param  array<string, string>  $roots
+     * @return array{0: array<string, list<string>>, 1: list<string>}
+     */
+    private function dependencyGraph(array $manifests, array $roots): array
+    {
         $refusals = [];
         $rootRanks = array_flip(ApplicationTopology::relativeRoots());
         $remaining = [];
@@ -378,25 +291,19 @@ final class ModuleCheck
             }
         }
 
-        while ($remaining !== []) {
-            $ready = null;
-            foreach ($remaining as $module => $requires) {
-                if (array_intersect($requires, array_keys($remaining)) === []) {
-                    $ready = $module;
-                    break;
-                }
+        return [$remaining, $refusals];
+    }
+
+    /** @param array<string, list<string>> $remaining */
+    private function readyModule(array $remaining): ?string
+    {
+        foreach ($remaining as $module => $requires) {
+            if (array_intersect($requires, array_keys($remaining)) === []) {
+                return $module;
             }
-
-            if ($ready === null) {
-                $refusals[] = 'dependency: module dependency cycle: '.$this->cycle($remaining);
-
-                break;
-            }
-
-            unset($remaining[$ready]);
         }
 
-        return $refusals;
+        return null;
     }
 
     /**
@@ -454,48 +361,6 @@ final class ModuleCheck
      * @param  array<string, string>  $roots
      * @return list<string>
      */
-    private function routeCollisions(array $composition, array $roots): array
-    {
-        $byKey = [];
-        $byName = [];
-        $refusals = [];
-
-        foreach ($this->routeDeclarations($composition, $roots) as $route) {
-            $keyOwner = $byKey[$route['key']] ?? null;
-            if ($keyOwner !== null && $keyOwner !== $route['module']) {
-                $refusals[] = sprintf(
-                    'collision: route %s is registered by %s and %s',
-                    $route['key'],
-                    $keyOwner,
-                    $route['module'],
-                );
-            }
-            $byKey[$route['key']] ??= $route['module'];
-
-            if ($route['name'] === '') {
-                continue;
-            }
-
-            $nameOwner = $byName[$route['name']] ?? null;
-            if ($nameOwner !== null && $nameOwner !== $route['module']) {
-                $refusals[] = sprintf(
-                    'collision: route name %s is registered by %s and %s',
-                    $route['name'],
-                    $nameOwner,
-                    $route['module'],
-                );
-            }
-            $byName[$route['name']] ??= $route['module'];
-        }
-
-        return $refusals;
-    }
-
-    /**
-     * @param  list<string>  $composition
-     * @param  array<string, string>  $roots
-     * @return list<string>
-     */
     private function routesFor(array $composition, array $roots): array
     {
         $routes = [];
@@ -518,47 +383,7 @@ final class ModuleCheck
      */
     private function routeDeclarations(array $composition, array $roots): array
     {
-        $declared = [];
-
-        foreach ($composition as $module) {
-            $path = $roots[$module] ?? null;
-            if ($path === null) {
-                continue;
-            }
-
-            foreach (['web', 'api'] as $type) {
-                $file = $path.DIRECTORY_SEPARATOR.'Routes'.DIRECTORY_SEPARATOR.$type.'.php';
-                if (! is_file($file)) {
-                    continue;
-                }
-
-                $contents = (string) file_get_contents($file);
-                if (! preg_match_all(
-                    '/Route::(get|post|put|patch|delete|options|any)\(\s*[\'"]([^\'"]+)[\'"]([^;]*);/i',
-                    $contents,
-                    $matches,
-                    PREG_SET_ORDER,
-                )) {
-                    continue;
-                }
-
-                foreach ($matches as $match) {
-                    $method = strtoupper($match[1]);
-                    $uri = ($type === 'api' ? 'api/' : '').ltrim($match[2], '/');
-                    $name = '';
-                    if (preg_match('/->name\(\s*[\'"]([^\'"]+)[\'"]\s*\)/', $match[3], $nameMatch) === 1) {
-                        $name = $nameMatch[1];
-                    }
-                    $declared[] = [
-                        'module' => $module,
-                        'key' => $method.' /'.$uri,
-                        'name' => $name,
-                    ];
-                }
-            }
-        }
-
-        return $declared;
+        return $this->routeScanner->declarations($composition, $roots);
     }
 
     /**
