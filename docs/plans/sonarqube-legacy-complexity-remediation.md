@@ -2,7 +2,7 @@
 
 Status: In progress
 
-Last Updated: 2026-10-30
+Last Updated: 2026-10-31
 
 Sources: SonarCloud project `BelimbingApp_lara`, branch `main`; current open findings retrieved 2026-10-30; SonarCloud PR #1010 analysis
 
@@ -53,6 +53,8 @@ Evidence: protected SQL token copying is separated from statement-boundary scann
 - [x] Decompose catalog discovery in `App\Base\Foundation\Services\DomainCatalog` without changing discovery order. `{root}/gpt-5`
 - [x] Decompose the three flagged checks in `App\Base\Foundation\Services\ModuleCheck` while retaining complete diagnostic output. `{root}/gpt-5`
 - [ ] Decompose source installation and migration rollback paths in `App\Base\Foundation\Services\SourceRepositoryInstaller` without broadening installation authority.
+  - [x] Move cloned-source module, manifest, dependency, and migration-path validation into `SourceRepositoryCheckoutValidator`, retaining the installer as the only clone/migration/rollback/reload authority. `{root}/gpt-5`
+  - [ ] Isolate the installer’s remaining migration and rollback orchestration only when its failure-state contract can remain equally explicit.
 - [ ] Decompose scheduler-index filtering in `App\Base\Schedule\Livewire\Index` while preserving pagination and operator actions.
 - [ ] Decompose `App\Base\Schedule\Services\ScheduleRunRecorder` reservation flow without altering concurrency or ledger honesty guarantees.
 - [ ] Decompose update orchestration in `App\Base\Software\Console\Commands\SoftwareUpdateCommand` and upstream synchronization in `App\Base\Software\Services\UpstreamSyncService` without changing deployment safety semantics.
