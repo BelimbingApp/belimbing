@@ -102,7 +102,7 @@ final class SourceRepositoryCheckoutValidator
         $sourceModuleIds = array_fill_keys(array_map(fn (ModuleManifest $manifest): string => $manifest->module, $sourceManifests), true);
         $dependencyIssues = array_values(array_filter(
             $reader->dependencyIssues($reader->all()),
-            fn (array $issue): bool => isset($sourceModuleIds[(string) ($issue['requiring_module'] ?? '')]),
+            fn (array $issue): bool => isset($sourceModuleIds[$issue['requiring_module']]),
         ));
         if ($dependencyIssues === []) {
             return;
