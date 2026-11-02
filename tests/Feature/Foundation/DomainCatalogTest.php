@@ -208,5 +208,5 @@ it('falls back to this checkout own remotes when no owner is configured', functi
 
     // The platform checkout's origin is the canonical repository, so the
     // owner resolves without anything being written down.
-    expect(domainCatalog()->owners())->toContain('BelimbingApp');
+    expect(domainCatalog()->owners())->toContain('BelimbingProject');
 });
