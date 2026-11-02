@@ -1,6 +1,7 @@
 <?php
 
 use App\Base\Foundation\Services\DomainCatalog;
+use App\Base\Support\Git\GitRepositoryConfigReader;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -208,5 +209,8 @@ it('falls back to this checkout own remotes when no owner is configured', functi
 
     // The platform checkout's origin is the canonical repository, so the
     // owner resolves without anything being written down.
-    expect(domainCatalog()->owners())->toContain('BelimbingProject');
+    $originOwner = DomainCatalog::ownerFromRemoteUrl((string) (new GitRepositoryConfigReader(base_path()))->remoteUrl('origin'));
+
+    expect($originOwner)->not->toBeNull()
+        ->and(domainCatalog()->owners())->toContain($originOwner);
 });
