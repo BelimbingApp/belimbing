@@ -8,6 +8,7 @@ use App\Base\Foundation\Events\DomainLifecycleAction;
 use App\Base\Foundation\Exceptions\SourceRepositoryInstallException;
 use App\Base\Foundation\ModuleManifest\ModuleManifestReader;
 use App\Base\Foundation\RuntimeRequirements\RuntimeRequirementVerifier;
+use App\Base\Foundation\ValueObjects\SourceRepositoryInstallationContext;
 use App\Base\Software\Inventory\InstalledSource;
 use App\Base\Software\Services\GitHubTokenStore;
 use App\Base\Support\Git\GitRepository;
@@ -75,7 +76,11 @@ final class SourceRepositoryInstaller
             return $runtimeFailure;
         }
 
-        $migration = $this->runMigrations($path, $migrationPaths, $log, $kind, $folder, $repository['url']);
+        $migration = $this->runMigrations(
+            new SourceRepositoryInstallationContext($path, $kind, $folder, $repository['url']),
+            $migrationPaths,
+            $log,
+        );
         if ($migration['failure'] !== null) {
             return $migration['failure'];
         }
@@ -192,7 +197,7 @@ final class SourceRepositoryInstaller
      * @param  list<string>  $log
      * @return array{failure: array{ok: bool, log: string, cleaned_up: bool, repository: string, kind: string, folder: string}|null, exit_code: int}
      */
-    private function runMigrations(string $path, array $migrationPaths, array &$log, string $kind, string $folder, string $repositoryUrl): array
+    private function runMigrations(SourceRepositoryInstallationContext $installation, array $migrationPaths, array &$log): array
     {
         $beforeBatch = Schema::hasTable('migrations') ? (int) (DB::table('migrations')->max('batch') ?? 0) : 0;
         $migrateArgs = array_merge(['migrate', '--force'], array_map(fn (string $migrationPath): string => '--path='.$migrationPath, $migrationPaths));
@@ -206,10 +211,10 @@ final class SourceRepositoryInstaller
             $migrate = Process::path(base_path())->timeout(600)->run(PhpCli::current()->artisan($migrateArgs));
         } catch (Throwable $exception) {
             $log[] = (string) __('The migration process could not be started or observed: :message', ['message' => $exception->getMessage()]);
-            $log[] = (string) __('The checkout remains at :path because database state could not be verified. Resolve the process failure before retrying or removing it.', ['path' => $this->relativePath($path)]);
-            $this->recordDomainInstall($kind, $folder, 'migration_failed', $repositoryUrl);
+            $log[] = (string) __('The checkout remains at :path because database state could not be verified. Resolve the process failure before retrying or removing it.', ['path' => $this->relativePath($installation->path)]);
+            $this->recordDomainInstall($installation->kind, $installation->folder, 'migration_failed', $installation->repositoryUrl);
 
-            return ['failure' => $this->result(false, $log, false, $repositoryUrl, $kind, $folder), 'exit_code' => 1];
+            return ['failure' => $this->result(false, $log, false, $installation->repositoryUrl, $installation->kind, $installation->folder), 'exit_code' => 1];
         }
 
         $log[] = '$ php artisan '.implode(' ', $migrateArgs);
@@ -218,7 +223,7 @@ final class SourceRepositoryInstaller
             return ['failure' => null, 'exit_code' => $migrate->exitCode()];
         }
 
-        $failure = $this->migrationFailure($path, $migrationPaths, $beforeBatch, $log, $kind, $folder, $repositoryUrl, $migrate->exitCode());
+        $failure = $this->migrationFailure($installation, $migrationPaths, $beforeBatch, $log, $migrate->exitCode());
 
         return ['failure' => $failure, 'exit_code' => $migrate->exitCode()];
     }
@@ -228,7 +233,7 @@ final class SourceRepositoryInstaller
      * @param  list<string>  $log
      * @return array{ok: bool, log: string, cleaned_up: bool, repository: string, kind: string, folder: string}
      */
-    private function migrationFailure(string $path, array $migrationPaths, int $beforeBatch, array $log, string $kind, string $folder, string $repositoryUrl, int $exitCode): array
+    private function migrationFailure(SourceRepositoryInstallationContext $installation, array $migrationPaths, int $beforeBatch, array $log, int $exitCode): array
     {
         $rollbackArgs = array_merge(['migrate:rollback', '--force', '--batch='.($beforeBatch + 1)], array_map(fn (string $migrationPath): string => '--path='.$migrationPath, $migrationPaths));
         try {
@@ -242,13 +247,13 @@ final class SourceRepositoryInstaller
 
         $log[] = '$ php artisan '.implode(' ', $rollbackArgs);
         $log[] = $rollbackOutput;
-        $cleaned = $rollbackSuccessful && $this->deleteCheckout($path);
+        $cleaned = $rollbackSuccessful && $this->deleteCheckout($installation->path);
         $log[] = $cleaned
             ? (string) __('Migrations failed. BLB rolled back this source batch and removed the checkout; correct the repository and retry.')
-            : (string) __('Migrations failed and automatic rollback did not finish cleanly. The checkout remains at :path so its code still describes any database state. Resolve the run log before retrying or removing it.', ['path' => $this->relativePath($path)]);
-        $this->recordDomainInstall($kind, $folder, 'migration_failed', $repositoryUrl, $exitCode);
+            : (string) __('Migrations failed and automatic rollback did not finish cleanly. The checkout remains at :path so its code still describes any database state. Resolve the run log before retrying or removing it.', ['path' => $this->relativePath($installation->path)]);
+        $this->recordDomainInstall($installation->kind, $installation->folder, 'migration_failed', $installation->repositoryUrl, $exitCode);
 
-        return $this->result(false, $log, $cleaned, $repositoryUrl, $kind, $folder);
+        return $this->result(false, $log, $cleaned, $installation->repositoryUrl, $installation->kind, $installation->folder);
     }
 
     /**
